@@ -1,0 +1,216 @@
+@import url("https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap");
+
+:root {
+  font-family: "Vazirmatn", Tahoma, sans-serif;
+  color: #253238;
+  background: #f4f6fa;
+  direction: rtl;
+
+  --app-primary: #28645a;
+  --app-primary-dark: #1e5048;
+  --app-primary-light: #e8f2ef;
+  --app-text: #253238;
+  --app-muted: #78868b;
+  --app-border: #e6ebed;
+  --app-white: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden; /* جلوگیری از اسکرول افقی در کل صفحه */
+}
+
+/* قاب اصلی برنامه */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* سربرگ بالا - همیشه ثابت */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: var(--app-white);
+  border-bottom: 1px solid var(--app-border);
+  flex-shrink: 0; /* جلوگیری از تغییر ارتفاع در اثر فشار محتوا */
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  background: var(--app-primary);
+  color: white;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font-weight: 800;
+}
+
+.brand-title {
+  font-size: 16px;
+  margin: 0;
+}
+
+/* چیدمان اصلی: منو و محتوا */
+.app-layout {
+  display: flex;
+  flex: 1; /* پر کردن فضای باقی‌مانده صفحه */
+  width: 100%;
+  min-height: calc(100vh - 64px);
+}
+
+/* منوی سمت راست */
+.sidebar {
+  width: 240px;
+  background: #fbfcfd;
+  border-left: 1px solid var(--app-border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 10px;
+  flex-shrink: 0; /* منو ثابت می‌ماند و جمع نمی‌شود */
+}
+
+/* محتوای اصلی سمت چپ */
+.main-content {
+  flex: 1; /* تمام فضای باقی‌مانده را می‌گیرد */
+  min-width: 0; /* بسیار مهم برای جلوگیری از بیرون زدن محتوا */
+  padding: 20px;
+  overflow-x: hidden; /* جلوگیری از اسکرول افقی محتوا */
+}
+
+/* استایل منوها */
+.sidebar-label {
+  font-size: 11px;
+  color: var(--app-muted);
+  padding: 10px 15px;
+}
+
+.section-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.nav-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #647276;
+  text-align: right;
+  width: 100%;
+  font-size: 13px;
+}
+
+.nav-button.active {
+  background: var(--app-primary-light);
+  color: var(--app-primary-dark);
+  font-weight: 700;
+}
+
+/* مدیریت جداول و پنل‌ها برای جلوگیری از اسکرول */
+.panel-container {
+  width: 100%;
+  background: var(--app-white);
+  border-radius: 12px;
+  border: 1px solid var(--app-border);
+  overflow: hidden; /* محتوا از لبه‌های گرد بیرون نزند */
+}
+
+/* اگر جدول خیلی بزرگ شد، فقط خود جدول اسکرول بخورد، نه کل صفحه */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto; 
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 500px; /* حداقل عرض برای اینکه داده‌ها خیلی فشرده نشوند */
+}
+
+th, td {
+  padding: 12px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--app-border);
+  font-size: 13px;
+}
+
+th {
+  background: #f8fafb;
+  font-weight: 700;
+}
+
+/* دکمه‌های کوچک و هماهنگ */
+button {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-sm {
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  min-height: 30px !important;
+}
+
+/* تنظیمات مخصوص موبایل */
+@media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column; /* در موبایل منو بالا و محتوا پایین می‌آید */
+  }
+
+  .sidebar {
+    width: 100%;
+    border-left: none;
+    border-bottom: 1px solid var(--app-border);
+    padding: 10px;
+  }
+
+  .section-nav {
+    flex-direction: row; /* منو در موبایل افقی می‌شود تا فضا کم نیاید */
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+
+  .nav-button {
+    white-space: nowrap; /* متن منوها در موبایل نشکند */
+    padding: 8px 12px;
+  }
+
+  .main-content {
+    padding: 15px;
+  }
+
+  .brand-title {
+    display: none; /* در موبایل فقط آیکون برند برای جا شدن */
+  }
+}
+
+/* برای جلوگیری از بیرون زدن فرم‌ها در موبایل */
+input, select, textarea {
+  max-width: 100%;
+}

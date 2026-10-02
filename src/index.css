@@ -1,0 +1,95 @@
+/* ۱. دستور import حتما باید خط اول باشد */
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap');
+
+/* ۲. ریست کردن استایل‌های پیش‌فرض مرورگر */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ۳. متغیرهای رنگی برای یکپارچگی طراحی شما */
+:root {
+  --primary-color: #2563eb;
+  --secondary-color: #64748b;
+  --success-color: #22c55e;
+  --danger-color: #ef4444;
+  --background-color: #f8fafc;
+  --text-color: #1e293b;
+  --border-color: #e2e8f0;
+  --font-main: 'Vazirmatn', sans-serif;
+}
+
+/* ۴. تنظیمات اصلی بدنه سایت */
+body {
+  font-family: var(--font-main);
+  background-color: var(--background-color);
+  color: var(--text-color);
+  direction: rtl; /* این خط سایت را راست‌چین می‌کند */
+  text-align: right;
+  line-height: 1.6;
+}
+
+/* ۵. استایل‌های پایه برای جداول */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+th, td {
+  padding: 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--border-color);
+}
+
+th {
+  background-color: #f1f5f9;
+  font-weight: 700;
+}
+
+/* ۶. استایل‌های فرم‌ها */
+input, select, textarea, button {
+  font-family: var(--font-main);
+  font-size: 14px;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+button {
+  cursor: pointer;
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: none;
+  transition: background 0.3s;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #1d4ed8;
+}
+
+.btn-danger {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+/* ۷. تنظیمات مخصوص چاپ (Print) */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background-color: white;
+  }
+}
