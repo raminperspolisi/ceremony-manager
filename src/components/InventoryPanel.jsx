@@ -44,7 +44,6 @@ export default function InventoryPanel({ onItemSelected }) {
     document.addEventListener('mouseup', onMouseUp);
   };
 
-  // اصلاح شده: حذف 1fr برای جلوگیری از کشیدگی بی‌مورد ستون
   const gridTemplate = `${colWidths.op}px ${colWidths.select}px ${colWidths.title}px ${colWidths.base}px ${colWidths.l1}px ${colWidths.l2}px ${colWidths.l3}px`;
 
   const handleAdd = async () => {
@@ -79,7 +78,6 @@ export default function InventoryPanel({ onItemSelected }) {
 
   const updateSingleItem = async (item) => {
     setIsSaving(true);
-    
     const updatePayload = {
       base_cost: sanitizeInput(item.base_cost),
       price_level1: sanitizeInput(item.price_level1),
@@ -95,10 +93,11 @@ export default function InventoryPanel({ onItemSelected }) {
   const colKeys = ['op', 'select', 'title', 'base', 'l1', 'l2', 'l3'];
 
   return (
-    <div style={{ ...styles.card, width: "100%", direction: "rtl", fontFamily: 'IRANSans, Tahoma, sans-serif' }}>
+    <div style={{ ...styles.card, width: "100%", direction: "rtl" }}>
       <h3 style={{ textAlign: 'center', marginBottom: '15px' }}>مدیریت موجودی انبار</h3>
 
-      <div style={{ overflowX: 'auto', border: '1px solid #ddd' }}>
+      {/* استفاده از استایل مرکزی برای اسکرول افقی */}
+      <div style={{ ...styles.tableWrapper, border: '1px solid #ddd' }}>
         <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, minWidth: 'max-content', alignItems: 'center' }}>
           
           <div style={{ gridColumn: "1 / -1", padding: "10px", backgroundColor: "#f9f9f9", borderBottom: "1px solid #ccc", display: "flex", gap: "10px", alignItems: "center" }}>

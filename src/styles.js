@@ -54,6 +54,12 @@ export const styles = {
     color: "#334155",
     fontFamily,
   },
+  tableWrapper: {
+    overflowX: "auto",
+    width: "100%",
+    WebkitOverflowScrolling: "touch",
+    marginTop: "20px",
+  },
 };
 
 export const formatDisplay = (num) => {
