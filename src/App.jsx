@@ -1,64 +1,37 @@
-import { useCallback, useEffect, useState } from "react";
-import { supabase } from "./supabaseClient";
-import InventoryPanel from "./components/InventoryPanel";
+import React, { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient'; // اطمینان حاصل کنید این فایل موجود است
+import InventoryPanel from './components/InventoryPanel';
 import QuotationPanel from './components/QuotationPanel';
-import CustomersPanel from './components/CustomersPanel'; 
-import "./App.css";
+import CustomersPanel from './components/CustomersPanel';
+import ReportsPanel from './components/ReportsPanel';
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState("inventory");
+  const [activeSection, setActiveSection] = useState('inventory');
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
 
-  const fetchData = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("inventory")
-      .select("*");
-
-    if (error) {
-      console.error("خطا در دریافت موجودی:", error.message);
-      alert("خطا در دریافت کالاهای انبار: " + error.message);
-      return;
+  // تابع دریافت داده‌ها
+  const fetchData = async () => {
+    try {
+      const { data, error } = await supabase.from('inventory').select('*');
+      if (error) throw error;
+      setInventory(data || []);
+    } catch (error) {
+      console.error('خطا در دریافت اطلاعات:', error.message);
     }
-
-    setInventory(data || []);
-  }, []);
+  };
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, []);
 
-  // افزودن کالا به پیش‌فاکتور
+  // افزودن به پیش‌فاکتور
   const handleSelectItem = (item) => {
-    setSelectedItems((currentItems) => {
-      const existingItem = currentItems.find(
-        (selectedItem) => selectedItem.id === item.id
-      );
-
-      if (existingItem) {
-        return currentItems.map((selectedItem) =>
-          selectedItem.id === item.id
-            ? {
-                ...selectedItem,
-                requestedQuantity:
-                  (Number(selectedItem.requestedQuantity) || 1) + 1,
-              }
-            : selectedItem
-        );
-      }
-
-      return [
-        ...currentItems,
-        {
-          ...item,
-          requestedQuantity: 1,
-        },
-      ];
-    });
+    setSelectedItems((prev) => [...prev, item]);
   };
 
   return (
-    <main className="app-shell" dir="rtl">
+    <main className="app-container">
       <header className="app-header">
         <div className="brand">
           <img src="/azho2.png" alt="لوگو" className="header-logo" />
@@ -81,9 +54,7 @@ export default function App() {
           <nav className="section-nav" aria-label="بخش‌های برنامه">
             <button
               type="button"
-              className={`nav-button ${
-                activeSection === "inventory" ? "active" : ""
-              }`}
+              className={`nav-button ${activeSection === "inventory" ? "active" : ""}`}
               onClick={() => setActiveSection("inventory")}
             >
               <span className="nav-icon">▦</span>
@@ -93,9 +64,7 @@ export default function App() {
 
             <button
               type="button"
-              className={`nav-button ${
-                activeSection === "quotations" ? "active" : ""
-              }`}
+              className={`nav-button ${activeSection === "quotations" ? "active" : ""}`}
               onClick={() => setActiveSection("quotations")}
             >
               <span className="nav-icon">▤</span>
@@ -105,13 +74,20 @@ export default function App() {
 
             <button
               type="button"
-              className={`nav-button ${
-                activeSection === "customers" ? "active" : ""
-              }`}
+              className={`nav-button ${activeSection === "customers" ? "active" : ""}`}
               onClick={() => setActiveSection("customers")}
             >
               <span className="nav-icon">👤</span>
               <span className="nav-text">مشتریان</span>
+            </button>
+
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "reports" ? "active" : ""}`}
+              onClick={() => setActiveSection("reports")}
+            >
+              <span className="nav-icon">📊</span>
+              <span className="nav-text">گزارش مالی</span>
             </button>
           </nav>
 
@@ -130,50 +106,30 @@ export default function App() {
                   ? "موجودی انبار"
                   : activeSection === "quotations"
                   ? "پیش‌فاکتور"
-                  : "مشتریان"}
-            </h2>
-            <p className="page-description">
-              {activeSection === "inventory"
-                ? "کالاهای انبار را مشاهده و مدیریت کنید."
-                : activeSection === "quotations"
-                ? "اقلام انتخاب‌شده و قیمت‌های پیش‌فاکتور را بررسی کنید."
-                : "اطلاعات مشتریان را ثبت و مدیریت کنید."}
-            </p>
+                  : activeSection === "customers"
+                  ? "مشتریان"
+                  : "گزارش مالی"}
+              </h2>
             </div>
 
             {activeSection === "inventory" && (
-              <button
-                type="button"
-                className="refresh-button"
-                onClick={fetchData}
-              >
-                <span aria-hidden="true">↻</span>
-                تازه‌سازی
+              <button type="button" className="refresh-button" onClick={fetchData}>
+                ↻ تازه‌سازی
               </button>
             )}
           </div>
 
           <div className="panel-container">
-            {/* شرط‌های نمایش پنل‌ها */}
             {activeSection === "inventory" ? (
-              <InventoryPanel
-                items={inventory}
-                refresh={fetchData}
-                onItemSelected={handleSelectItem} 
-              /> // <--- اصلاح شد: اینجا onItemSelected قرار گرفت
+              <InventoryPanel items={inventory} refresh={fetchData} onItemSelected={handleSelectItem} />
             ) : activeSection === "quotations" ? (
-              <QuotationPanel
-                selectedItems={selectedItems}
-                setSelectedItems={setSelectedItems}
-              />
-            ) : (
+              <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} />
+            ) : activeSection === "customers" ? (
               <CustomersPanel />
+            ) : (
+              <ReportsPanel />
             )}
           </div>
-
-          <footer className="app-footer">
-            سامانه مدیریت تشریفات
-          </footer>
         </section>
       </div>
     </main>

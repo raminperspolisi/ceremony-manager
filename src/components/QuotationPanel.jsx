@@ -1,8 +1,7 @@
-// src/components/QuotationPanel.jsx
 import React, { useState, useEffect } from 'react';
-import { styles, formatDisplay } from "../styles";
+// به جای قبلی
+import { styles, formatDisplay } from '../styles'; // حذف .jsx و اضافه کردن styles به ایمپورت
 import { supabase } from '../supabaseClient';
-
 export default function QuotationPanel({ selectedItems, setSelectedItems }) {
   const items = selectedItems || [];
   const [customers, setCustomers] = useState([]);
@@ -10,10 +9,13 @@ export default function QuotationPanel({ selectedItems, setSelectedItems }) {
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showBuyingPrice, setShowBuyingPrice] = useState(false);
   
-  // این متغیر برای کنترل نمایش محتوا استفاده می‌شود
-  const [showBuyingPrice, setShowBuyingPrice] = useState(false); 
-  
+  // States برای افزودن مشتری جدید
+  const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+
   const [quotationDate, setQuotationDate] = useState(new Date().toLocaleDateString('fa-IR'));
   const [savedInvoices, setSavedInvoices] = useState([]);
 
@@ -27,9 +29,30 @@ export default function QuotationPanel({ selectedItems, setSelectedItems }) {
     if (data) setCustomers(data);
   }
 
+  // تابع ذخیره مشتری جدید
+  async function handleAddNewCustomer() {
+    if (!newCustomerName) { alert("نام مشتری الزامی است."); return; }
+    const { error } = await supabase.from('customers').insert([{ "Full name": newCustomerName, "phone": newCustomerPhone }]);
+    if (error) { alert("خطا در افزودن مشتری: " + error.message); } 
+    else {
+      alert("مشتری جدید اضافه شد.");
+      setNewCustomerName('');
+      setNewCustomerPhone('');
+      setShowAddCustomerForm(false);
+      fetchCustomers();
+    }
+  }
+
   async function fetchInvoices() {
-    const { data } = await supabase.from('quotations').select('*').order('created_at', { ascending: false });
-    if (data) setSavedInvoices(data);
+    const { data: quotations } = await supabase.from('quotations').select('*').order('created_at', { ascending: false });
+    const { data: officialInvoices } = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
+    
+    const combined = [
+      ...(quotations || []).map(item => ({ ...item, type: 'quotation' })),
+      ...(officialInvoices || []).map(item => ({ ...item, type: 'official' }))
+    ];
+    combined.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    setSavedInvoices(combined);
   }
 
   const getQuantity = (val) => {
@@ -116,6 +139,14 @@ export default function QuotationPanel({ selectedItems, setSelectedItems }) {
     } catch (err) { alert("خطا: " + err.message); } finally { setIsSaving(false); }
   };
 
+  const handleConvertToInvoice = async (e, inv) => {
+    e.stopPropagation();
+    if (inv.type === 'official') { alert("این فاکتور قبلاً رسمی شده است."); return; }
+    if (!window.confirm(`تبدیل پیش‌فاکتور ${inv.customer_name} به فاکتور رسمی؟`)) return;
+    const { error } = await supabase.from("invoices").insert([{ customer_name: inv.customer_name, total_price: inv.total_price, items_data: inv.items_json, is_official: true }]);
+    if (error) alert("خطا در صدور فاکتور: " + error.message); else { alert("فاکتور با موفقیت صادر شد."); fetchInvoices(); }
+  };
+
   const handleQuantityChange = (itemId, value) => {
     setSelectedItems(items.map(item => item.id === itemId ? { ...item, requestedQuantity: value } : item));
   };
@@ -125,71 +156,119 @@ export default function QuotationPanel({ selectedItems, setSelectedItems }) {
   };
 
   const handleLoadInvoice = (inv) => {
-    const restoredItems = inv.items_json.map((item, index) => ({
-      id: index,
-      title: item.title,
-      requestedQuantity: item.qty,
-      price_level1: item.p1,
-      price_level2: item.p2,
-      price_level3: item.p3,
-      base_cost: item.cost || 0
+    const itemsData = inv.items_json || inv.items_data;
+    const restoredItems = itemsData.map((item, index) => ({
+      id: index, title: item.title, requestedQuantity: item.qty, price_level1: item.p1, price_level2: item.p2, price_level3: item.p3, base_cost: item.cost || 0
     }));
     setSelectedItems(restoredItems);
     setSearchTerm(inv.customer_name);
     alert("فاکتور بارگذاری شد.");
   };
 
-  const handleDeleteInvoice = async (e, id) => {
+  const handleDeleteInvoice = async (e, inv) => {
     e.stopPropagation();
-    if (!window.confirm("آیا مطمئن هستید که می‌خواهید این پیش‌فاکتور حذف شود؟")) return;
-    const { error } = await supabase.from("quotations").delete().eq("id", id);
-    if (error) { alert("خطا در حذف: " + error.message); } else { fetchInvoices(); }
+    if (!window.confirm("آیا مطمئن هستید؟")) return;
+    const table = inv.type === 'official' ? 'invoices' : 'quotations';
+    await supabase.from(table).delete().eq("id", inv.id);
+    fetchInvoices();
   };
 
   return (
-    <div style={{ ...styles.card, direction: "rtl" }}>
-      <h3>پیش‌فاکتور جدید</h3>
+    <div style={styles.classicWindow}>
+      <div style={{ background: '#000080', color: '#fff', padding: '3px', fontWeight: 'bold' }}>پیش‌فاکتور جدید</div>
       
-      {/* ... بخش‌های دیگر کد ثابت بماند ... */}
+      <div style={{ padding: '5px', display: 'flex', gap: '10px', fontSize: '11px', borderBottom: '1px solid #808080' }}>
+          <span>۱: {total1.toLocaleString()}</span>
+          <span>۲: {total2.toLocaleString()}</span>
+          <span>۳: {total3.toLocaleString()}</span>
+      </div>
 
-      <button onClick={() => setShowBuyingPrice(!showBuyingPrice)} style={{ ...styles.button, backgroundColor: '#666', marginBottom: '10px' }}>
+      <div style={{ padding: '5px' }}>
+          <div style={{ marginBottom: '2px' }}>تاریخ: <input style={styles.classicInput} value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} /></div>
+          <div style={{ marginBottom: '2px', display: 'flex', gap: '5px' }}>
+              <input style={styles.classicInput} placeholder="جستجوی مشتری..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setIsSearching(true); }} />
+              <button style={styles.smallButton} onClick={() => setShowAddCustomerForm(!showAddCustomerForm)}>+</button>
+          </div>
+          
+          {/* فرم افزودن مشتری جدید */}
+          {showAddCustomerForm && (
+            <div style={{ border: '1px solid #808080', padding: '5px', marginBottom: '5px', background: '#e0e0e0' }}>
+                <input style={{...styles.classicInput, marginBottom: '2px', display: 'block'}} placeholder="نام و نام خانوادگی" value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)} />
+                <input style={{...styles.classicInput, marginBottom: '2px', display: 'block'}} placeholder="تلفن" value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)} />
+                <button style={{...styles.classicButton, width: '100%'}} onClick={handleAddNewCustomer}>ذخیره مشتری جدید</button>
+            </div>
+          )}
+
+          {isSearching && searchTerm && (
+            <div style={{ position: 'relative', width: '100%', backgroundColor: '#fff', border: '1px solid #808080', zIndex: 10 }}>
+                {customers.filter(c => c["Full name"]?.toLowerCase().includes(searchTerm.toLowerCase())).map((c) => (
+                <div key={c.id} style={{ padding: '2px', cursor: 'pointer', borderBottom: '1px solid #ccc' }} onClick={() => { setSelectedCustomer(c); setSearchTerm(c["Full name"]); setIsSearching(false); }}>{c["Full name"]}</div>
+                ))}
+            </div>
+          )}
+      </div>
+
+      <button onClick={() => setShowBuyingPrice(!showBuyingPrice)} style={{ ...styles.classicButton, width: '100%', marginBottom: '5px' }}>
         {showBuyingPrice ? "مخفی کردن قیمت خرید" : "نمایش قیمت خرید"}
       </button>
 
-      <table style={{ width: "100%", marginTop: "10px", borderCollapse: "collapse" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+        <colgroup>
+          <col style={{ width: "auto" }} />
+          <col style={{ width: "50px" }} />
+          <col style={{ width: "60px" }} />
+          <col style={{ width: "60px" }} />
+          <col style={{ width: "60px" }} />
+          {showBuyingPrice && <col style={{ width: "60px" }} />}
+          <col style={{ width: "30px" }} />
+        </colgroup>
         <thead>
           <tr>
-            <th>نام کالا</th>
-            <th>تعداد</th>
-            <th>درجه یک</th>
-            <th>درجه دو</th>
-            <th>درجه سه</th>
-            <th>قیمت خرید</th> {/* ستون همیشه در DOM هست و دیگر نمی‌پرد */}
-            <th>حذف</th>
+            <th style={styles.gridHeader}>نام کالا</th>
+            <th style={styles.gridHeader}>تعداد</th>
+            <th style={styles.gridHeader}>۱</th>
+            <th style={styles.gridHeader}>۲</th>
+            <th style={styles.gridHeader}>۳</th>
+            {showBuyingPrice && <th style={styles.gridHeader}>خرید</th>}
+            <th style={styles.gridHeader}>-</th>
           </tr>
         </thead>
         <tbody>
           {items.map((item) => (
             <tr key={item.id}>
-              <td>{item.title}</td>
-              <td><input type="number" value={item.requestedQuantity ?? ""} onChange={(e) => handleQuantityChange(item.id, e.target.value)} style={{ width: "50px" }} /></td>
-              <td>{formatDisplay(item.price_level1)}</td>
-              <td>{formatDisplay(item.price_level2)}</td>
-              <td>{formatDisplay(item.price_level3)}</td>
-              {/* تغییر اصلی اینجا است: */}
-              <td>{showBuyingPrice ? formatDisplay(item.base_cost) : "***"}</td>
-              <td><button onClick={() => handleRemoveItem(item.id)} style={{ color: "red", background: "none", border: "none", cursor: "pointer" }}>حذف</button></td>
+              <td style={{...styles.gridCell, textAlign: 'right', paddingRight: '4px'}}>{item.title}</td>
+              <td style={styles.gridCell}><input type="number" value={item.requestedQuantity ?? ""} onChange={(e) => handleQuantityChange(item.id, e.target.value)} style={styles.classicInput} /></td>
+              <td style={styles.gridCell}>{formatDisplay(item.price_level1)}</td>
+              <td style={styles.gridCell}>{formatDisplay(item.price_level2)}</td>
+              <td style={styles.gridCell}>{formatDisplay(item.price_level3)}</td>
+              {showBuyingPrice && <td style={styles.gridCell}>{formatDisplay(item.base_cost)}</td>}
+              <td style={styles.gridCell}><button style={styles.smallButton} onClick={() => handleRemoveItem(item.id)}>X</button></td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      {/* ... ادامه کد مانند قبل ... */}
-      <button onClick={handleSaveAndPrint} disabled={isSaving} style={{ ...styles.button, marginTop: '20px' }}>
-        {isSaving ? "در حال ذخیره..." : "💾 ذخیره و چاپ پیش‌فاکتور"}
+      <button onClick={handleSaveAndPrint} disabled={isSaving} style={{ ...styles.classicButton, width: '100%', marginTop: '5px', padding: '5px' }}>
+        {isSaving ? "در حال ذخیره..." : "💾 چاپ و ذخیره"}
       </button>
 
-      {/* ... بخش فاکتورهای اخیر ... */}
+      <div style={{ marginTop: "10px", border: "1px solid #808080" }}>
+        <div style={{ background: '#808080', color: '#fff', padding: '2px', fontSize: '11px' }}>فاکتورهای اخیر:</div>
+        {savedInvoices.map(inv => (
+          <div key={inv.id} style={{ ...styles.gridCell, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px' }}>
+            <span style={{ cursor: 'pointer' }} onClick={() => handleLoadInvoice(inv)}>
+              {inv.customer_name} - {new Date(inv.created_at).toLocaleDateString('fa-IR')}
+              {inv.type === 'official' && <span style={{ color: 'green', fontSize: '10px' }}>(رسمی)</span>}
+            </span>
+            <div style={{ display: 'flex', gap: '2px' }}>
+                {inv.type !== 'official' && (
+                    <button style={styles.smallButton} onClick={(e) => handleConvertToInvoice(e, inv)}>صدور</button>
+                )}
+                <button style={styles.smallButton} onClick={(e) => handleDeleteInvoice(e, inv)}>حذف</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

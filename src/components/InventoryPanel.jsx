@@ -1,8 +1,7 @@
 // src/components/InventoryPanel.jsx
 import React, { useState, useEffect } from 'react';
-import { styles } from "../styles";
+import { styles } from "../styles.jsx";
 import { supabase } from '../supabaseClient';
-
 export default function InventoryPanel({ onItemSelected }) {
   const [items, setItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');

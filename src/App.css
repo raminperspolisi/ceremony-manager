@@ -4,7 +4,10 @@
   font-family: "Vazirmatn", Tahoma, sans-serif;
   color: #253238;
   background: #f4f6fa;
-  direction: rtl;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
   --app-primary: #28645a;
   --app-primary-dark: #1e5048;
@@ -12,6 +15,7 @@
   --app-text: #253238;
   --app-muted: #78868b;
   --app-border: #e6ebed;
+  --app-background: #f4f6fa;
   --app-white: #ffffff;
 }
 
@@ -19,198 +23,691 @@
   box-sizing: border-box;
 }
 
-html, body {
+html {
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
   margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  overflow-x: hidden; /* جلوگیری از اسکرول افقی در کل صفحه */
+  background: var(--app-background);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+#root {
+  min-height: 100vh;
 }
 
 /* قاب اصلی برنامه */
 .app-shell {
-  display: flex;
-  flex-direction: column;
   min-height: 100vh;
-  width: 100%;
+  color: var(--app-text);
+  direction: rtl;
 }
 
-/* سربرگ بالا - همیشه ثابت */
+/* سربرگ بالای برنامه */
 .app-header {
   position: sticky;
+  z-index: 10;
   top: 0;
-  z-index: 100;
   display: flex;
-  height: 64px;
+  min-height: 76px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  background: var(--app-white);
+  gap: 16px;
+  padding: 12px 32px;
   border-bottom: 1px solid var(--app-border);
-  flex-shrink: 0; /* جلوگیری از تغییر ارتفاع در اثر فشار محتوا */
+  background: var(--app-white);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .brand-mark {
-  width: 36px;
-  height: 36px;
-  background: var(--app-primary);
-  color: white;
   display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 14px;
+  background: var(--app-primary);
+  color: #fff;
+  font-size: 23px;
   font-weight: 800;
+  box-shadow: 0 5px 14px rgb(40 100 90 / 18%);
 }
 
 .brand-title {
-  font-size: 16px;
   margin: 0;
+  color: var(--app-text);
+  font-size: 17px;
+  font-weight: 800;
 }
 
-/* چیدمان اصلی: منو و محتوا */
-.app-layout {
+.brand-subtitle {
+  margin: 3px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.header-status {
   display: flex;
-  flex: 1; /* پر کردن فضای باقی‌مانده صفحه */
-  width: 100%;
-  min-height: calc(100vh - 64px);
+  align-items: center;
+  gap: 8px;
+  color: #60716f;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #2faa76;
+  box-shadow: 0 0 0 4px #e7f5ef;
+}
+
+/*
+  چیدمان اصلی:
+  در صفحهٔ راست‌به‌چپ، منو سمت راست و محتوای اصلی سمت چپ قرار می‌گیرد.
+*/
+.app-layout {
+  display: grid;
+  width: min(1500px, 100%);
+  min-height: calc(100vh - 76px);
+  grid-template-columns: 248px minmax(0, 1fr);
+  margin: 0 auto;
 }
 
 /* منوی سمت راست */
 .sidebar {
-  width: 240px;
-  background: #fbfcfd;
-  border-left: 1px solid var(--app-border);
   display: flex;
+  min-width: 0;
   flex-direction: column;
-  padding: 20px 10px;
-  flex-shrink: 0; /* منو ثابت می‌ماند و جمع نمی‌شود */
+  padding: 28px 16px;
+  border-left: 1px solid var(--app-border);
+  background: #fbfcfd;
 }
 
-/* محتوای اصلی سمت چپ */
-.main-content {
-  flex: 1; /* تمام فضای باقی‌مانده را می‌گیرد */
-  min-width: 0; /* بسیار مهم برای جلوگیری از بیرون زدن محتوا */
-  padding: 20px;
-  overflow-x: hidden; /* جلوگیری از اسکرول افقی محتوا */
-}
-
-/* استایل منوها */
 .sidebar-label {
+  margin: 0 12px 12px;
+  color: #98a3a6;
   font-size: 11px;
-  color: var(--app-muted);
-  padding: 10px 15px;
+  font-weight: 700;
 }
 
 .section-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: grid;
+  gap: 7px;
 }
 
 .nav-button {
   display: flex;
+  width: 100%;
+  min-height: 46px;
   align-items: center;
-  gap: 10px;
-  padding: 10px 15px;
-  border-radius: 8px;
-  border: none;
+  gap: 11px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
   background: transparent;
   color: #647276;
   text-align: right;
-  width: 100%;
-  font-size: 13px;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+
+.nav-button:hover {
+  background: #f0f5f4;
+  color: var(--app-primary-dark);
 }
 
 .nav-button.active {
+  border-color: #dcebe7;
   background: var(--app-primary-light);
   color: var(--app-primary-dark);
   font-weight: 700;
 }
 
-/* مدیریت جداول و پنل‌ها برای جلوگیری از اسکرول */
-.panel-container {
-  width: 100%;
-  background: var(--app-white);
-  border-radius: 12px;
-  border: 1px solid var(--app-border);
-  overflow: hidden; /* محتوا از لبه‌های گرد بیرون نزند */
+.nav-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
+  font-size: 18px;
 }
 
-/* اگر جدول خیلی بزرگ شد، فقط خود جدول اسکرول بخورد، نه کل صفحه */
-.table-wrapper {
-  width: 100%;
-  overflow-x: auto; 
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 500px; /* حداقل عرض برای اینکه داده‌ها خیلی فشرده نشوند */
-}
-
-th, td {
-  padding: 12px 10px;
-  text-align: right;
-  border-bottom: 1px solid var(--app-border);
+.nav-text {
+  flex: 1;
   font-size: 13px;
 }
 
-th {
-  background: #f8fafb;
+.nav-count {
+  display: grid;
+  min-width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 75%);
+  color: inherit;
+  font-size: 11px;
   font-weight: 700;
 }
 
-/* دکمه‌های کوچک و هماهنگ */
-button {
-  cursor: pointer;
-  transition: all 0.2s ease;
+.sidebar-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: auto;
+  padding: 13px;
+  border: 1px solid #e5eeeb;
+  border-radius: 12px;
+  background: #f4f8f7;
+  color: #647673;
 }
 
-.btn-sm {
-  padding: 4px 8px !important;
-  font-size: 12px !important;
-  min-height: 30px !important;
+.sidebar-note-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: #dcefe8;
+  color: var(--app-primary);
+  font-size: 12px;
+  font-weight: 800;
 }
 
-/* تنظیمات مخصوص موبایل */
-@media (max-width: 768px) {
+.sidebar-note p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.9;
+}
+
+/* محتوای بخش انتخاب‌شده در سمت چپ منو */
+.main-content {
+  min-width: 0;
+  padding: 30px 32px 18px;
+}
+
+.page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.page-eyebrow {
+  margin: 0 0 5px;
+  color: var(--app-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.page-heading h2 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.page-description {
+  margin: 6px 0 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.refresh-button {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid var(--app-border);
+  border-radius: 9px;
+  background: #fff;
+  color: #56666a;
+  font-size: 12px;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+.refresh-button:hover {
+  border-color: #bdd6cf;
+  background: #f7fbf9;
+}
+
+.refresh-button span {
+  font-size: 16px;
+}
+
+.panel-container {
+  min-width: 0;
+}
+
+/* جدول‌های پنل‌ها */
+.panel-container table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.panel-container th {
+  white-space: nowrap;
+}
+
+.panel-container td,
+.panel-container th {
+  vertical-align: middle;
+}
+
+.panel-container th {
+  padding: 11px 10px;
+  background: #f2f5f6;
+  color: #526167;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.panel-container td {
+  padding: 10px;
+  border-bottom: 1px solid var(--app-border);
+  color: #39484d;
+  font-size: 13px;
+}
+
+.panel-container tr:hover td {
+  background: #fafcfb;
+}
+
+/* دکمه‌های عمومی داخل جدول: کوچک و هم‌اندازه */
+.panel-container button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* دکمهٔ انتخاب برای فاکتور */
+.panel-container button:not(.edit-button):not(.delete-button):not(.btn-edit):not(.btn-delete) {
+  max-width: 115px;
+  padding: 6px 9px;
+  background: #3478d4;
+  color: #fff;
+  border: 1px solid #3478d4;
+}
+
+/* دکمهٔ ویرایش */
+.panel-container button.edit-button,
+.panel-container button.btn-edit {
+  background: #f2bf16;
+  color: #273238;
+  border: 1px solid #e2af08;
+}
+
+/* دکمهٔ حذف */
+.panel-container button.delete-button,
+.panel-container button.btn-delete {
+  background: #d93649;
+  color: #fff;
+  border: 1px solid #d93649;
+}
+
+/* اثر حرکت ماوس روی دکمه‌ها */
+.panel-container button:hover {
+  filter: brightness(0.96);
+}
+
+.panel-container button:active {
+  transform: translateY(1px);
+}
+
+.app-footer {
+  padding: 20px 0 4px;
+  color: #98a3a6;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* تبلت: منو همچنان عمودی و سمت راست می‌ماند */
+@media (max-width: 850px) {
   .app-layout {
-    flex-direction: column; /* در موبایل منو بالا و محتوا پایین می‌آید */
+    grid-template-columns: 210px minmax(0, 1fr);
   }
 
   .sidebar {
-    width: 100%;
-    border-left: none;
-    border-bottom: 1px solid var(--app-border);
-    padding: 10px;
-  }
-
-  .section-nav {
-    flex-direction: row; /* منو در موبایل افقی می‌شود تا فضا کم نیاید */
-    overflow-x: auto;
-    padding-bottom: 5px;
-  }
-
-  .nav-button {
-    white-space: nowrap; /* متن منوها در موبایل نشکند */
-    padding: 8px 12px;
+    padding: 22px 12px;
   }
 
   .main-content {
-    padding: 15px;
+    padding: 24px 20px 16px;
   }
 
-  .brand-title {
-    display: none; /* در موبایل فقط آیکون برند برای جا شدن */
+  .page-heading h2 {
+    font-size: 21px;
+  }
+
+  .panel-container td,
+  .panel-container th {
+    padding: 8px 7px;
+    font-size: 12px;
   }
 }
 
-/* برای جلوگیری از بیرون زدن فرم‌ها در موبایل */
-input, select, textarea {
+/* موبایل: منو عمودی سمت راست و محتوا در سمت چپ باقی می‌ماند */
+@media (max-width: 600px) {
+  .app-header {
+    min-height: 66px;
+    padding: 10px 14px;
+  }
+
+  .brand {
+    gap: 9px;
+  }
+
+  .brand-mark {
+    width: 39px;
+    height: 39px;
+    flex-basis: 39px;
+    border-radius: 12px;
+    font-size: 20px;
+  }
+
+  .brand-title {
+    font-size: 14px;
+  }
+
+  .brand-subtitle {
+    font-size: 10px;
+  }
+
+  .header-status {
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .header-status .status-dot {
+    width: 7px;
+    height: 7px;
+    flex-basis: 7px;
+  }
+
+  .app-layout {
+    grid-template-columns: 125px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 18px 8px;
+  }
+
+  .sidebar-label {
+    margin: 0 7px 10px;
+    font-size: 10px;
+  }
+
+  .section-nav {
+    gap: 6px;
+  }
+
+  .nav-button {
+    min-height: 42px;
+    gap: 6px;
+    padding: 0 7px;
+  }
+
+  .nav-icon {
+    width: 20px;
+    flex-basis: 20px;
+    font-size: 16px;
+  }
+
+  .nav-text {
+    font-size: 10px;
+  }
+
+  .nav-count {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    font-size: 10px;
+  }
+
+  .sidebar-note {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .sidebar-note-icon {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+  }
+
+  .sidebar-note p {
+    font-size: 9px;
+    line-height: 1.7;
+  }
+
+  .main-content {
+    padding: 18px 12px 14px;
+  }
+
+  .page-heading {
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .page-heading h2 {
+    font-size: 18px;
+  }
+
+  .page-description {
+    max-width: 230px;
+    font-size: 10px;
+    line-height: 1.8;
+  }
+
+  .page-eyebrow {
+    font-size: 10px;
+  }
+
+  .refresh-button {
+    min-height: 33px;
+    gap: 4px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .panel-container {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .panel-container table {
+    min-width: 620px;
+  }
+
+  .panel-container td,
+  .panel-container th {
+    padding: 8px 7px;
+    font-size: 11px;
+  }
+
+  .panel-container button {
+    min-height: 29px;
+    padding: 5px 7px;
+    font-size: 10px;
+  }
+
+  .panel-container button:not(.edit-button):not(.delete-button):not(.btn-edit):not(.btn-delete) {
+    max-width: 94px;
+    padding: 5px 6px;
+  }
+}
+
+/* موبایل خیلی باریک */
+@media (max-width: 380px) {
+  .app-header {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .header-status {
+    font-size: 9px;
+  }
+
+  .app-layout {
+    grid-template-columns: 108px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .nav-button {
+    gap: 4px;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  .nav-text {
+    font-size: 9px;
+  }
+
+  .main-content {
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+
+  .panel-container table {
+    min-width: 580px;
+  }
+}
+/* ... (بخش‌های قبلی فایل را نگه دارید و فقط این بخش را با دقت جایگزین کنید) ... */
+
+/* استایل‌های اصلاح شده برای دکمه‌ها با اولویت بالا */
+.panel-container button {
+  min-height: 30px !important; /* کوچک‌تر شدن ارتفاع */
+  padding: 4px 8px !important;  /* کم کردن فاصله داخلی */
+  font-size: 12px !important;   /* کوچک کردن متن */
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* اگر دکمه‌ها کلاس‌های خاصی دارند، آن‌ها را هم هدف قرار می‌دهیم */
+.panel-container button.edit-button,
+.panel-container button.btn-edit,
+.panel-container button.delete-button,
+.panel-container button.btn-delete {
+  min-height: 30px !important;
+  padding: 4px 8px !important;
+}
+
+/* اصلاح جدول برای جلوگیری از بزرگ شدن دکمه‌ها */
+.panel-container td {
+  padding: 6px 10px !important; /* کم کردن فضای خالی دور سلول‌ها */
+  vertical-align: middle !important;
+}
+
+/* برای دکمه‌های انتخاب (که معمولا در ستون اول هستند) */
+.panel-container button:not(.edit-button):not(.delete-button):not(.btn-edit):not(.btn-delete) {
+  max-width: 100px !important;
+  min-height: 30px !important;
+}
+/* تنظیم اندازهٔ دکمه‌ها در همهٔ بخش‌های نرم‌افزار */
+.panel-container button {
+  min-height: 30px !important;
+  max-width: 100% !important;
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* کوچک‌تر شدن فضای ردیف‌های جدول */
+.panel-container td {
+  padding: 6px 10px !important;
+  vertical-align: middle !important;
+}
+
+/* جلوگیری از بیرون‌زدن صفحه از عرض نمایشگر */
+html,
+body,
+#root {
+  width: 100%;
   max-width: 100%;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+/* اجازه می‌دهد محتوای اصلی در چیدمان جمع شود */
+.app-layout,
+.main-content,
+.panel-container {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* تنظیمات نمایشگر موبایل */
+@media (max-width: 600px) {
+  .app-header {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .main-content {
+    min-width: 0;
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .panel-container {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+  }
 }
