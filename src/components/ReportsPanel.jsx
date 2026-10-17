@@ -1,94 +1,126 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-export default function ReportsPanel() {
-  const [report, setReport] = useState({ totalSales: 0, totalProfit: 0 });
-  const [loading, setLoading] = useState(false);
+export default function FinancialReportPanel() {
+  const [invoices, setInvoices] = useState([]);
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalProfit, setTotalProfit] = useState(0);
+  const [totalRentProfit, setTotalRentProfit] = useState(0);
+  const [totalSaleProfit, setTotalSaleProfit] = useState(0);
 
   useEffect(() => {
-    fetchFinancialData();
+    fetchOfficialInvoicesReport();
   }, []);
 
-  async function fetchFinancialData() {
-    setLoading(true);
-    // دریافت تمامی فاکتورها
-    const { data: invoices, error } = await supabase.from('invoices').select('*');
+  async function fetchOfficialInvoicesReport() {
+    // خواندن داده‌ها فقط از فاکتورهای رسمی (جدول invoices)
+    const { data, error } = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
     
     if (error) {
-      console.error("خطا در خواندن فاکتورها:", error.message);
-      setLoading(false);
+      console.error("خطا در دریافت فاکتورهای رسمی:", error.message);
       return;
     }
 
-    if (invoices) {
-      let sales = 0; 
-      let profit = 0;
+    if (data) {
+      setInvoices(data);
       
-      invoices.forEach(inv => {
-        // محاسبه مجموع فروش
-        sales += Number(inv.total_price) || 0;
+      let revenueSum = 0;
+      let rentProfitSum = 0;
+      let saleProfitSum = 0;
+
+      data.forEach(inv => {
+        revenueSum += Number(inv.total_price || 0);
         
-        // محاسبه سود (با فرض وجود items_data به صورت آرایه)
-        if (inv.items_data && Array.isArray(inv.items_data)) {
-          inv.items_data.forEach(item => {
-            const cost = Number(item.cost) || 0;
-            const price = Number(item.price) || 0;
-            const qty = Number(item.qty) || 1; // اگر qty نبود، حداقل 1 در نظر می‌گیریم
-            profit += (price - cost) * qty;
-          });
-        }
+        const items = inv.items_data || [];
+        items.forEach(item => {
+          const qty = Number(item.qty || item.requestedQuantity || 1);
+          const price = Number(item.p1 || item.price || 0);
+          const baseCost = Number(item.base_cost || 0); // قیمت خرید از موجودی
+          const itemType = item.type || 'sale'; // نوع کالا: فروش ('sale') یا اجاره ('rent')
+
+          if (itemType === 'rent') {
+            // اجاره: کل مبلغ دریافتی به عنوان سود خالص محسوب می‌شود
+            rentProfitSum += price * qty;
+          } else {
+            // فروش: (قیمت فروش - قیمت خرید) * تعداد
+            const profitPerItem = price - baseCost;
+            saleProfitSum += (profitPerItem > 0 ? profitPerItem : 0) * qty;
+          }
+        });
       });
-      setReport({ totalSales: sales, totalProfit: profit });
+
+      setTotalRevenue(revenueSum);
+      setTotalRentProfit(rentProfitSum);
+      setTotalSaleProfit(saleProfitSum);
+      setTotalProfit(rentProfitSum + saleProfitSum);
     }
-    setLoading(false);
   }
 
-  // استایل‌های کلاسیک ویندوزی
-  const classicBox = {
-    border: '2px solid #808080',
-    borderTop: '2px solid #fff',
-    borderLeft: '2px solid #fff',
-    backgroundColor: '#d4d0c8',
-    padding: '10px',
-    textAlign: 'center',
-    marginBottom: '10px'
-  };
-
   return (
-    <div style={{ padding: '10px', backgroundColor: '#d4d0c8', height: '100%' }}>
-      <div style={{ border: '2px inset #808080', padding: '10px', backgroundColor: '#e0e0e0' }}>
-        <h3 style={{ margin: '0 0 10px 0', borderBottom: '1px solid #808080' }}>گزارش مالی کل</h3>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
-          <div style={classicBox}>
-            <strong style={{ display: 'block', marginBottom: '5px' }}>فروش کل:</strong>
-            <span style={{ fontSize: '1.2em', fontWeight: 'bold' }}>{report.totalSales.toLocaleString()}</span>
-            <small> تومان</small>
-          </div>
-          <div style={classicBox}>
-            <strong style={{ display: 'block', marginBottom: '5px' }}>سود تخمینی:</strong>
-            <span style={{ fontSize: '1.2em', fontWeight: 'bold', color: report.totalProfit >= 0 ? 'green' : 'red' }}>
-              {report.totalProfit.toLocaleString()}
-            </span>
-            <small> تومان</small>
+    <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', direction: 'rtl' }}>
+      <h3 style={{ margin: '0 0 15px 0', color: '#1e293b', fontSize: '15px' }}>گزارش مالی فاکتورهای رسمی (تشریفات)</h3>
+      
+      {/* کارت‌های خلاصه آماری */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+        <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+          <div style={{ fontSize: '11px', color: '#64748b' }}>مجموع کل درآمد فاکتورهای رسمی</div>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0369a1', marginTop: '5px' }}>
+            {totalRevenue.toLocaleString()} <span style={{ fontSize: '11px' }}>تومان</span>
           </div>
         </div>
 
-        <button 
-          onClick={fetchFinancialData} 
-          disabled={loading}
-          style={{ 
-            marginTop: '10px', 
-            padding: '5px 20px', 
-            cursor: 'pointer',
-            backgroundColor: '#d4d0c8',
-            border: '2px outset #fff',
-            borderRight: '2px solid #808080',
-            borderBottom: '2px solid #808080'
-          }}
-        >
-          {loading ? 'در حال بارگذاری...' : 'بروزرسانی آمار'}
-        </button>
+        <div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
+          <div style={{ fontSize: '11px', color: '#166534' }}>سود اقلام اجاره‌ای (کل درآمد اجاره)</div>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#15803d', marginTop: '5px' }}>
+            {totalRentProfit.toLocaleString()} <span style={{ fontSize: '11px' }}>تومان</span>
+          </div>
+        </div>
+
+        <div style={{ background: '#eff6ff', padding: '12px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+          <div style={{ fontSize: '11px', color: '#1e40af' }}>سود اقلام فروشی (فروش - خرید)</div>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1d4ed8', marginTop: '5px' }}>
+            {totalSaleProfit.toLocaleString()} <span style={{ fontSize: '11px' }}>تومان</span>
+          </div>
+        </div>
+
+        <div style={{ background: '#fef2f2', padding: '12px', borderRadius: '6px', border: '1px solid #fecaca' }}>
+          <div style={{ fontSize: '11px', color: '#991b1b' }}>مجموع سود خالص کل مراسم‌ها</div>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#dc2626', marginTop: '5px' }}>
+            {totalProfit.toLocaleString()} <span style={{ fontSize: '11px' }}>تومان</span>
+          </div>
+        </div>
+      </div>
+
+      {/* جدول فاکتورهای رسمی تاثیرگذار در گزارش */}
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
+          <thead>
+            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              <th style={{ padding: '10px' }}>ردیف</th>
+              <th style={{ padding: '10px' }}>نام مشتری</th>
+              <th style={{ padding: '10px' }}>تاریخ سفارش</th>
+              <th style={{ padding: '10px' }}>تاریخ مراسم</th>
+              <th style={{ padding: '10px' }}>مبلغ کل (تومان)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoices.length === 0 ? (
+              <tr>
+                <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>هیچ فاکتور رسمی برای گزارش موجود نیست.</td>
+              </tr>
+            ) : (
+              invoices.map((inv, idx) => (
+                <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '10px' }}>{idx + 1}</td>
+                  <td style={{ padding: '10px', fontWeight: 'bold' }}>{inv.customer_name}</td>
+                  <td style={{ padding: '10px' }}>{inv.order_date || 'ثبت نشده'}</td>
+                  <td style={{ padding: '10px' }}>{inv.ceremony_date || 'ثبت نشده'}</td>
+                  <td style={{ padding: '10px', color: '#0369a1' }}>{Number(inv.total_price || 0).toLocaleString()}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

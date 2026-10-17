@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient'; // اطمینان حاصل کنید این فایل موجود است
+import { supabase } from './supabaseClient';
 import InventoryPanel from './components/InventoryPanel';
 import QuotationPanel from './components/QuotationPanel';
 import CustomersPanel from './components/CustomersPanel';
-import ReportsPanel from './components/ReportsPanel';
+import FinancialReportPanel from './components/FinancialReportPanel';
+import OfficialInvoicesPanel from './components/OfficialInvoicesPanel';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('inventory');
@@ -25,13 +26,61 @@ export default function App() {
     fetchData();
   }, []);
 
-  // افزودن به پیش‌فاکتور
+  // آپدیت زنده کالا در انبار و پیش‌فاکتورِ جاری (پیش‌فاکتورهای ذخیره‌شده‌ی قدیمی تغییر نمی‌کنند)
+  const handleItemUpdated = (updatedItem) => {
+    // ۱. به‌روزرسانی لیست انبار
+    setInventory((prev) =>
+      prev.map((item) => (item.id === updatedItem.id ? { ...item, ...updatedItem } : item))
+    );
+
+    // ۲. به‌روزرسانی آنی در اقلام پیش‌فاکتورِ جاری
+    setSelectedItems((prev) =>
+      prev.map((item) =>
+        item.id === updatedItem.id
+          ? {
+              ...item,
+              ...updatedItem,
+              p1: updatedItem.price_level1 ?? updatedItem.p1,
+              p2: updatedItem.price_level2 ?? updatedItem.p2,
+              p3: updatedItem.price_level3 ?? updatedItem.p3,
+              requestedQuantity: item.requestedQuantity || 1
+            }
+          : item
+      )
+    );
+  };
+
+  // افزودن به پیش‌فاکتور با تعداد پیش‌فرض ۱
   const handleSelectItem = (item) => {
-    setSelectedItems((prev) => [...prev, item]);
+    setSelectedItems((prev) => {
+      const existingIndex = prev.findIndex((i) => i.id === item.id);
+      if (existingIndex > -1) {
+        const updated = [...prev];
+        const currentQty = Number(updated[existingIndex].requestedQuantity || updated[existingIndex].quantity || 1);
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          requestedQuantity: currentQty + 1,
+          quantity: currentQty + 1
+        };
+        return updated;
+      } else {
+        return [...prev, { ...item, requestedQuantity: 1, quantity: 1 }];
+      }
+    });
   };
 
   return (
-    <main className="app-container">
+    <main 
+      className="app-container" 
+      style={{ 
+        maxWidth: '1150px', 
+        margin: '20px auto', 
+        boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
+        borderRadius: '8px', 
+        overflow: 'hidden',
+        backgroundColor: '#ffffff'
+      }}
+    >
       <header className="app-header">
         <div className="brand">
           <img src="/azho2.png" alt="لوگو" className="header-logo" />
@@ -74,6 +123,15 @@ export default function App() {
 
             <button
               type="button"
+              className={`nav-button ${activeSection === "official" ? "active" : ""}`}
+              onClick={() => setActiveSection("official")}
+            >
+              <span className="nav-icon">📜</span>
+              <span className="nav-text">فاکتور رسمی</span>
+            </button>
+
+            <button
+              type="button"
               className={`nav-button ${activeSection === "customers" ? "active" : ""}`}
               onClick={() => setActiveSection("customers")}
             >
@@ -106,6 +164,8 @@ export default function App() {
                   ? "موجودی انبار"
                   : activeSection === "quotations"
                   ? "پیش‌فاکتور"
+                  : activeSection === "official"
+                  ? "فاکتور رسمی"
                   : activeSection === "customers"
                   ? "مشتریان"
                   : "گزارش مالی"}
@@ -120,15 +180,18 @@ export default function App() {
           </div>
 
           <div className="panel-container">
-            {activeSection === "inventory" ? (
-              <InventoryPanel items={inventory} refresh={fetchData} onItemSelected={handleSelectItem} />
-            ) : activeSection === "quotations" ? (
-              <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} />
-            ) : activeSection === "customers" ? (
-              <CustomersPanel />
-            ) : (
-              <ReportsPanel />
+            {activeSection === "inventory" && (
+              <InventoryPanel 
+                items={inventory} 
+                refresh={fetchData} 
+                onItemSelected={handleSelectItem} 
+                onItemUpdated={handleItemUpdated} 
+              />
             )}
+            {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} />}
+            {activeSection === "official" && <OfficialInvoicesPanel />}
+            {activeSection === "customers" && <CustomersPanel />}
+            {activeSection === "reports" && <FinancialReportPanel />}
           </div>
         </section>
       </div>

@@ -23,16 +23,16 @@
   box-sizing: border-box;
 }
 
-html {
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
   min-width: 320px;
   min-height: 100%;
-}
-
-body {
-  min-width: 320px;
-  min-height: 100vh;
   margin: 0;
   background: var(--app-background);
+  overflow-x: hidden;
 }
 
 button,
@@ -44,10 +44,6 @@ textarea {
 
 button {
   cursor: pointer;
-}
-
-#root {
-  min-height: 100vh;
 }
 
 /* قاب اصلی برنامه */
@@ -78,18 +74,10 @@ button {
   gap: 12px;
 }
 
-.brand-mark {
-  display: grid;
+.header-logo {
   width: 44px;
   height: 44px;
-  flex: 0 0 44px;
-  place-items: center;
-  border-radius: 14px;
-  background: var(--app-primary);
-  color: #fff;
-  font-size: 23px;
-  font-weight: 800;
-  box-shadow: 0 5px 14px rgb(40 100 90 / 18%);
+  object-fit: contain;
 }
 
 .brand-title {
@@ -123,16 +111,14 @@ button {
   box-shadow: 0 0 0 4px #e7f5ef;
 }
 
-/*
-  چیدمان اصلی:
-  در صفحهٔ راست‌به‌چپ، منو سمت راست و محتوای اصلی سمت چپ قرار می‌گیرد.
-*/
+/* چیدمان اصلی */
 .app-layout {
   display: grid;
   width: min(1500px, 100%);
   min-height: calc(100vh - 76px);
   grid-template-columns: 248px minmax(0, 1fr);
   margin: 0 auto;
+  min-width: 0;
 }
 
 /* منوی سمت راست */
@@ -169,10 +155,7 @@ button {
   background: transparent;
   color: #647276;
   text-align: right;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease,
-    border-color 160ms ease;
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
 .nav-button:hover {
@@ -246,9 +229,10 @@ button {
   line-height: 1.9;
 }
 
-/* محتوای بخش انتخاب‌شده در سمت چپ منو */
+/* محتوای اصلی */
 .main-content {
   min-width: 0;
+  max-width: 100%;
   padding: 30px 32px 18px;
 }
 
@@ -274,13 +258,6 @@ button {
   font-weight: 800;
 }
 
-.page-description {
-  margin: 6px 0 0;
-  color: var(--app-muted);
-  font-size: 13px;
-  line-height: 1.8;
-}
-
 .refresh-button {
   display: inline-flex;
   min-height: 38px;
@@ -294,9 +271,7 @@ button {
   background: #fff;
   color: #56666a;
   font-size: 12px;
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease;
+  transition: border-color 160ms ease, background-color 160ms ease;
 }
 
 .refresh-button:hover {
@@ -304,27 +279,15 @@ button {
   background: #f7fbf9;
 }
 
-.refresh-button span {
-  font-size: 16px;
-}
-
 .panel-container {
   min-width: 0;
+  max-width: 100%;
 }
 
-/* جدول‌های پنل‌ها */
+/* جدول‌ها */
 .panel-container table {
   width: 100%;
   border-collapse: collapse;
-}
-
-.panel-container th {
-  white-space: nowrap;
-}
-
-.panel-container td,
-.panel-container th {
-  vertical-align: middle;
 }
 
 .panel-container th {
@@ -334,322 +297,22 @@ button {
   font-size: 12px;
   font-weight: 700;
   text-align: right;
+  white-space: nowrap;
 }
 
 .panel-container td {
-  padding: 10px;
+  padding: 8px 10px !important;
   border-bottom: 1px solid var(--app-border);
   color: #39484d;
   font-size: 13px;
+  vertical-align: middle !important;
 }
 
 .panel-container tr:hover td {
   background: #fafcfb;
 }
 
-/* دکمه‌های عمومی داخل جدول: کوچک و هم‌اندازه */
-.panel-container button {
-  min-height: 32px;
-  padding: 6px 10px;
-  border-radius: 7px;
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-/* دکمهٔ انتخاب برای فاکتور */
-.panel-container button:not(.edit-button):not(.delete-button):not(.btn-edit):not(.btn-delete) {
-  max-width: 115px;
-  padding: 6px 9px;
-  background: #3478d4;
-  color: #fff;
-  border: 1px solid #3478d4;
-}
-
-/* دکمهٔ ویرایش */
-.panel-container button.edit-button,
-.panel-container button.btn-edit {
-  background: #f2bf16;
-  color: #273238;
-  border: 1px solid #e2af08;
-}
-
-/* دکمهٔ حذف */
-.panel-container button.delete-button,
-.panel-container button.btn-delete {
-  background: #d93649;
-  color: #fff;
-  border: 1px solid #d93649;
-}
-
-/* اثر حرکت ماوس روی دکمه‌ها */
-.panel-container button:hover {
-  filter: brightness(0.96);
-}
-
-.panel-container button:active {
-  transform: translateY(1px);
-}
-
-.app-footer {
-  padding: 20px 0 4px;
-  color: #98a3a6;
-  font-size: 11px;
-  text-align: center;
-}
-
-/* تبلت: منو همچنان عمودی و سمت راست می‌ماند */
-@media (max-width: 850px) {
-  .app-layout {
-    grid-template-columns: 210px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    padding: 22px 12px;
-  }
-
-  .main-content {
-    padding: 24px 20px 16px;
-  }
-
-  .page-heading h2 {
-    font-size: 21px;
-  }
-
-  .panel-container td,
-  .panel-container th {
-    padding: 8px 7px;
-    font-size: 12px;
-  }
-}
-
-/* موبایل: منو عمودی سمت راست و محتوا در سمت چپ باقی می‌ماند */
-@media (max-width: 600px) {
-  .app-header {
-    min-height: 66px;
-    padding: 10px 14px;
-  }
-
-  .brand {
-    gap: 9px;
-  }
-
-  .brand-mark {
-    width: 39px;
-    height: 39px;
-    flex-basis: 39px;
-    border-radius: 12px;
-    font-size: 20px;
-  }
-
-  .brand-title {
-    font-size: 14px;
-  }
-
-  .brand-subtitle {
-    font-size: 10px;
-  }
-
-  .header-status {
-    gap: 6px;
-    font-size: 10px;
-  }
-
-  .header-status .status-dot {
-    width: 7px;
-    height: 7px;
-    flex-basis: 7px;
-  }
-
-  .app-layout {
-    grid-template-columns: 125px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    padding: 18px 8px;
-  }
-
-  .sidebar-label {
-    margin: 0 7px 10px;
-    font-size: 10px;
-  }
-
-  .section-nav {
-    gap: 6px;
-  }
-
-  .nav-button {
-    min-height: 42px;
-    gap: 6px;
-    padding: 0 7px;
-  }
-
-  .nav-icon {
-    width: 20px;
-    flex-basis: 20px;
-    font-size: 16px;
-  }
-
-  .nav-text {
-    font-size: 10px;
-  }
-
-  .nav-count {
-    min-width: 20px;
-    height: 20px;
-    padding: 0 4px;
-    font-size: 10px;
-  }
-
-  .sidebar-note {
-    gap: 6px;
-    padding: 8px;
-  }
-
-  .sidebar-note-icon {
-    width: 18px;
-    height: 18px;
-    flex-basis: 18px;
-  }
-
-  .sidebar-note p {
-    font-size: 9px;
-    line-height: 1.7;
-  }
-
-  .main-content {
-    padding: 18px 12px 14px;
-  }
-
-  .page-heading {
-    align-items: flex-start;
-    gap: 8px;
-    margin-bottom: 16px;
-  }
-
-  .page-heading h2 {
-    font-size: 18px;
-  }
-
-  .page-description {
-    max-width: 230px;
-    font-size: 10px;
-    line-height: 1.8;
-  }
-
-  .page-eyebrow {
-    font-size: 10px;
-  }
-
-  .refresh-button {
-    min-height: 33px;
-    gap: 4px;
-    padding: 0 7px;
-    font-size: 10px;
-  }
-
-  .panel-container {
-    width: 100%;
-    overflow-x: auto;
-    border: 1px solid var(--app-border);
-    border-radius: 10px;
-    background: #fff;
-  }
-
-  .panel-container table {
-    min-width: 620px;
-  }
-
-  .panel-container td,
-  .panel-container th {
-    padding: 8px 7px;
-    font-size: 11px;
-  }
-
-  .panel-container button {
-    min-height: 29px;
-    padding: 5px 7px;
-    font-size: 10px;
-  }
-
-  .panel-container button:not(.edit-button):not(.delete-button):not(.btn-edit):not(.btn-delete) {
-    max-width: 94px;
-    padding: 5px 6px;
-  }
-}
-
-/* موبایل خیلی باریک */
-@media (max-width: 380px) {
-  .app-header {
-    padding-right: 10px;
-    padding-left: 10px;
-  }
-
-  .header-status {
-    font-size: 9px;
-  }
-
-  .app-layout {
-    grid-template-columns: 108px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    padding-right: 6px;
-    padding-left: 6px;
-  }
-
-  .nav-button {
-    gap: 4px;
-    padding-right: 5px;
-    padding-left: 5px;
-  }
-
-  .nav-text {
-    font-size: 9px;
-  }
-
-  .main-content {
-    padding-right: 9px;
-    padding-left: 9px;
-  }
-
-  .panel-container table {
-    min-width: 580px;
-  }
-}
-/* ... (بخش‌های قبلی فایل را نگه دارید و فقط این بخش را با دقت جایگزین کنید) ... */
-
-/* استایل‌های اصلاح شده برای دکمه‌ها با اولویت بالا */
-.panel-container button {
-  min-height: 30px !important; /* کوچک‌تر شدن ارتفاع */
-  padding: 4px 8px !important;  /* کم کردن فاصله داخلی */
-  font-size: 12px !important;   /* کوچک کردن متن */
-  border-radius: 6px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-/* اگر دکمه‌ها کلاس‌های خاصی دارند، آن‌ها را هم هدف قرار می‌دهیم */
-.panel-container button.edit-button,
-.panel-container button.btn-edit,
-.panel-container button.delete-button,
-.panel-container button.btn-delete {
-  min-height: 30px !important;
-  padding: 4px 8px !important;
-}
-
-/* اصلاح جدول برای جلوگیری از بزرگ شدن دکمه‌ها */
-.panel-container td {
-  padding: 6px 10px !important; /* کم کردن فضای خالی دور سلول‌ها */
-  vertical-align: middle !important;
-}
-
-/* برای دکمه‌های انتخاب (که معمولا در ستون اول هستند) */
-.panel-container button:not(.edit-button):not(.delete-button):not(.btn-edit):not(.btn-delete) {
-  max-width: 100px !important;
-  min-height: 30px !important;
-}
-/* تنظیم اندازهٔ دکمه‌ها در همهٔ بخش‌های نرم‌افزار */
+/* دکمه‌های جدول */
 .panel-container button {
   min-height: 30px !important;
   max-width: 100% !important;
@@ -661,53 +324,113 @@ button {
   justify-content: center !important;
 }
 
-/* کوچک‌تر شدن فضای ردیف‌های جدول */
-.panel-container td {
-  padding: 6px 10px !important;
-  vertical-align: middle !important;
+.panel-container button.edit-button,
+.panel-container button.btn-edit {
+  background: #f2bf16;
+  color: #273238;
+  border: 1px solid #e2af08;
 }
 
-/* جلوگیری از بیرون‌زدن صفحه از عرض نمایشگر */
-html,
-body,
-#root {
+.panel-container button.delete-button,
+.panel-container button.btn-delete {
+  background: #d93649;
+  color: #fff;
+  border: 1px solid #d93649;
+}
+
+.panel-container button:hover {
+  filter: brightness(0.96);
+}
+
+/* استایل‌های اختصاصی پنل فاکتور رسمی */
+.official-invoices-panel {
+  padding: 0;
+  direction: rtl;
+}
+
+.panel-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+.table-responsive {
   width: 100%;
-  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: #fff;
 }
 
-body {
-  overflow-x: hidden;
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  display: inline-block;
 }
 
-/* اجازه می‌دهد محتوای اصلی در چیدمان جمع شود */
-.app-layout,
-.main-content,
-.panel-container {
-  min-width: 0;
-  max-width: 100%;
+.status-badge.paid {
+  background-color: #e6fffa;
+  color: #2c7a7b;
 }
 
-/* تنظیمات نمایشگر موبایل */
+.status-badge.unpaid {
+  background-color: #fff5f5;
+  color: #c53030;
+}
+
+.amount-cell {
+  font-weight: bold;
+  color: #2d3748;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-view,
+.btn-print {
+  background: #edf2f7;
+  border: 1px solid #cbd5e0;
+  color: #2d3748;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 30px !important;
+  color: var(--app-muted);
+}
+
+/* واکنش‌گرایی موبایل */
 @media (max-width: 600px) {
   .app-header {
-    padding-right: 12px;
-    padding-left: 12px;
+    padding: 10px 12px;
+  }
+
+  .app-layout {
+    grid-template-columns: 125px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    padding: 18px 8px;
   }
 
   .main-content {
-    min-width: 0;
-    padding-right: 10px;
-    padding-left: 10px;
+    padding: 18px 10px 14px;
   }
 
-  .panel-container {
-    max-width: 100%;
-    overflow-x: auto;
-  }
-
-  input,
-  select,
-  textarea {
-    max-width: 100%;
+  .panel-container table {
+    min-width: 620px;
   }
 }

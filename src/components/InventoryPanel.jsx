@@ -1,146 +1,382 @@
-// src/components/InventoryPanel.jsx
-import React, { useState, useEffect } from 'react';
-import { styles } from "../styles.jsx";
+import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-export default function InventoryPanel({ onItemSelected }) {
-  const [items, setItems] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [showBaseCost, setShowBaseCost] = useState(true);
 
-  const [colWidths, setColWidths] = useState({
-    op: 80, select: 50, title: 200, base: 120, l1: 120, l2: 120, l3: 120
-  });
+export default function InventoryPanel({ items, refresh, onItemSelected, onItemUpdated }) {
+  const [title, setTitle] = useState('');
+  const [itemType, setItemType] = useState('sale'); // پیش‌فرض: فروشی
+  const [baseCost, setBaseCost] = useState('');
+  const [price1, setPrice1] = useState('');
+  const [price2, setPrice2] = useState('');
+  const [price3, setPrice3] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const [formData, setFormData] = useState({
-    title: '', base_cost: '', price_level1: '', price_level2: '', price_level3: ''
-  });
+  // استیت جستجو در انبار
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const sanitizeInput = (val) => {
-    return (val === '' || val === undefined || val === null) ? null : Number(val);
-  };
+  // استیت برای نمایش یا مخفی کردن قیمت خرید
+  const [showCostPrice, setShowCostPrice] = useState(false);
 
-  useEffect(() => { fetchItems(); }, []);
+  // استیت برای نگهداری شناسه آیتم‌های انتخاب‌شده
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
-  async function fetchItems() {
-    const { data } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
-    if (data) setItems(data);
-  }
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({});
 
-  const startResizing = (colName, e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    const startX = e.pageX;
-    const startWidth = colWidths[colName];
-    const onMouseMove = (moveEvent) => {
-      const diff = moveEvent.pageX - startX;
-      setColWidths(prev => ({ ...prev, [colName]: Math.max(50, startWidth + diff) }));
-    };
-    const onMouseUp = () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-  };
+    if (!title.trim()) return;
 
-  const gridTemplate = `${colWidths.op}px ${colWidths.select}px ${colWidths.title}px ${colWidths.base}px ${colWidths.l1}px ${colWidths.l2}px ${colWidths.l3}px`;
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('inventory').insert([{
+        title: title.trim(),
+        item_type: itemType,
+        base_cost: baseCost === '' ? 0 : parseFloat(baseCost),
+        price_level1: price1 === '' ? 0 : parseFloat(price1),
+        price_level2: price2 === '' ? 0 : parseFloat(price2),
+        price_level3: price3 === '' ? 0 : parseFloat(price3)
+      }]);
 
-  const handleAdd = async () => {
-    if (!formData.title) return;
-    
-    const dataToInsert = {
-      title: formData.title,
-      base_cost: sanitizeInput(formData.base_cost),
-      price_level1: sanitizeInput(formData.price_level1),
-      price_level2: sanitizeInput(formData.price_level2),
-      price_level3: sanitizeInput(formData.price_level3),
-    };
+      if (error) throw error;
 
-    const { error } = await supabase.from('inventory').insert([dataToInsert]);
-    if (error) alert(error.message);
-    else {
-      setFormData({ title: '', base_cost: '', price_level1: '', price_level2: '', price_level3: '' });
-      fetchItems();
+      setTitle('');
+      setItemType('sale');
+      setBaseCost('');
+      setPrice1('');
+      setPrice2('');
+      setPrice3('');
+      refresh();
+    } catch (err) {
+      console.error('خطا در ثبت کالا:', err.message);
+      alert('خطا در ثبت کالا: ' + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("آیا مطمئن هستید؟")) return;
-    const { error } = await supabase.from('inventory').delete().eq('id', id);
-    if (error) alert(error.message);
-    else fetchItems();
+    if (!window.confirm('آیا از حذف این آیتم اطمینان دارید؟')) return;
+    try {
+      const { error } = await supabase.from('inventory').delete().eq('id', id);
+      if (error) throw error;
+      refresh();
+    } catch (err) {
+      console.error('خطا در حذف:', err.message);
+      alert('خطا در حذف: ' + err.message);
+    }
   };
 
-  const handleInlineChange = (id, field, value) => {
-    setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+  const handleDoubleClick = (item) => {
+    setEditingId(item.id);
+    setEditForm({
+      title: item.title || '',
+      item_type: item.item_type || 'sale',
+      base_cost: item.base_cost ?? '',
+      price_level1: item.price_level1 ?? '',
+      price_level2: item.price_level2 ?? '',
+      price_level3: item.price_level3 ?? ''
+    });
   };
 
-  const updateSingleItem = async (item) => {
-    setIsSaving(true);
-    const updatePayload = {
-      base_cost: sanitizeInput(item.base_cost),
-      price_level1: sanitizeInput(item.price_level1),
-      price_level2: sanitizeInput(item.price_level2),
-      price_level3: sanitizeInput(item.price_level3),
-    };
+  const handleInlineSave = async (id) => {
+    try {
+      const updatedData = {
+        title: editForm.title.trim(),
+        item_type: editForm.item_type || 'sale',
+        base_cost: editForm.base_cost === '' ? 0 : parseFloat(editForm.base_cost),
+        price_level1: editForm.price_level1 === '' ? 0 : parseFloat(editForm.price_level1),
+        price_level2: editForm.price_level2 === '' ? 0 : parseFloat(editForm.price_level2),
+        price_level3: editForm.price_level3 === '' ? 0 : parseFloat(editForm.price_level3)
+      };
 
-    await supabase.from('inventory').update(updatePayload).eq('id', item.id);
-    setIsSaving(false);
+      const { error } = await supabase
+        .from('inventory')
+        .update(updatedData)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // آپدیت زنده پیش‌فاکتور جاری در App.jsx
+      if (typeof onItemUpdated === 'function') {
+        onItemUpdated({
+          id,
+          ...updatedData
+        });
+      }
+
+      setEditingId(null);
+      refresh();
+    } catch (err) {
+      console.error('خطا در به‌روزرسانی:', err.message);
+      alert('خطا در به‌روزرسانی: ' + err.message);
+    }
   };
 
-  const headerLabels = ['عملیات', 'انتخاب', 'نام کالا', 'قیمت خرید', 'درجه ۱', 'درجه ۲', 'درجه ۳'];
-  const colKeys = ['op', 'select', 'title', 'base', 'l1', 'l2', 'l3'];
+  const handleSelectClick = (item) => {
+    if (selectedIds.has(item.id)) return;
+
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      newSet.add(item.id);
+      return newSet;
+    });
+
+    if (onItemSelected) {
+      onItemSelected(item);
+    }
+  };
+
+  // فیلتر کردن اقلام انبار بر اساس عبارت جستجو شده
+  const filteredItems = items.filter(item => 
+    item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div style={{ ...styles.card, width: "100%", direction: "rtl" }}>
-      <h3 style={{ textAlign: 'center', marginBottom: '15px' }}>مدیریت موجودی انبار</h3>
+    <div style={{ padding: '15px', backgroundColor: '#f8fafc', fontSize: '13px', direction: 'rtl' }}>
+      <form onSubmit={handleSave} style={{ background: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '15px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', alignItems: 'end' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569', fontWeight: 'bold' }}>نام کالا / خدمت</label>
+          <input 
+            type="text" 
+            value={title} 
+            onChange={(e) => setTitle(e.target.value)} 
+            placeholder="مثلا دیزاین ورودی" 
+            required
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
+          />
+        </div>
 
-      {/* استفاده از استایل مرکزی برای اسکرول افقی */}
-      <div style={{ ...styles.tableWrapper, border: '1px solid #ddd' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, minWidth: 'max-content', alignItems: 'center' }}>
-          
-          <div style={{ gridColumn: "1 / -1", padding: "10px", backgroundColor: "#f9f9f9", borderBottom: "1px solid #ccc", display: "flex", gap: "10px", alignItems: "center" }}>
-            <input placeholder="جستجوی سریع..." style={{...styles.input, flex: 1, padding: "5px"}} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-            <label style={{ fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              <input type="checkbox" checked={showBaseCost} onChange={() => setShowBaseCost(!showBaseCost)} />
-              نمایش خرید
-            </label>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569', fontWeight: 'bold' }}>نوع کالا</label>
+          <select 
+            value={itemType} 
+            onChange={(e) => setItemType(e.target.value)}
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', backgroundColor: '#fff' }}
+          >
+            <option value="sale">فروشی</option>
+            <option value="rent">اجاره‌ای</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569' }}>قیمت خرید</label>
+          <input 
+            type="number" 
+            value={baseCost} 
+            onChange={(e) => setBaseCost(e.target.value)} 
+            placeholder="۰"
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569' }}>نرخ سطح ۱</label>
+          <input 
+            type="number" 
+            value={price1} 
+            onChange={(e) => setPrice1(e.target.value)} 
+            placeholder="۰"
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569' }}>نرخ سطح ۲</label>
+          <input 
+            type="number" 
+            value={price2} 
+            onChange={(e) => setPrice2(e.target.value)} 
+            placeholder="۰"
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569' }}>نرخ سطح ۳</label>
+          <input 
+            type="number" 
+            value={price3} 
+            onChange={(e) => setPrice3(e.target.value)} 
+            placeholder="۰"
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
+          />
+        </div>
+
+        <div>
+          <button 
+            type="submit" 
+            disabled={loading}
+            style={{ width: '100%', backgroundColor: '#0ea5e9', color: '#ffffff', border: 'none', padding: '7px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
+          >
+            {loading ? 'در حال ثبت...' : '+ ثبت کالا'}
+          </button>
+        </div>
+      </form>
+
+      <div style={{ background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+        <div style={{ padding: '10px 12px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 'bold', color: '#334155' }}>لیست اقلام انبار ({filteredItems.length} از {items.length})</span>
+            
+            {/* کادر جستجوی محصول */}
+            <input 
+              type="text" 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              placeholder="🔍 جستجوی نام کالا..." 
+              style={{ padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '11px', width: '180px', backgroundColor: '#fff' }}
+            />
           </div>
 
-          {headerLabels.map((label, i) => (
-            <div key={label} style={{ position: 'relative', backgroundColor: "#f2f2f2", borderBottom: "2px solid #ccc", padding: "8px", fontWeight: 'bold', fontSize: '13px', textAlign: 'center' }}>
-              {label}
-              <div onMouseDown={(e) => startResizing(colKeys[i], e)} style={{ position: 'absolute', right: 0, top: 0, width: '10px', height: '100%', cursor: 'col-resize', zIndex: 1 }} />
-            </div>
-          ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>💡 دابل‌کلیک برای ویرایش</span>
+            <button 
+              type="button" 
+              onClick={() => setShowCostPrice(!showCostPrice)} 
+              style={{ backgroundColor: showCostPrice ? '#0284c7' : '#64748b', color: '#fff', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+            >
+              {showCostPrice ? "👁️ مخفی کردن قیمت خرید" : "👁️‍🗨️ نمایش قیمت خرید"}
+            </button>
+          </div>
+        </div>
+        
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
+            <thead>
+              <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
+                <th style={{ padding: '8px 10px' }}>ردیف</th>
+                <th style={{ padding: '8px 10px' }}>عنوان کالا / خدمت</th>
+                <th style={{ padding: '8px 10px' }}>نوع کالا</th>
+                {showCostPrice && <th style={{ padding: '8px 10px', color: '#b91c1c' }}>قیمت خرید</th>}
+                <th style={{ padding: '8px 10px' }}>نرخ سطح ۱</th>
+                <th style={{ padding: '8px 10px' }}>نرخ سطح ۲</th>
+                <th style={{ padding: '8px 10px' }}>نرخ سطح ۳</th>
+                <th style={{ padding: '8px 10px', textAlign: 'center' }}>عملیات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.length === 0 ? (
+                <tr>
+                  <td colSpan={showCostPrice ? "8" : "7"} style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
+                    {items.length === 0 ? 'هیچ کالایی در انبار ثبت نشده است.' : 'نتیجه‌ای برای جستجوی شما یافت نشد.'}
+                  </td>
+                </tr>
+              ) : (
+                filteredItems.map((item, index) => {
+                  const isEditing = editingId === item.id;
+                  const isSelected = selectedIds.has(item.id);
+                  const currentType = item.item_type || 'sale';
 
-          <div style={{ padding: "5px" }}></div>
-          <div style={{ padding: "5px" }}></div>
-          <div style={{ padding: "5px" }}><input style={{...styles.input, width: '90%'}} placeholder="نام..." value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} /></div>
-          <div style={{ padding: "5px" }}><input style={{...styles.input, width: '90%'}} type="number" placeholder="خرید" value={formData.base_cost} onChange={(e) => setFormData({...formData, base_cost: e.target.value})} /></div>
-          <div style={{ padding: "5px" }}><input style={{...styles.input, width: '90%'}} type="number" placeholder="درجه ۱" value={formData.price_level1} onChange={(e) => setFormData({...formData, price_level1: e.target.value})} /></div>
-          <div style={{ padding: "5px" }}><input style={{...styles.input, width: '90%'}} type="number" placeholder="درجه ۲" value={formData.price_level2} onChange={(e) => setFormData({...formData, price_level2: e.target.value})} /></div>
-          <div style={{ padding: "5px" }}><button onClick={handleAdd} style={{ ...styles.button, backgroundColor: '#28a745', padding: '5px 10px', width: '100%' }}>➕</button></div>
+                  return (
+                    <tr 
+                      key={item.id} 
+                      onClick={() => !isEditing && handleSelectClick(item)}
+                      style={{ 
+                        borderBottom: '1px solid #f1f5f9', 
+                        backgroundColor: isEditing ? '#fefce8' : isSelected ? '#f0fdf4' : 'transparent', 
+                        cursor: 'pointer' 
+                      }}
+                      title="کلیک برای افزودن به فاکتور"
+                    >
+                      <td style={{ padding: '8px 10px', color: '#64748b' }}>{index + 1}</td>
+                      
+                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', fontWeight: '500', color: '#1e293b' }}>
+                        {isEditing ? (
+                          <input type="text" value={editForm.title} onChange={(e) => setEditForm({...editForm, title: e.target.value})} style={{ width: '100%', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                        ) : (
+                          item.title
+                        )}
+                      </td>
 
-          {items.filter(item => item.title.toLowerCase().includes(searchTerm.toLowerCase())).map((item) => (
-            <React.Fragment key={item.id}>
-              <div style={{ borderBottom: "1px solid #eee", padding: "5px", textAlign: 'center' }}><button onClick={() => handleDelete(item.id)}>حذف</button></div>
-              <div style={{ borderBottom: "1px solid #eee", padding: "5px", textAlign: 'center' }}><button onClick={() => onItemSelected(item)}>✅</button></div>
-              <div style={{ borderBottom: "1px solid #eee", padding: "5px", textAlign: 'right' }}>{item.title}</div>
-              
-              <div style={{ borderBottom: "1px solid #eee", padding: "5px", textAlign: 'center' }}>
-                {showBaseCost ? (
-                  <input style={{...styles.input, width: '90%'}} value={item.base_cost === null ? '' : item.base_cost} onChange={(e) => handleInlineChange(item.id, 'base_cost', e.target.value)} onBlur={() => updateSingleItem(item)} />
-                ) : (
-                  <span style={{ color: '#ccc' }}>***</span>
-                )}
-              </div>
-              
-              <div style={{ borderBottom: "1px solid #eee", padding: "5px" }}><input style={{...styles.input, width: '90%'}} value={item.price_level1 === null ? '' : item.price_level1} onChange={(e) => handleInlineChange(item.id, 'price_level1', e.target.value)} onBlur={() => updateSingleItem(item)} /></div>
-              <div style={{ borderBottom: "1px solid #eee", padding: "5px" }}><input style={{...styles.input, width: '90%'}} value={item.price_level2 === null ? '' : item.price_level2} onChange={(e) => handleInlineChange(item.id, 'price_level2', e.target.value)} onBlur={() => updateSingleItem(item)} /></div>
-              <div style={{ borderBottom: "1px solid #eee", padding: "5px" }}><input style={{...styles.input, width: '90%'}} value={item.price_level3 === null ? '' : item.price_level3} onChange={(e) => handleInlineChange(item.id, 'price_level3', e.target.value)} onBlur={() => updateSingleItem(item)} /></div>
-            </React.Fragment>
-          ))}
+                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px' }}>
+                        {isEditing ? (
+                          <select value={editForm.item_type} onChange={(e) => setEditForm({...editForm, item_type: e.target.value})} style={{ padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }}>
+                            <option value="sale">فروشی</option>
+                            <option value="rent">اجاره‌ای</option>
+                          </select>
+                        ) : (
+                          <span style={{ 
+                            padding: '2px 6px', 
+                            borderRadius: '4px', 
+                            fontSize: '11px', 
+                            backgroundColor: currentType === 'rent' ? '#f0fdf4' : '#eff6ff',
+                            color: currentType === 'rent' ? '#15803d' : '#1d4ed8',
+                            border: `1px solid ${currentType === 'rent' ? '#bbf7d0' : '#bfdbfe'}`
+                          }}>
+                            {currentType === 'rent' ? 'اجاره‌ای' : 'فروشی'}
+                          </span>
+                        )}
+                      </td>
+
+                      {showCostPrice && (
+                        <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#b91c1c', fontWeight: 'bold' }}>
+                          {isEditing ? (
+                            <input type="number" value={editForm.base_cost} onChange={(e) => setEditForm({...editForm, base_cost: e.target.value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                          ) : (
+                            `${Number(item.base_cost || 0).toLocaleString()} ت`
+                          )}
+                        </td>
+                      )}
+
+                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
+                        {isEditing ? (
+                          <input type="number" value={editForm.price_level1} onChange={(e) => setEditForm({...editForm, price_level1: e.target.value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                        ) : (
+                          `${Number(item.price_level1 || 0).toLocaleString()} ت`
+                        )}
+                      </td>
+
+                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
+                        {isEditing ? (
+                          <input type="number" value={editForm.price_level2} onChange={(e) => setEditForm({...editForm, price_level2: e.target.value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                        ) : (
+                          `${Number(item.price_level2 || 0).toLocaleString()} ت`
+                        )}
+                      </td>
+
+                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
+                        {isEditing ? (
+                          <input type="number" value={editForm.price_level3} onChange={(e) => setEditForm({...editForm, price_level3: e.target.value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                        ) : (
+                          `${Number(item.price_level3 || 0).toLocaleString()} ت`
+                        )}
+                      </td>
+
+                      <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        {isEditing ? (
+                          <>
+                            <button type="button" onClick={() => handleInlineSave(item.id)} style={{ backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '3px 7px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', marginLeft: '3px' }}>ذخیره</button>
+                            <button type="button" onClick={() => setEditingId(null)} style={{ backgroundColor: '#64748b', color: '#fff', border: 'none', padding: '3px 7px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>لغو</button>
+                          </>
+                        ) : (
+                          <>
+                            <button 
+                              type="button" 
+                              onClick={() => handleSelectClick(item)} 
+                              style={{ 
+                                backgroundColor: isSelected ? '#16a34a' : '#22c55e', 
+                                color: '#fff', 
+                                border: 'none', 
+                                padding: '3px 8px', 
+                                borderRadius: '4px', 
+                                cursor: 'pointer', 
+                                fontSize: '11px', 
+                                marginLeft: '5px',
+                                fontWeight: isSelected ? 'bold' : 'normal'
+                              }}
+                            >
+                              {isSelected ? '✓ انتخاب شد' : 'انتخاب'}
+                            </button>
+                            <button type="button" onClick={() => handleDelete(item.id)} style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>حذف</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
