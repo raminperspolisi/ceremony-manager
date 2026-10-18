@@ -5,6 +5,7 @@ import QuotationPanel from './components/QuotationPanel';
 import CustomersPanel from './components/CustomersPanel';
 import FinancialReportPanel from './components/FinancialReportPanel';
 import OfficialInvoicesPanel from './components/OfficialInvoicesPanel';
+import RemindersPanel from './components/RemindersPanel'; // 🔔 اضافه کردن کامپوننت یادآوری‌ها
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('inventory');
@@ -26,14 +27,12 @@ export default function App() {
     fetchData();
   }, []);
 
-  // آپدیت زنده کالا در انبار و پیش‌فاکتورِ جاری (پیش‌فاکتورهای ذخیره‌شده‌ی قدیمی تغییر نمی‌کنند)
+  // آپدیت زنده کالا در انبار و پیش‌فاکتورِ جاری
   const handleItemUpdated = (updatedItem) => {
-    // ۱. به‌روزرسانی لیست انبار
     setInventory((prev) =>
       prev.map((item) => (item.id === updatedItem.id ? { ...item, ...updatedItem } : item))
     );
 
-    // ۲. به‌روزرسانی آنی در اقلام پیش‌فاکتورِ جاری
     setSelectedItems((prev) =>
       prev.map((item) =>
         item.id === updatedItem.id
@@ -147,6 +146,16 @@ export default function App() {
               <span className="nav-icon">📊</span>
               <span className="nav-text">گزارش مالی</span>
             </button>
+
+            {/* 🔔 دکمه تب جدید یادآوری مراسم */}
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "reminders" ? "active" : ""}`}
+              onClick={() => setActiveSection("reminders")}
+            >
+              <span className="nav-icon">🔔</span>
+              <span className="nav-text">یادآوری مراسم و تسویه</span>
+            </button>
           </nav>
 
           <div className="sidebar-note">
@@ -168,7 +177,9 @@ export default function App() {
                   ? "فاکتور رسمی"
                   : activeSection === "customers"
                   ? "مشتریان"
-                  : "گزارش مالی"}
+                  : activeSection === "reports"
+                  ? "گزارش مالی"
+                  : "یادآوری مراسم و پیگیری تسویه"}
               </h2>
             </div>
 
@@ -192,6 +203,7 @@ export default function App() {
             {activeSection === "official" && <OfficialInvoicesPanel />}
             {activeSection === "customers" && <CustomersPanel />}
             {activeSection === "reports" && <FinancialReportPanel />}
+            {activeSection === "reminders" && <RemindersPanel />} {/* 🔔 رندر پنل یادآوری‌ها */}
           </div>
         </section>
       </div>
