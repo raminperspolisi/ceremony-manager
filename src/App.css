@@ -66,6 +66,7 @@ button {
   padding: 12px 32px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-white);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .brand {
@@ -83,7 +84,7 @@ button {
 .brand-title {
   margin: 0;
   color: var(--app-text);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 800;
 }
 
@@ -100,6 +101,9 @@ button {
   color: #60716f;
   font-size: 13px;
   white-space: nowrap;
+  background: var(--app-primary-light);
+  padding: 6px 14px;
+  border-radius: 20px;
 }
 
 .status-dot {
@@ -116,7 +120,7 @@ button {
   display: grid;
   width: min(1500px, 100%);
   min-height: calc(100vh - 76px);
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   margin: 0 auto;
   min-width: 0;
 }
@@ -155,7 +159,7 @@ button {
   background: transparent;
   color: #647276;
   text-align: right;
-  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+  transition: all 160ms ease;
 }
 
 .nav-button:hover {
@@ -168,6 +172,7 @@ button {
   background: var(--app-primary-light);
   color: var(--app-primary-dark);
   font-weight: 700;
+  box-shadow: 0 2px 6px rgba(40, 100, 90, 0.06);
 }
 
 .nav-icon {
@@ -192,7 +197,7 @@ button {
   place-items: center;
   padding: 0 6px;
   border-radius: 8px;
-  background: rgb(255 255 255 / 75%);
+  background: rgb(255 255 255 / 90%);
   color: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -234,6 +239,7 @@ button {
   min-width: 0;
   max-width: 100%;
   padding: 30px 32px 18px;
+  background: var(--app-background);
 }
 
 .page-heading {
@@ -265,23 +271,29 @@ button {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 0 13px;
+  padding: 0 14px;
   border: 1px solid var(--app-border);
   border-radius: 9px;
   background: #fff;
   color: #56666a;
   font-size: 12px;
-  transition: border-color 160ms ease, background-color 160ms ease;
+  transition: all 160ms ease;
 }
 
 .refresh-button:hover {
   border-color: #bdd6cf;
   background: #f7fbf9;
+  color: var(--app-primary-dark);
 }
 
 .panel-container {
   min-width: 0;
   max-width: 100%;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid var(--app-border);
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.02);
 }
 
 /* جدول‌ها */
@@ -291,55 +303,59 @@ button {
 }
 
 .panel-container th {
-  padding: 11px 10px;
-  background: #f2f5f6;
-  color: #526167;
+  padding: 12px 12px;
+  background: #f8fafc;
+  color: #475569;
   font-size: 12px;
   font-weight: 700;
   text-align: right;
   white-space: nowrap;
+  border-bottom: 2px solid var(--app-border);
 }
 
 .panel-container td {
-  padding: 8px 10px !important;
+  padding: 12px !important;
   border-bottom: 1px solid var(--app-border);
-  color: #39484d;
+  color: #334155;
   font-size: 13px;
   vertical-align: middle !important;
 }
 
 .panel-container tr:hover td {
-  background: #fafcfb;
+  background: #f8fafc;
 }
 
-/* دکمه‌های جدول */
-.panel-container button {
-  min-height: 30px !important;
-  max-width: 100% !important;
-  padding: 4px 8px !important;
+/* دکمه‌های جدول و پنل‌ها */
+.panel-container button,
+.action-buttons button {
+  min-height: 32px !important;
+  padding: 6px 12px !important;
   font-size: 12px !important;
-  border-radius: 6px !important;
+  border-radius: 8px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+  font-weight: 600;
+  transition: all 150ms ease;
 }
 
 .panel-container button.edit-button,
 .panel-container button.btn-edit {
-  background: #f2bf16;
-  color: #273238;
-  border: 1px solid #e2af08;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
 }
 
 .panel-container button.delete-button,
 .panel-container button.btn-delete {
-  background: #d93649;
-  color: #fff;
-  border: 1px solid #d93649;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
 }
 
 .panel-container button:hover {
-  filter: brightness(0.96);
+  filter: brightness(0.95);
+  transform: translateY(-1px);
 }
 
 /* استایل‌های اختصاصی پنل فاکتور رسمی */
@@ -352,13 +368,13 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .section-title {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: var(--app-text);
 }
 
@@ -366,30 +382,31 @@ button {
   width: 100%;
   overflow-x: auto;
   border: 1px solid var(--app-border);
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
 }
 
 .status-badge {
-  padding: 4px 12px;
+  padding: 5px 12px;
   border-radius: 20px;
-  font-size: 0.85rem;
+  font-size: 12px;
+  font-weight: 700;
   display: inline-block;
 }
 
 .status-badge.paid {
-  background-color: #e6fffa;
-  color: #2c7a7b;
+  background-color: #d1fae5;
+  color: #065f46;
 }
 
 .status-badge.unpaid {
-  background-color: #fff5f5;
-  color: #c53030;
+  background-color: #fee2e2;
+  color: #991b1b;
 }
 
 .amount-cell {
-  font-weight: bold;
-  color: #2d3748;
+  font-weight: 800;
+  color: #0f172a;
 }
 
 .action-buttons {
@@ -399,38 +416,59 @@ button {
 
 .btn-view,
 .btn-print {
-  background: #edf2f7;
-  border: 1px solid #cbd5e0;
-  color: #2d3748;
-  padding: 4px 10px;
-  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+
+.btn-print:hover {
+  background: var(--app-primary-light);
+  color: var(--app-primary-dark);
+  border-color: #bbf7d0;
 }
 
 .empty-state {
   text-align: center;
-  padding: 30px !important;
+  padding: 40px !important;
   color: var(--app-muted);
+  font-size: 14px;
 }
 
 /* واکنش‌گرایی موبایل */
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .app-header {
-    padding: 10px 12px;
+    padding: 10px 16px;
+    min-height: 64px;
   }
 
   .app-layout {
-    grid-template-columns: 125px minmax(0, 1fr);
+    grid-template-columns: 80px minmax(0, 1fr);
   }
 
   .sidebar {
-    padding: 18px 8px;
+    padding: 14px 6px;
+  }
+
+  .nav-text, .sidebar-label, .sidebar-note, .brand-subtitle, .nav-count {
+    display: none; /* در موبایل آیکون‌محور می‌شود تا جا باز شود */
+  }
+
+  .nav-button {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .nav-icon {
+    font-size: 20px;
   }
 
   .main-content {
-    padding: 18px 10px 14px;
+    padding: 16px 12px;
   }
 
-  .panel-container table {
-    min-width: 620px;
+  .panel-container {
+    padding: 14px;
   }
 }

@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
     "html2pdf.js": "^0.14.0",
+    "jalali-moment": "^3.3.11",
     "moment-jalaali": "^0.10.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

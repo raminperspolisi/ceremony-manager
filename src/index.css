@@ -93,3 +93,30 @@ button {
     background-color: white;
   }
 }
+/* تنظیمات اختصاصی چاپ فاکتور AZHO */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #printable-invoice, #printable-invoice * {
+    visibility: visible;
+  }
+  
+  #printable-invoice {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+    padding: 20px;
+    margin: 0;
+    font-family: 'IRANSans', Tahoma, sans-serif;
+  }
+
+  /* پنهان کردن دکمه‌ها و منوها هنگام پرینت */
+  .no-print {
+    display: none !important;
+  }
+}

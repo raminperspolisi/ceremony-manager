@@ -5,12 +5,48 @@ import QuotationPanel from './components/QuotationPanel';
 import CustomersPanel from './components/CustomersPanel';
 import FinancialReportPanel from './components/FinancialReportPanel';
 import OfficialInvoicesPanel from './components/OfficialInvoicesPanel';
-import RemindersPanel from './components/RemindersPanel'; // 🔔 اضافه کردن کامپوننت یادآوری‌ها
+import AnalyticsPanel from './components/AnalyticsPanel';
+import RemindersPanel from './components/RemindersPanel'; // 🔔 یادآوری مراسم
+import CalendarPanel from './components/CalendarPanel'; // 📅 تقویم مراسم‌ها
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState('inventory');
+  const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  // پیش‌فرض را روی مشتریان می‌گذاریم چون اولین گزینه منو است
+  const [activeSection, setActiveSection] = useState('customers');
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (mounted) {
+        setSession(nextSession);
+        setAuthError('');
+        setAuthReady(true);
+        if (!nextSession) {
+          setInventory([]);
+          setSelectedItems([]);
+        }
+      }
+    });
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!mounted) return;
+      if (error) setAuthError('خطا در بررسی ورود: ' + error.message);
+      setSession(data?.session ?? null);
+      setAuthReady(true);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // تابع دریافت داده‌ها
   const fetchData = async () => {
@@ -24,8 +60,33 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (session) fetchData();
+  }, [session]);
+
+  const handleSignIn = async (e) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) throw error;
+      setPassword('');
+    } catch (error) {
+      setAuthError('خطا در ورود: ' + error.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setAuthError('');
+    const { error } = await supabase.auth.signOut();
+    if (error) setAuthError('خطا در خروج: ' + error.message);
+    else {
+      setInventory([]);
+      setSelectedItems([]);
+    }
+  };
 
   // آپدیت زنده کالا در انبار و پیش‌فاکتورِ جاری
   const handleItemUpdated = (updatedItem) => {
@@ -68,6 +129,30 @@ export default function App() {
     });
   };
 
+  if (!authReady) {
+    return <main style={{ maxWidth: 420, margin: '15vh auto', padding: 24, textAlign: 'center' }}>در حال بررسی وضعیت ورود...</main>;
+  }
+
+  if (!session) {
+    return (
+      <main style={{ maxWidth: 420, margin: '10vh auto', padding: 24, direction: 'rtl', background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(15, 23, 42, 0.1)' }}>
+        <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>ورود به مدیریت تشریفات</h1>
+        <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 14 }}>برای دسترسی به سامانه با حساب کاربری خود وارد شوید.</p>
+        {authError && <div role="alert" style={{ marginBottom: 14, padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
+        <form onSubmit={handleSignIn}>
+          <label htmlFor="auth-email" style={{ display: 'block', marginBottom: 6 }}>ایمیل</label>
+          <input id="auth-email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <label htmlFor="auth-password" style={{ display: 'block', marginBottom: 6 }}>رمز عبور</label>
+          <input id="auth-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button type="submit" disabled={authLoading} style={{ width: '100%', color: '#fff', background: '#28645a', opacity: authLoading ? 0.7 : 1 }}>
+            {authLoading ? 'در حال ورود...' : 'ورود'}
+          </button>
+        </form>
+        <p style={{ margin: '14px 0 0', color: '#64748b', fontSize: 12 }}>حساب‌ها باید از بخش Authentication در Supabase ساخته شوند.</p>
+      </main>
+    );
+  }
+
   return (
     <main 
       className="app-container" 
@@ -91,15 +176,31 @@ export default function App() {
 
         <div className="header-status">
           <span className="status-dot" />
-          <span>سامانه آماده است</span>
+          <span>{session.user.email || 'کاربر واردشده'}</span>
+          <button type="button" onClick={handleSignOut} style={{ padding: '4px 10px', border: '1px solid #dbe5e2', background: '#fff', color: '#1e5048' }}>
+            خروج
+          </button>
         </div>
       </header>
+
+      {authError && <div role="alert" style={{ margin: '12px 20px', padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
 
       <div className="app-layout">
         <aside className="sidebar">
           <p className="sidebar-label">منوی اصلی</p>
 
           <nav className="section-nav" aria-label="بخش‌های برنامه">
+            {/* 1. مشتریان */}
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "customers" ? "active" : ""}`}
+              onClick={() => setActiveSection("customers")}
+            >
+              <span className="nav-icon">👤</span>
+              <span className="nav-text">مشتریان</span>
+            </button>
+
+            {/* 2. موجودی انبار */}
             <button
               type="button"
               className={`nav-button ${activeSection === "inventory" ? "active" : ""}`}
@@ -110,6 +211,7 @@ export default function App() {
               <span className="nav-count">{inventory.length}</span>
             </button>
 
+            {/* 3. پیش‌فاکتور */}
             <button
               type="button"
               className={`nav-button ${activeSection === "quotations" ? "active" : ""}`}
@@ -120,6 +222,7 @@ export default function App() {
               <span className="nav-count">{selectedItems.length}</span>
             </button>
 
+            {/* 4. فاکتور رسمی */}
             <button
               type="button"
               className={`nav-button ${activeSection === "official" ? "active" : ""}`}
@@ -129,15 +232,7 @@ export default function App() {
               <span className="nav-text">فاکتور رسمی</span>
             </button>
 
-            <button
-              type="button"
-              className={`nav-button ${activeSection === "customers" ? "active" : ""}`}
-              onClick={() => setActiveSection("customers")}
-            >
-              <span className="nav-icon">👤</span>
-              <span className="nav-text">مشتریان</span>
-            </button>
-
+            {/* 5. گزارش مالی */}
             <button
               type="button"
               className={`nav-button ${activeSection === "reports" ? "active" : ""}`}
@@ -147,7 +242,27 @@ export default function App() {
               <span className="nav-text">گزارش مالی</span>
             </button>
 
-            {/* 🔔 دکمه تب جدید یادآوری مراسم */}
+            {/* 6. آنالیز پیشرفته */}
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "analytics" ? "active" : ""}`}
+              onClick={() => setActiveSection("analytics")}
+            >
+              <span className="nav-icon">📈</span>
+              <span className="nav-text">آنالیز پیشرفته</span>
+            </button>
+
+            {/* 7. تقویم مراسم‌ها */}
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "calendar" ? "active" : ""}`}
+              onClick={() => setActiveSection("calendar")}
+            >
+              <span className="nav-icon">📅</span>
+              <span className="nav-text">تقویم مراسم‌ها</span>
+            </button>
+
+            {/* 8. یادآوری مراسم و تسویه */}
             <button
               type="button"
               className={`nav-button ${activeSection === "reminders" ? "active" : ""}`}
@@ -160,7 +275,7 @@ export default function App() {
 
           <div className="sidebar-note">
             <span className="sidebar-note-icon">✓</span>
-            <p>برای شروع، کالاهای موردنیاز را از انبار به پیش‌فاکتور اضافه کنید.</p>
+            <p>نرم افزار مدیریت گالری آژو.</p>
           </div>
         </aside>
 
@@ -169,16 +284,20 @@ export default function App() {
             <div>
               <p className="page-eyebrow">داشبورد مدیریت</p>
               <h2>
-                {activeSection === "inventory"
+                {activeSection === "customers"
+                  ? "مشتریان"
+                  : activeSection === "inventory"
                   ? "موجودی انبار"
                   : activeSection === "quotations"
                   ? "پیش‌فاکتور"
                   : activeSection === "official"
                   ? "فاکتور رسمی"
-                  : activeSection === "customers"
-                  ? "مشتریان"
                   : activeSection === "reports"
                   ? "گزارش مالی"
+                  : activeSection === "analytics"
+                  ? "آنالیز پیشرفته و سود و زیان"
+                  : activeSection === "calendar"
+                  ? "تقویم مراسم‌ها"
                   : "یادآوری مراسم و پیگیری تسویه"}
               </h2>
             </div>
@@ -191,6 +310,7 @@ export default function App() {
           </div>
 
           <div className="panel-container">
+            {activeSection === "customers" && <CustomersPanel />}
             {activeSection === "inventory" && (
               <InventoryPanel 
                 items={inventory} 
@@ -201,9 +321,10 @@ export default function App() {
             )}
             {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} />}
             {activeSection === "official" && <OfficialInvoicesPanel />}
-            {activeSection === "customers" && <CustomersPanel />}
             {activeSection === "reports" && <FinancialReportPanel />}
-            {activeSection === "reminders" && <RemindersPanel />} {/* 🔔 رندر پنل یادآوری‌ها */}
+            {activeSection === "analytics" && <AnalyticsPanel />}
+            {activeSection === "calendar" && <CalendarPanel />}
+            {activeSection === "reminders" && <RemindersPanel />}
           </div>
         </section>
       </div>
