@@ -97,7 +97,7 @@ const createInvoiceImageMarkup = (invoice) => {
           <th style="padding:10px;border:1px solid #94a3b8;">نوع</th>
           <th style="padding:10px;border:1px solid #94a3b8;">تعداد</th>
           <th style="padding:10px;border:1px solid #94a3b8;">قیمت واحد</th>
-          <th style="padding:10px;border:1px solid #94a3b8;">مبلغ ردیف</th>
+          <th style="padding:10px;border:1px solid #94a3b8;">قیمت کل</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
