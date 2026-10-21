@@ -151,6 +151,17 @@ const renderInvoiceImage = async (invoice) => {
   }
 };
 
+const normalizeTelegramPhone = (phone) => {
+  let digits = String(phone || '')
+    .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
+    .replace(/[٠-٩]/g, (digit) => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit))
+    .replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('0')) digits = `98${digits.slice(1)}`;
+  else if (digits.startsWith('9') && digits.length === 10) digits = `98${digits}`;
+  return digits;
+};
+
 export default function RemindersPanel() {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -196,41 +207,37 @@ export default function RemindersPanel() {
     }
   };
 
-  const sharePreparedInvoiceImage = (invoice) => {
+  const openTelegramChatWithInvoice = (invoice) => {
     if (!preparedInvoiceImage || preparedInvoiceImage.invoiceId !== invoice.id) {
       setShareStatus('ابتدا تصویر همین فاکتور را بسازید.');
       return;
     }
-    const file = new File([preparedInvoiceImage.blob], preparedInvoiceImage.fileName, { type: 'image/png' });
-    const shareData = {
-      files: [file],
-      title: `فاکتور ${invoice.customer_name || ''}`,
-      text: `فاکتور و یادآوری مراسم ${invoice.customer_name || 'مشتری گرامی'}`,
-    };
-    if (!navigator.share || !navigator.canShare?.(shareData)) {
-      if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
-        setShareStatus('این مرورگر اشتراک فایل و کپی تصویر را پشتیبانی نمی‌کند؛ برای ارسال بدون ذخیره از گوشی و مرورگر دارای فهرست اشتراک فایل استفاده کنید.');
-        return;
-      }
-      const telegramWindow = window.open('https://web.telegram.org/', '_blank');
-      if (telegramWindow) telegramWindow.opener = null;
-      navigator.clipboard.write([new ClipboardItem({ 'image/png': preparedInvoiceImage.blob })])
-        .then(() => {
-          setShareStatus(telegramWindow
-            ? 'تصویر در کلیپ‌بورد کپی شد و تلگرام باز شد. در گفت‌وگوی مشتری تصویر را Paste کنید و ارسال بزنید؛ هیچ فایلی ذخیره نشد.'
-            : 'تصویر در کلیپ‌بورد کپی شد اما مرورگر بازشدن تلگرام را مسدود کرد. تلگرام را باز کنید، تصویر را Paste و ارسال کنید؛ هیچ فایلی ذخیره نشد.');
-        })
-        .catch((error) => {
-          setShareStatus(`مرورگر اجازهٔ اشتراک یا کپی تصویر را نداد؛ هیچ فایلی ذخیره نشده است. از گوشی با فهرست اشتراک فایل استفاده کنید. (${error.message})`);
-        });
+    const phone = normalizeTelegramPhone(invoice.customer_phone || invoice.phone);
+    if (!phone) {
+      setShareStatus('شمارهٔ مشتری در فاکتور ثبت نشده است؛ برای بازکردن چت مستقیم، ابتدا شماره را در فاکتور ذخیره کنید.');
       return;
     }
-    navigator.share(shareData)
-      .then(() => setShareStatus('تصویر فاکتور با برنامهٔ انتخاب‌شده به اشتراک گذاشته شد.'))
-      .catch((error) => {
-        if (error.name === 'AbortError') setShareStatus('اشتراک‌گذاری لغو شد.');
-        else setShareStatus(`اشتراک‌گذاری انجام نشد: ${error.message}`);
-      });
+    const draftText = `سلام ${invoice.customer_name || 'مشتری گرامی'} عزیز، تصویر فاکتور و یادآوری مراسم شما از طرف تشریفات آژو تقدیم می‌شود.`;
+    const telegramWindow = window.open(
+      `https://t.me/+${phone}?text=${encodeURIComponent(draftText)}`,
+      '_blank',
+    );
+    if (!telegramWindow) {
+      setShareStatus('مرورگر بازشدن تلگرام را مسدود کرد؛ اجازهٔ بازشدن پنجرهٔ جدید را بدهید و دوباره بزنید.');
+      return;
+    }
+    telegramWindow.opener = null;
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+      setShareStatus('چت تلگرام باز شد، اما مرورگر کپی تصویر را پشتیبانی نمی‌کند. برای ارسال بدون ذخیره از گوشی/مرورگر دارای اشتراک تصویر استفاده کنید.');
+      return;
+    }
+    navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': preparedInvoiceImage.blob }),
+    ]).then(() => {
+      setShareStatus(`چت شمارهٔ ${invoice.customer_phone || invoice.phone} باز شد و تصویر کپی شد؛ داخل تلگرام در کادر پیام Paste کنید و ارسال بزنید. هیچ فایلی ذخیره نشد. اگر چت باز نشد، تنظیم حریم خصوصی تلگرام اجازهٔ پیدا کردن شما با این شماره را نمی‌دهد.`);
+    }).catch((error) => {
+      setShareStatus(`چت تلگرام باز شد، اما کپی تصویر مسدود شد: ${error.message}. هیچ فایلی ذخیره نشده است.`);
+    });
   };
 
   return (
@@ -301,10 +308,10 @@ export default function RemindersPanel() {
                   {preparedInvoiceImage?.invoiceId === invoice.id && (
                     <button
                       type="button"
-                      onClick={() => sharePreparedInvoiceImage(invoice)}
+                      onClick={() => openTelegramChatWithInvoice(invoice)}
                       className="reminders-mobile-button share"
                     >
-                      📤 بازکردن فهرست اشتراک
+                      ✈️ بازکردن چت تلگرام و کپی تصویر
                     </button>
                   )}
                 </div>
@@ -386,10 +393,10 @@ export default function RemindersPanel() {
                             <>
                               <button
                                 type="button"
-                                onClick={() => sharePreparedInvoiceImage(invoice)}
+                                onClick={() => openTelegramChatWithInvoice(invoice)}
                                 style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
                               >
-                                📤 بازکردن فهرست اشتراک
+                                ✈️ بازکردن چت تلگرام و کپی تصویر
                               </button>
                             </>
                           )}
@@ -455,7 +462,7 @@ export default function RemindersPanel() {
         </>
       )}
       <p style={{ margin: '12px 0 0', color: '#64748b', fontSize: '0.8rem', lineHeight: 1.8 }}>
-        بعد از آماده‌سازی تصویر، «بازکردن فهرست اشتراک» را بزنید و تلگرام را انتخاب کنید؛ در دستگاه‌های پشتیبانی‌شده تصویر بدون دانلود به تلگرام می‌رود و فقط انتخاب چت و زدن ارسال می‌ماند. اگر اشتراک فایل در مرورگر موجود نباشد، برنامه کپی تصویر به کلیپ‌بورد را امتحان می‌کند و هیچ فایلی ذخیره نمی‌کند.
+        پس از ساخت تصویر، «بازکردن چت تلگرام و کپی تصویر» را بزنید؛ چت شمارهٔ ثبت‌شده باز می‌شود و تصویر بدون دانلود کپی می‌شود. در تلگرام داخل کادر پیام Paste و ارسال کنید. بازشدن چت با شماره به تنظیمات حریم خصوصی تلگرام مشتری وابسته است.
       </p>
     </div>
   );
