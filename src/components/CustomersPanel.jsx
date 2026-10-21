@@ -234,11 +234,23 @@ export default function CustomersPanel() {
       <div style={{ ...styles.cardBox, border: editingId ? '2px solid #d97706' : '1px solid #e2e8f0' }}>
         <h3 style={styles.sectionTitle}>{editingId ? '✏️ ویرایش مشتری' : '➕ ثبت مشتری جدید'}</h3>
         
-        <div style={styles.formGrid}>
-          <input style={styles.input} placeholder="نام و نام خانوادگی *" value={name} onChange={e => setName(e.target.value)} />
-          <input style={styles.input} placeholder="شماره تماس (09...) *" value={phone} onChange={e => setPhone(e.target.value)} />
-          <input style={styles.input} placeholder="آدرس (اختیاری)" value={address} onChange={e => setAddress(e.target.value)} />
-          <input style={styles.input} placeholder="یادداشت (اختیاری)" value={notes} onChange={e => setNotes(e.target.value)} />
+        <div className="accounting-form-grid customer-form-grid" style={styles.formGrid}>
+          <div className="accounting-field">
+            <label htmlFor="customer-name">نام و نام خانوادگی *</label>
+            <input id="customer-name" style={styles.input} placeholder="نام مشتری" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div className="accounting-field">
+            <label htmlFor="customer-phone">شماره تماس *</label>
+            <input id="customer-phone" style={styles.input} type="tel" inputMode="tel" placeholder="مثلاً 09123456789" value={phone} onChange={e => setPhone(e.target.value)} />
+          </div>
+          <div className="accounting-field">
+            <label htmlFor="customer-address">آدرس</label>
+            <input id="customer-address" style={styles.input} placeholder="آدرس مشتری (اختیاری)" value={address} onChange={e => setAddress(e.target.value)} />
+          </div>
+          <div className="accounting-field">
+            <label htmlFor="customer-notes">یادداشت</label>
+            <input id="customer-notes" style={styles.input} placeholder="یادداشت تکمیلی (اختیاری)" value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
         </div>
 
         {/* بخش انتخاب معرف */}
@@ -249,16 +261,22 @@ export default function CustomersPanel() {
             <button type="button" style={{ ...styles.btnSmall, background: introducerMode === 'manual' ? '#78350f' : '#cbd5e1', fontSize: '10px' }} onClick={() => setIntroducerMode('manual')}>دستی</button>
           </div>
 
-          <div style={{ gridColumn: 'span 3' }}>
+          <div className="accounting-field" style={{ gridColumn: 'span 3' }}>
             {introducerMode === 'list' ? (
-              <select style={styles.input} value={selectedIntroducer} onChange={e => setSelectedIntroducer(e.target.value)}>
+              <>
+                <label htmlFor="customer-referral">انتخاب معرف</label>
+                <select id="customer-referral" style={styles.input} value={selectedIntroducer} onChange={e => setSelectedIntroducer(e.target.value)}>
                 <option value="">-- انتخاب معرف از بین مشتریان --</option>
                 {customers.map(c => (
                   <option key={c.id} value={c["Full name"]}>{c["Full name"]} ({c.phone})</option>
                 ))}
-              </select>
+                </select>
+              </>
             ) : (
-              <input style={styles.input} placeholder="نام معرف را به صورت دستی وارد کنید..." value={manualIntroducer} onChange={e => setManualIntroducer(e.target.value)} />
+              <>
+                <label htmlFor="customer-manual-referral">نام معرف</label>
+                <input id="customer-manual-referral" style={styles.input} placeholder="نام معرف را وارد کنید" value={manualIntroducer} onChange={e => setManualIntroducer(e.target.value)} />
+              </>
             )}
           </div>
         </div>
@@ -331,14 +349,29 @@ export default function CustomersPanel() {
         <div style={{ ...styles.cardBox, border: '2px solid #d97706' }}>
           <h3 style={styles.sectionTitle}>🎉 مراسم‌های «{selectedCustomer["Full name"]}» ({ceremonies.length})</h3>
 
-          <div style={styles.formGrid}>
-            <select style={styles.inputSmall} value={cerType} onChange={e => setCerType(e.target.value)}>
-              {CEREMONY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            <input style={styles.inputSmall} placeholder="تاریخ مراسم (مثلاً ۱۴۰۴/۰۵/۱۰)" value={cerDate} onChange={e => setCerDate(e.target.value)} />
-            <input style={styles.inputSmall} type="number" placeholder="تعداد مهمان" value={cerGuests} onChange={e => setCerGuests(e.target.value)} />
-            <input style={styles.inputSmall} type="number" placeholder="بودجه تقریبی (تومان)" value={cerBudget} onChange={e => setCerBudget(e.target.value)} />
-            <input style={styles.inputSmall} placeholder="یادداشت مراسم" value={cerNotes} onChange={e => setCerNotes(e.target.value)} />
+          <div className="accounting-form-grid ceremony-form-grid" style={styles.formGrid}>
+            <div className="accounting-field">
+              <label htmlFor="ceremony-type">نوع مراسم</label>
+              <select id="ceremony-type" style={styles.inputSmall} value={cerType} onChange={e => setCerType(e.target.value)}>
+                {CEREMONY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="accounting-field">
+              <label htmlFor="ceremony-date">تاریخ مراسم</label>
+              <input id="ceremony-date" style={styles.inputSmall} placeholder="مثلاً ۱۴۰۴/۰۵/۱۰" value={cerDate} onChange={e => setCerDate(e.target.value)} />
+            </div>
+            <div className="accounting-field">
+              <label htmlFor="ceremony-guests">تعداد مهمان</label>
+              <input id="ceremony-guests" style={styles.inputSmall} type="number" min="0" placeholder="تعداد" value={cerGuests} onChange={e => setCerGuests(e.target.value)} />
+            </div>
+            <div className="accounting-field">
+              <label htmlFor="ceremony-budget">بودجه تقریبی (تومان)</label>
+              <input id="ceremony-budget" style={styles.inputSmall} type="number" min="0" placeholder="مبلغ بودجه" value={cerBudget} onChange={e => setCerBudget(e.target.value)} />
+            </div>
+            <div className="accounting-field">
+              <label htmlFor="ceremony-notes">یادداشت مراسم</label>
+              <input id="ceremony-notes" style={styles.inputSmall} placeholder="یادداشت (اختیاری)" value={cerNotes} onChange={e => setCerNotes(e.target.value)} />
+            </div>
             <div>
               <button style={{ ...styles.btn, backgroundColor: editingCeremonyId ? '#d97706' : '#16a34a' }} onClick={handleSaveCeremony}>
                 {editingCeremonyId ? '💾 ذخیره مراسم' : '➕ افزودن مراسم'}

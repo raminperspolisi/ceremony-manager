@@ -217,7 +217,8 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems })
               <style>
                 @font-face { font-family: 'IRANSans'; src: url('https://cdn.fontcdn.ir/Font/Persian/IRANSans/IRANSans.woff2') format('woff2'); }
                 body { font-family: 'IRANSans', Tahoma, sans-serif; padding: 35px; direction: rtl; color: #1e293b; }
-                .header-title { text-align: center; font-weight: bold; font-size: 22px; margin-bottom: 25px; border-bottom: 2px solid #0284c7; padding-bottom: 12px; }
+                .header-title { display: flex; align-items: center; justify-content: center; gap: 16px; text-align: center; font-weight: bold; font-size: 22px; margin-bottom: 25px; border-bottom: 2px solid #0284c7; padding-bottom: 12px; }
+                .company-logo { width: 72px; height: 94px; object-fit: contain; }
                 .header-info { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
                 table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
                 th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; }
@@ -228,7 +229,10 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems })
               </style>
             </head>
             <body>
-              <div class="header-title">پیش‌فاکتور گالری آژو</div>
+              <div class="header-title">
+                <img class="company-logo" src="/azho-logo.png" alt="لوگوی آژو مراسم">
+                <span>پیش‌فاکتور گالری آژو</span>
+              </div>
               <div class="header-info">
                   <div><strong>نام مشتری:</strong> ${selectedCustomer["Full name"]}</div>
                   <div><strong>تلفن:</strong> ${selectedCustomer.phone || 'ثبت نشده'}</div>
@@ -413,18 +417,20 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems })
 
       {/* نوار جستجو و انتخاب مشتری */}
       <div style={{ background: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '15px', display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>تاریخ:</span>
+          <div className="accounting-inline-field">
+              <label htmlFor="quotation-date">تاریخ صدور</label>
               <input 
+                id="quotation-date"
                 style={{ ...win95Style.input, width: '120px', textAlign: 'center' }} 
                 value={quotationDate} 
                 onChange={(e) => setQuotationDate(e.target.value)} 
               />
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
-              <span style={{ fontWeight: 'bold' }}>مشتری:</span>
+          <div className="accounting-inline-field" style={{ position: 'relative' }}>
+              <label htmlFor="quotation-customer-search">مشتری</label>
               <input 
+                id="quotation-customer-search"
                 style={{ ...win95Style.input, width: '220px' }} 
                 placeholder="جستجوی نام مشتری..." 
                 value={searchTerm} 
@@ -449,19 +455,29 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems })
 
       {/* فرم افزودن مشتری جدید */}
       {showAddCustomerForm && (
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '6px', marginBottom: '15px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="accounting-form-grid" style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '6px', marginBottom: '15px' }}>
+            <div className="accounting-field">
+            <label htmlFor="quotation-new-customer-name">نام و نام خانوادگی</label>
             <input 
-              style={{ ...win95Style.input, flex: '1 1 200px' }} 
-              placeholder="نام کامل مشتری" 
+              id="quotation-new-customer-name"
+              style={win95Style.input}
+              placeholder="نام مشتری"
               value={newCustomerName} 
               onChange={(e) => setNewCustomerName(e.target.value)} 
             />
+            </div>
+            <div className="accounting-field">
+            <label htmlFor="quotation-new-customer-phone">شماره تماس</label>
             <input 
-              style={{ ...win95Style.input, flex: '1 1 160px' }} 
-              placeholder="شماره تماس" 
+              id="quotation-new-customer-phone"
+              style={win95Style.input}
+              type="tel"
+              inputMode="tel"
+              placeholder="مثلاً 09123456789"
               value={newCustomerPhone} 
               onChange={(e) => setNewCustomerPhone(e.target.value)} 
             />
+            </div>
             <button 
               style={{ ...win95Style.button, backgroundColor: '#10b981' }} 
               onClick={handleAddNewCustomer}>

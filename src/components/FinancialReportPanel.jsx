@@ -226,7 +226,8 @@ export default function FinancialReportPanel() {
         <title>فاکتور رسمی مراسم - #${invoiceNumber}</title>
         <style>
           body { font-family: Tahoma, sans-serif; direction: rtl; padding: 20px; color: #1e293b; background: #fff; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px; }
+          .header { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px; }
+          .company-logo { width: 72px; height: 94px; object-fit: contain; }
           .title { font-size: 20px; font-weight: bold; color: #0f172a; }
           .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 20px; }
           table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; }
@@ -247,6 +248,7 @@ export default function FinancialReportPanel() {
             <div class="title">صورتحساب رسمی خدمات تشریفات</div>
             <div style="font-size: 12px; color: #0369a1; margin-top: 4px;">شماره فاکتور: #${invoiceNumber}</div>
           </div>
+          <img class="company-logo" src="/azho-logo.png" alt="لوگوی آژو مراسم">
           <div style="text-align: left; font-size: 12px; color: #64748b;">تاریخ ثبت: ${registerDate}</div>
         </div>
 
@@ -617,8 +619,11 @@ export default function FinancialReportPanel() {
 
             <form onSubmit={handleAddItem} style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', padding: '12px', borderRadius: '6px', marginBottom: '20px' }}>
               <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '8px' }}>➕ افزودن قلم یا کالا به این فاکتور:</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+              <div className="accounting-form-grid invoice-item-form-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                <div className="accounting-field">
+                <label htmlFor="invoice-item-title">عنوان کالا یا خدمت</label>
                 <input 
+                  id="invoice-item-title"
                   type="text" 
                   placeholder="عنوان کالا یا خدمت" 
                   value={newItemTitle}
@@ -626,7 +631,11 @@ export default function FinancialReportPanel() {
                   style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px' }}
                   required
                 />
+                </div>
+                <div className="accounting-field">
+                <label htmlFor="invoice-item-type">نوع کالا</label>
                 <select 
+                  id="invoice-item-type"
                   value={newItemType}
                   onChange={(e) => setNewItemType(e.target.value)}
                   style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', background: '#fff' }}
@@ -634,21 +643,32 @@ export default function FinancialReportPanel() {
                   <option value="rent">اجاره‌ای</option>
                   <option value="sale">فروشی</option>
                 </select>
+                </div>
+                <div className="accounting-field">
+                <label htmlFor="invoice-item-quantity">تعداد</label>
                 <input 
+                  id="invoice-item-quantity"
                   type="number" 
                   min="1" 
+                  placeholder="تعداد"
                   value={newItemQty}
                   onChange={(e) => setNewItemQty(e.target.value)}
                   style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', background: '#fff' }}
                 />
+                </div>
+                <div className="accounting-field">
+                <label htmlFor="invoice-item-price">قیمت واحد (تومان)</label>
                 <input 
+                  id="invoice-item-price"
                   type="number" 
                   min="0" 
                   step="1000" 
+                  placeholder="مبلغ"
                   value={newItemPrice}
                   onChange={(e) => setNewItemPrice(e.target.value)}
                   style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', background: '#fff' }}
                 />
+                </div>
                 <button 
                   type="submit"
                   style={{ background: '#16a34a', color: '#fff', border: 'none', padding: '7px 12px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}

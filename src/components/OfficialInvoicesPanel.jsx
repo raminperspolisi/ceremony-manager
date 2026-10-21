@@ -22,6 +22,10 @@ export default function OfficialInvoicesPanel() {
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [isCustomerListOpen, setIsCustomerListOpen] = useState(false);
+  const [customerLoadError, setCustomerLoadError] = useState('');
   const [editableItems, setEditableItems] = useState([]);
   const [paidAmount, setPaidAmount] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
@@ -31,7 +35,24 @@ export default function OfficialInvoicesPanel() {
 
   useEffect(() => {
     fetchOfficialInvoices();
+    const fetchCustomers = async () => {
+      const { data, error } = await supabase.from('customers').select('id, "Full name", phone, address');
+      if (error) {
+        setCustomerLoadError(`بارگذاری فهرست مشتریان ناموفق بود: ${error.message}`);
+        return;
+      }
+      setCustomers(data || []);
+      setCustomerLoadError('');
+    };
+    fetchCustomers();
   }, []);
+
+  const filteredCustomers = customers.filter((customer) => {
+    const query = customerSearch.trim().toLocaleLowerCase('fa-IR');
+    return query && [customer['Full name'], customer.phone].some((value) =>
+      String(value || '').toLocaleLowerCase('fa-IR').includes(query)
+    );
+  }).slice(0, 8);
 
   // محاسبه مانده بدهی
   const calcRemaining = (total, paid) => Math.max(0, Number(total || 0) - Number(paid || 0));
@@ -159,7 +180,7 @@ export default function OfficialInvoicesPanel() {
       if (isRent) {
         return sum + (unitPrice * qty);
       } else {
-        const buyCost = Number(item.base_cost || 0);
+        const buyCost = Number(item.base_cost ?? item.cost ?? item.unit_cost ?? 0);
         const profitPerItem = Math.max(0, unitPrice - buyCost);
         return sum + (profitPerItem * qty);
       }
@@ -169,6 +190,8 @@ export default function OfficialInvoicesPanel() {
   const handleStartEdit = (inv) => {
     setEditingId(inv.id);
     setCustomerName(inv.customer_name || '');
+    setCustomerSearch(inv.customer_name || '');
+    setIsCustomerListOpen(false);
     setCustomerPhone(inv.customer_phone || inv.phone || '');
     setOrderDate(inv.order_date || '');
     setCeremonyDate(inv.ceremony_date || '');
@@ -185,7 +208,7 @@ export default function OfficialInvoicesPanel() {
         p1: Number(item.p1 || item.price || 0),
         p2: Number(item.p2 || 0),
         p3: Number(item.p3 || 0),
-        base_cost: Number(item.base_cost || 0),
+        base_cost: Number(item.base_cost ?? item.cost ?? item.unit_cost ?? 0),
         qty: Number(item.qty || 1)
       };
     });
@@ -255,6 +278,7 @@ export default function OfficialInvoicesPanel() {
       alert("خطا در ذخیره اطلاعات: " + error.message);
     } else {
       setEditingId(null);
+      setIsCustomerListOpen(false);
       fetchOfficialInvoices();
     }
   };
@@ -274,7 +298,8 @@ export default function OfficialInvoicesPanel() {
           <style>
             @page { size: A4; margin: 15mm; }
             body { font-family: Tahoma, sans-serif; padding: 30px; direction: rtl; }
-            .header-container { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 10px; margin-bottom: 15px; }
+            .header-container { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 2px solid #334155; padding-bottom: 10px; margin-bottom: 15px; }
+            .company-logo { width: 72px; height: 94px; object-fit: contain; }
             h2 { margin: 0; font-size: 18px; color: #1e293b; }
             .invoice-number { font-size: 14px; font-weight: bold; color: #0369a1; background: #f0f9ff; padding: 5px 10px; border: 1px solid #bae6fd; border-radius: 4px; }
             .info-box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin-bottom: 20px; font-size: 13px; line-height: 1.8; }
@@ -293,6 +318,7 @@ export default function OfficialInvoicesPanel() {
         </head>
         <body>
           <div class="header-container">
+            <img class="company-logo" src="/azho-logo.png" alt="لوگوی آژو مراسم">
             <h2>فاکتور رسمی فروش و اجاره تشریفات آژو</h2>
             <div class="invoice-number">شماره فاکتور: #${inv.id}</div>
           </div>
@@ -435,10 +461,50 @@ export default function OfficialInvoicesPanel() {
                             <input
                               type="text"
                               value={customerName}
-                              onChange={(e) => setCustomerName(e.target.value)}
-                              placeholder="نام مشتری"
-                              style={{ width: '110px', padding: '4px', fontSize: '11px' }}
+                              onFocus={() => {
+                                setCustomerSearch(customerName);
+                                setIsCustomerListOpen(true);
+                              }}
+                              onChange={(e) => {
+                                setCustomerName(e.target.value);
+                                setCustomerSearch(e.target.value);
+                                setIsCustomerListOpen(true);
+                              }}
+                              placeholder="جست‌وجوی مشتری"
+                              autoComplete="off"
+                              style={{ width: '170px', padding: '4px', fontSize: '11px' }}
                             />
+                            {isCustomerListOpen && (
+                              <div style={{ position: 'relative', zIndex: 20 }}>
+                                <div style={{ position: 'absolute', top: 0, right: 0, width: '220px', maxHeight: '180px', overflowY: 'auto', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '5px', boxShadow: '0 4px 12px rgba(15,23,42,.15)' }}>
+                                  {customerLoadError ? (
+                                    <div role="alert" style={{ padding: '8px', color: '#b91c1c', whiteSpace: 'normal' }}>{customerLoadError}</div>
+                                  ) : filteredCustomers.length ? filteredCustomers.map((customer) => (
+                                    <button
+                                      key={customer.id}
+                                      type="button"
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={() => {
+                                        const name = customer['Full name'] || '';
+                                        setCustomerName(name);
+                                        setCustomerSearch(name);
+                                        setCustomerPhone(customer.phone || '');
+                                        setCustomerAddress(customer.address || '');
+                                        setIsCustomerListOpen(false);
+                                      }}
+                                      style={{ display: 'flex', flexDirection: 'column', width: '100%', padding: '8px', border: 0, borderBottom: '1px solid #e2e8f0', background: '#fff', textAlign: 'right', cursor: 'pointer' }}
+                                    >
+                                      <span>{customer['Full name'] || 'بدون نام'}</span>
+                                      <small dir="ltr" style={{ color: '#64748b', textAlign: 'right' }}>{customer.phone || 'بدون شماره'}</small>
+                                    </button>
+                                  )) : (
+                                    <div style={{ padding: '8px', color: '#64748b', whiteSpace: 'normal' }}>
+                                      {customerSearch.trim() ? 'مشتری پیدا نشد؛ نام را می‌توانید دستی وارد کنید.' : 'برای جست‌وجو نام یا شماره را بنویسید.'}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                             <input
                               type="text"
                               value={customerPhone}

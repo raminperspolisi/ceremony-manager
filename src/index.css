@@ -1,6 +1,3 @@
-/* ۱. دستور import حتما باید خط اول باشد */
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap');
-
 /* ۲. ریست کردن استایل‌های پیش‌فرض مرورگر */
 * {
   margin: 0;
