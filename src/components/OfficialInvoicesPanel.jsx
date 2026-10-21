@@ -11,7 +11,7 @@ const PAYMENT_STATUSES = [
 const getStatusMeta = (status) =>
   PAYMENT_STATUSES.find(s => s.value === status) || PAYMENT_STATUSES[0];
 
-export default function OfficialInvoicesPanel() {
+export default function OfficialInvoicesPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -120,7 +120,7 @@ export default function OfficialInvoicesPanel() {
 
     const text = encodeURIComponent(
       `سلام ${inv.customer_name || 'مشتری عزیز'} عزیز،\n` +
-      `با تشکر از انتخاب تشریفات آژو 🕊️\n` +
+      `با تشکر از انتخاب ${businessName} 🕊️\n` +
       `جزئیات فاکتور شماره #${inv.id}:\n` +
       `📅 تاریخ مراسم: ${inv.ceremony_date || 'تعیین نشده'}\n` +
       `💰 مبلغ کل: ${total.toLocaleString()} تومان\n` +
@@ -291,6 +291,12 @@ export default function OfficialInvoicesPanel() {
     const total = Number(inv.total_price || 0);
     const remaining = calcRemaining(total, paid);
     const statusMeta = getStatusMeta(inv.payment_status);
+    const safeBusinessName = String(businessName).replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[character]));
+    const safeLogoUrl = String(logoUrl).replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[character]));
 
     printWindow.document.write(`
       <html dir="rtl">
@@ -318,8 +324,8 @@ export default function OfficialInvoicesPanel() {
         </head>
         <body>
           <div class="header-container">
-            <img class="company-logo" src="/azho-logo.png" alt="لوگوی آژو مراسم">
-            <h2>فاکتور رسمی فروش و اجاره تشریفات آژو</h2>
+            <img class="company-logo" src="${safeLogoUrl}" alt="لوگوی ${safeBusinessName}">
+            <h2>فاکتور رسمی فروش و اجاره ${safeBusinessName}</h2>
             <div class="invoice-number">شماره فاکتور: #${inv.id}</div>
           </div>
           <div class="info-box">

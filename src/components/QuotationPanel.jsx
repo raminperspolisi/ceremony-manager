@@ -61,7 +61,7 @@ const win95Style = {
   }
 };
 
-export default function QuotationPanel({ selectedItems = [], setSelectedItems }) {
+export default function QuotationPanel({ selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const items = selectedItems || [];
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -209,11 +209,17 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems })
 
       const printWindow = window.open("", "_blank");
       if (printWindow) {
+        const safeBusinessName = String(businessName).replace(/[&<>"']/g, (character) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[character]));
+        const safeLogoUrl = String(logoUrl).replace(/[&<>"']/g, (character) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[character]));
         printWindow.document.write(`
           <html dir="rtl" lang="fa">
             <head>
               <meta charset="UTF-8">
-              <title>پیش‌فاکتور گالری آژو - ${selectedCustomer["Full name"]}</title>
+              <title>پیش‌فاکتور ${safeBusinessName} - ${selectedCustomer["Full name"]}</title>
               <style>
                 @font-face { font-family: 'IRANSans'; src: url('https://cdn.fontcdn.ir/Font/Persian/IRANSans/IRANSans.woff2') format('woff2'); }
                 body { font-family: 'IRANSans', Tahoma, sans-serif; padding: 35px; direction: rtl; color: #1e293b; }
@@ -230,8 +236,8 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems })
             </head>
             <body>
               <div class="header-title">
-                <img class="company-logo" src="/azho-logo.png" alt="لوگوی آژو مراسم">
-                <span>پیش‌فاکتور گالری آژو</span>
+                <img class="company-logo" src="${safeLogoUrl}" alt="لوگوی ${safeBusinessName}">
+                <span>پیش‌فاکتور ${safeBusinessName}</span>
               </div>
               <div class="header-info">
                   <div><strong>نام مشتری:</strong> ${selectedCustomer["Full name"]}</div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-export default function FinancialReportPanel() {
+export default function FinancialReportPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -189,6 +189,12 @@ export default function FinancialReportPanel() {
     const ceremonyDate = selectedInvoice.ceremony_date ? new Date(selectedInvoice.ceremony_date).toLocaleDateString('fa-IR') : 'تعیین نشده';
     const registerDate = selectedInvoice.created_at ? new Date(selectedInvoice.created_at).toLocaleDateString('fa-IR') : '---';
     const totalAmount = Number(selectedInvoice.total_price || selectedInvoice.total_amount || 0).toLocaleString();
+    const safeBusinessName = String(businessName).replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[character]));
+    const safeLogoUrl = String(logoUrl).replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[character]));
 
     let itemsHtml = '';
     if (items.length === 0) {
@@ -223,7 +229,7 @@ export default function FinancialReportPanel() {
       <html lang="fa" dir="rtl">
       <head>
         <meta charset="UTF-8">
-        <title>فاکتور رسمی مراسم - #${invoiceNumber}</title>
+        <title>فاکتور رسمی ${safeBusinessName} - #${invoiceNumber}</title>
         <style>
           body { font-family: Tahoma, sans-serif; direction: rtl; padding: 20px; color: #1e293b; background: #fff; }
           .header { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px; }
@@ -245,10 +251,10 @@ export default function FinancialReportPanel() {
       <body>
         <div class="header">
           <div>
-            <div class="title">صورتحساب رسمی خدمات تشریفات</div>
+            <div class="title">صورتحساب رسمی خدمات ${safeBusinessName}</div>
             <div style="font-size: 12px; color: #0369a1; margin-top: 4px;">شماره فاکتور: #${invoiceNumber}</div>
           </div>
-          <img class="company-logo" src="/azho-logo.png" alt="لوگوی آژو مراسم">
+          <img class="company-logo" src="${safeLogoUrl}" alt="لوگوی ${safeBusinessName}">
           <div style="text-align: left; font-size: 12px; color: #64748b;">تاریخ ثبت: ${registerDate}</div>
         </div>
 

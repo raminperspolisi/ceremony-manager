@@ -49,7 +49,7 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character
   "'": '&#39;',
 }[character]));
 
-const createInvoiceImageMarkup = (invoice) => {
+const createInvoiceImageMarkup = (invoice, businessName, logoUrl) => {
   const summary = getInvoiceSummary(invoice);
   const invoiceNumber = invoice.invoice_number || invoice.invoiceNumber || invoice.id;
   const statusLabels = {
@@ -74,14 +74,14 @@ const createInvoiceImageMarkup = (invoice) => {
     <div style="box-sizing:border-box;width:900px;padding:38px;background:#fff;color:#1e293b;direction:rtl;font-family:Vazirmatn,Tahoma,sans-serif;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:18px;padding-bottom:18px;border-bottom:3px solid #0f766e;">
         <div>
-          <div style="font-size:25px;font-weight:800;color:#0f172a;">فاکتور رسمی فروش و اجاره تشریفات آژو</div>
+          <div style="font-size:25px;font-weight:800;color:#0f172a;">فاکتور رسمی فروش و اجاره ${escapeHtml(businessName)}</div>
           <div style="margin-top:8px;font-size:15px;color:#0f766e;">یادآوری مراسم و وضعیت فاکتور</div>
         </div>
-        <img src="/azho-logo.png" alt="لوگوی آژو" style="width:82px;height:96px;object-fit:contain;">
+        <img src="${escapeHtml(logoUrl)}" alt="لوگوی ${escapeHtml(businessName)}" style="width:82px;height:96px;object-fit:contain;">
       </div>
       <div style="margin:20px 0;padding:16px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;font-size:15px;line-height:2;">
         <div style="font-size:17px;font-weight:700;">سلام ${escapeHtml(invoice.customer_name || 'مشتری گرامی')} محترم،</div>
-        <div>یادآوری مراسم شما را از طرف تشریفات آژو تقدیم می‌کنیم. مشتاق دیدار شما هستیم.</div>
+        <div>یادآوری مراسم شما را از طرف ${escapeHtml(businessName)} تقدیم می‌کنیم. مشتاق دیدار شما هستیم.</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px 28px;margin-top:8px;">
           <span><strong>شماره فاکتور:</strong> #${escapeHtml(invoiceNumber)}</span>
           <span><strong>شماره تماس:</strong> ${escapeHtml(invoice.customer_phone || invoice.phone || 'ثبت نشده')}</span>
@@ -108,14 +108,14 @@ const createInvoiceImageMarkup = (invoice) => {
         <div style="display:flex;justify-content:space-between;"><strong>وضعیت پرداخت:</strong><strong>${statusLabels[invoice.payment_status] || (summary.remaining ? 'تسویه نشده' : 'تسویه شده')}</strong></div>
       </div>
       <div style="margin-top:20px;padding-top:14px;border-top:1px solid #cbd5e1;text-align:center;color:#475569;font-size:13px;line-height:1.9;">
-        برای هماهنگی‌های نهایی یا تسویه، با ما در تماس باشید.<br>با احترام، تشریفات آژو 🙏
+        برای هماهنگی‌های نهایی یا تسویه، با ما در تماس باشید.<br>        با احترام، ${escapeHtml(businessName)} 🙏
       </div>
     </div>`;
 };
 
-const renderInvoiceImage = async (invoice) => {
+const renderInvoiceImage = async (invoice, businessName, logoUrl) => {
   const imageElement = document.createElement('div');
-  imageElement.innerHTML = createInvoiceImageMarkup(invoice);
+  imageElement.innerHTML = createInvoiceImageMarkup(invoice, businessName, logoUrl);
   Object.assign(imageElement.style, {
     position: 'fixed',
     left: '-10000px',
@@ -162,7 +162,7 @@ const normalizeTelegramPhone = (phone) => {
   return digits;
 };
 
-export default function RemindersPanel() {
+export default function RemindersPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -197,7 +197,7 @@ export default function RemindersPanel() {
     setSharingInvoiceId(invoice.id);
     setShareStatus('');
     try {
-      const image = await renderInvoiceImage(invoice);
+      const image = await renderInvoiceImage(invoice, businessName, logoUrl);
       setPreparedInvoiceImage({ invoiceId: invoice.id, ...image });
       setShareStatus('تصویر آماده شد. حالا «بازکردن فهرست اشتراک» را بزنید تا برنامه‌های در دسترس دستگاه نمایش داده شوند.');
     } catch (error) {
@@ -217,7 +217,7 @@ export default function RemindersPanel() {
       setShareStatus('شمارهٔ مشتری در فاکتور ثبت نشده است؛ برای بازکردن چت مستقیم، ابتدا شماره را در فاکتور ذخیره کنید.');
       return;
     }
-    const draftText = `سلام ${invoice.customer_name || 'مشتری گرامی'} عزیز، تصویر فاکتور و یادآوری مراسم شما از طرف تشریفات آژو تقدیم می‌شود.`;
+    const draftText = `سلام ${invoice.customer_name || 'مشتری گرامی'} عزیز، تصویر فاکتور و یادآوری مراسم شما از طرف ${businessName} تقدیم می‌شود.`;
     const file = new File(
       [preparedInvoiceImage.blob],
       preparedInvoiceImage.fileName,

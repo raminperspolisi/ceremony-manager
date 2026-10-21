@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 
 const CEREMONY_TYPES = ['عروسی', 'عقد', 'نامزدی', 'تولد', 'حنابندان', 'همایش', 'سایر'];
 
-export default function CustomersPanel() {
+export default function CustomersPanel({ businessName = 'تشریفات آژو' }) {
   // فرم مشتری
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
@@ -153,7 +153,7 @@ export default function CustomersPanel() {
         advance_payment: 0,
         paid_amount: 0,
         status: 'رزرو شده',
-        location: selectedCustomer.address || 'تالار تشریفات آژو'
+        location: selectedCustomer.address || `تالار ${businessName}`
       };
 
       if (editingCeremonyId) {
@@ -226,7 +226,7 @@ export default function CustomersPanel() {
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.headerTitle}>✨ مدیریت مشتریان و مراسم‌ها | تشریفات آژو</h2>
+      <h2 style={styles.headerTitle}>✨ مدیریت مشتریان و مراسم‌ها | {businessName}</h2>
 
       {error && <div style={styles.errBox}>{error}</div>}
 
