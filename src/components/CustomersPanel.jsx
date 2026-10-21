@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import FormattedNumberInput from './FormattedNumberInput';
 
 const CEREMONY_TYPES = ['عروسی', 'عقد', 'نامزدی', 'تولد', 'حنابندان', 'همایش', 'سایر'];
 
@@ -362,11 +363,11 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
             </div>
             <div className="accounting-field">
               <label htmlFor="ceremony-guests">تعداد مهمان</label>
-              <input id="ceremony-guests" style={styles.inputSmall} type="number" min="0" placeholder="تعداد" value={cerGuests} onChange={e => setCerGuests(e.target.value)} />
+              <FormattedNumberInput id="ceremony-guests" style={styles.inputSmall} allowDecimal={false} placeholder="تعداد" value={cerGuests} onValueChange={setCerGuests} />
             </div>
             <div className="accounting-field">
               <label htmlFor="ceremony-budget">بودجه تقریبی (تومان)</label>
-              <input id="ceremony-budget" style={styles.inputSmall} type="number" min="0" placeholder="مبلغ بودجه" value={cerBudget} onChange={e => setCerBudget(e.target.value)} />
+              <FormattedNumberInput id="ceremony-budget" style={styles.inputSmall} allowDecimal={false} placeholder="مبلغ بودجه" value={cerBudget} onValueChange={setCerBudget} />
             </div>
             <div className="accounting-field">
               <label htmlFor="ceremony-notes">یادداشت مراسم</label>

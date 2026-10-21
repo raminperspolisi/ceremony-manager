@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import FormattedNumberInput from './FormattedNumberInput';
 
 // مقادیر مجاز وضعیت پرداخت
 const PAYMENT_STATUSES = [
@@ -575,10 +576,9 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
 
                       <td style={{ padding: '10px', color: '#0d9488' }}>
                         {isEditing ? (
-                          <input
-                            type="number"
+                          <FormattedNumberInput
                             value={paidAmount}
-                            onChange={(e) => setPaidAmount(Number(e.target.value))}
+                            onValueChange={(value) => setPaidAmount(value)}
                             style={{ width: '80px', padding: '4px', fontSize: '11px', textAlign: 'center' }}
                           />
                         ) : (
@@ -748,18 +748,17 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                                       </select>
                                     </td>
                                     <td style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                      <input
-                                        type="number"
+                                      <FormattedNumberInput
+                                        allowDecimal={false}
                                         value={item.qty || 1}
-                                        onChange={(e) => handleItemChange(itemIdx, 'qty', Number(e.target.value))}
+                                        onValueChange={(value) => handleItemChange(itemIdx, 'qty', Number(value))}
                                         style={{ width: '50px', padding: '4px', textAlign: 'center' }}
                                       />
                                     </td>
                                     <td style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                      <input
-                                        type="number"
+                                      <FormattedNumberInput
                                         value={getActiveUnitPrice(item)}
-                                        onChange={(e) => handleUnitPriceChange(itemIdx, e.target.value)}
+                                        onValueChange={(value) => handleUnitPriceChange(itemIdx, value)}
                                         style={{ width: '100px', padding: '4px', textAlign: 'center' }}
                                       />
                                     </td>
@@ -785,10 +784,9 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                               </div>
                               <div>
                                 <strong style={{ color: '#0d9488' }}>مبلغ پرداختی (بیعانه):</strong>{' '}
-                                <input
-                                  type="number"
+                                <FormattedNumberInput
                                   value={paidAmount}
-                                  onChange={(e) => setPaidAmount(Number(e.target.value))}
+                                  onValueChange={(value) => setPaidAmount(value)}
                                   style={{ width: '100px', padding: '4px', fontSize: '11px', textAlign: 'center' }}
                                 /> تومان
                               </div>

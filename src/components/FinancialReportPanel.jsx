@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import FormattedNumberInput from './FormattedNumberInput';
 
 export default function FinancialReportPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [invoices, setInvoices] = useState([]);
@@ -652,26 +653,22 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
                 </div>
                 <div className="accounting-field">
                 <label htmlFor="invoice-item-quantity">تعداد</label>
-                <input 
+                <FormattedNumberInput
                   id="invoice-item-quantity"
-                  type="number" 
-                  min="1" 
+                  allowDecimal={false}
                   placeholder="تعداد"
                   value={newItemQty}
-                  onChange={(e) => setNewItemQty(e.target.value)}
+                  onValueChange={setNewItemQty}
                   style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', background: '#fff' }}
                 />
                 </div>
                 <div className="accounting-field">
                 <label htmlFor="invoice-item-price">قیمت واحد (تومان)</label>
-                <input 
+                <FormattedNumberInput
                   id="invoice-item-price"
-                  type="number" 
-                  min="0" 
-                  step="1000" 
                   placeholder="مبلغ"
                   value={newItemPrice}
-                  onChange={(e) => setNewItemPrice(e.target.value)}
+                  onValueChange={setNewItemPrice}
                   style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', background: '#fff' }}
                 />
                 </div>

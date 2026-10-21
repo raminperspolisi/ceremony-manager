@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { styles, formatDisplay } from '../styles'; 
 import { supabase } from '../supabaseClient';
+import FormattedNumberInput from './FormattedNumberInput';
 
 const win95Style = {
   window: { 
@@ -559,11 +560,10 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                       </span>
                     </td>
                     <td style={{ ...win95Style.tableCell, width: '85px' }}>
-                      <input 
-                        type="number" 
-                        min="1"
+                      <FormattedNumberInput
+                        allowDecimal={false}
                         value={item.requestedQuantity ?? ""} 
-                        onChange={(e) => handleQuantityChange(item.id, e.target.value)} 
+                        onValueChange={(value) => handleQuantityChange(item.id, value)}
                         style={{ ...win95Style.input, width: '100%', textAlign: 'center' }} 
                       />
                     </td>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import FormattedNumberInput from './FormattedNumberInput';
 
 export default function InventoryPanel({ items, refresh, onItemSelected, onItemUpdated }) {
   const [title, setTitle] = useState('');
@@ -160,10 +161,9 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
         <div>
           <label style={{ display: 'block', marginBottom: '4px', color: '#475569' }}>قیمت خرید</label>
-          <input 
-            type="number" 
-            value={baseCost} 
-            onChange={(e) => setBaseCost(e.target.value)} 
+          <FormattedNumberInput
+            value={baseCost}
+            onValueChange={setBaseCost}
             placeholder="۰"
             style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
           />
@@ -171,10 +171,9 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
         <div>
           <label style={{ display: 'block', marginBottom: '4px', color: '#475569' }}>نرخ سطح ۱</label>
-          <input 
-            type="number" 
-            value={price1} 
-            onChange={(e) => setPrice1(e.target.value)} 
+          <FormattedNumberInput
+            value={price1}
+            onValueChange={setPrice1}
             placeholder="۰"
             style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
           />
@@ -182,10 +181,9 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
         <div>
           <label style={{ display: 'block', marginBottom: '4px', color: '#475569' }}>نرخ سطح ۲</label>
-          <input 
-            type="number" 
-            value={price2} 
-            onChange={(e) => setPrice2(e.target.value)} 
+          <FormattedNumberInput
+            value={price2}
+            onValueChange={setPrice2}
             placeholder="۰"
             style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
           />
@@ -193,10 +191,9 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
         <div>
           <label style={{ display: 'block', marginBottom: '4px', color: '#475569' }}>نرخ سطح ۳</label>
-          <input 
-            type="number" 
-            value={price3} 
-            onChange={(e) => setPrice3(e.target.value)} 
+          <FormattedNumberInput
+            value={price3}
+            onValueChange={setPrice3}
             placeholder="۰"
             style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
           />
@@ -311,7 +308,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                       {showCostPrice && (
                         <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#b91c1c', fontWeight: 'bold' }}>
                           {isEditing ? (
-                            <input type="number" value={editForm.base_cost} onChange={(e) => setEditForm({...editForm, base_cost: e.target.value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                            <FormattedNumberInput value={editForm.base_cost} onValueChange={(value) => setEditForm({...editForm, base_cost: value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                           ) : (
                             `${Number(item.base_cost || 0).toLocaleString()} ت`
                           )}
@@ -320,7 +317,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
                       <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
                         {isEditing ? (
-                          <input type="number" value={editForm.price_level1} onChange={(e) => setEditForm({...editForm, price_level1: e.target.value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                          <FormattedNumberInput value={editForm.price_level1} onValueChange={(value) => setEditForm({...editForm, price_level1: value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                         ) : (
                           `${Number(item.price_level1 || 0).toLocaleString()} ت`
                         )}
@@ -328,7 +325,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
                       <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
                         {isEditing ? (
-                          <input type="number" value={editForm.price_level2} onChange={(e) => setEditForm({...editForm, price_level2: e.target.value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                          <FormattedNumberInput value={editForm.price_level2} onValueChange={(value) => setEditForm({...editForm, price_level2: value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                         ) : (
                           `${Number(item.price_level2 || 0).toLocaleString()} ت`
                         )}
@@ -336,7 +333,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
                       <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
                         {isEditing ? (
-                          <input type="number" value={editForm.price_level3} onChange={(e) => setEditForm({...editForm, price_level3: e.target.value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                          <FormattedNumberInput value={editForm.price_level3} onValueChange={(value) => setEditForm({...editForm, price_level3: value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                         ) : (
                           `${Number(item.price_level3 || 0).toLocaleString()} ت`
                         )}
