@@ -66,12 +66,15 @@ const getInvoiceItemPrice = (item) => {
 
 export default function CalendarPanel() {
   const todayJ = moment().locale("fa");
+  const todayLabel = formatPersianDigits(todayJ.format("dddd jD jMMMM jYYYY"));
   const [jYear, setJYear] = useState(todayJ.jYear());
+  const displayYear = formatPersianDigits(jYear);
   const [jMonth, setJMonth] = useState(todayJ.jMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(gregorianISOToJalali(moment().format("YYYY-MM-DD")));
   const [events, setEvents] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -165,14 +168,23 @@ export default function CalendarPanel() {
       const { data, error: err } = await supabase.from("customers").select("id, \"Full name\", phone");
       if (err) throw err;
       setCustomers(data || []);
-    } catch (e) {
-      // خاموش
+    } catch (err) {
+      setError((currentError) => currentError || "خطا در بارگذاری مشتریان تقویم: " + err.message);
     }
   }, []);
 
+  const refreshCalendarData = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([fetchEvents(), fetchInvoices(), fetchCustomers()]);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchEvents, fetchInvoices, fetchCustomers]);
+
   useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+    refreshCalendarData();
+  }, [refreshCalendarData]);
 
   // کلیک روی تقویم گرافیکی برای انتخاب تاریخ فرم
   const handleDayClick = useCallback((dayStr) => {
@@ -294,7 +306,12 @@ export default function CalendarPanel() {
           <h2>تقویم مراسم‌ها</h2>
           <p>مراسم‌های ثبت‌شده و تاریخ مراسم فاکتورهای رسمی را یکجا ببینید.</p>
         </div>
-        <div className="calendar-month-badge">{JMONTHS[jMonth - 1]} {jYear.toLocaleString("fa-IR")}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div className="calendar-month-badge">امروز: {todayLabel}</div>
+          <button type="button" className="refresh-button" onClick={refreshCalendarData} disabled={refreshing}>
+            {refreshing ? "در حال بارگذاری..." : "↻ تازه‌سازی"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -423,7 +440,7 @@ export default function CalendarPanel() {
         >
           قبلی ←
         </button>
-        <span>{JMONTHS[jMonth - 1]} {jYear.toLocaleString("fa-IR")}</span>
+        <span>{JMONTHS[jMonth - 1]} {displayYear}</span>
         <button
           type="button"
           onClick={() => {
@@ -481,7 +498,7 @@ export default function CalendarPanel() {
           <div className="calendar-day-details-heading">
             <div>
               <span className="calendar-eyebrow">برنامهٔ روز انتخاب‌شده</span>
-              <h3>{selectedDay.replace(/\d+/g, (digit) => Number(digit).toLocaleString("fa-IR"))} {JMONTHS[jMonth - 1]} {jYear.toLocaleString("fa-IR")}</h3>
+              <h3>{selectedDay.replace(/\d+/g, (digit) => Number(digit).toLocaleString("fa-IR"))} {JMONTHS[jMonth - 1]} {displayYear}</h3>
             </div>
             <span className="calendar-day-count">{selectedDayEvents.length.toLocaleString("fa-IR")} مورد</span>
           </div>

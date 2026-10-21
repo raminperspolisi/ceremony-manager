@@ -80,6 +80,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   // پیش‌فرض را روی مشتریان می‌گذاریم چون اولین گزینه منو است
   const [activeSection, setActiveSection] = useState('customers');
+  const [visitedSections, setVisitedSections] = useState(() => new Set(['customers']));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
@@ -146,6 +147,7 @@ export default function App() {
 
       event.preventDefault();
       setActiveSection(section);
+      setVisitedSections((visited) => new Set(visited).add(section));
       setMobileMenuOpen(false);
     };
 
@@ -164,6 +166,7 @@ export default function App() {
 
   const handleSectionChange = (section) => {
     setActiveSection(section);
+    setVisitedSections((visited) => new Set(visited).add(section));
     setMobileMenuOpen(false);
   };
 
@@ -708,8 +711,16 @@ export default function App() {
             {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} />}
             {activeSection === "reports" && <FinancialReportPanel businessName={businessName} logoUrl={logoUrl} />}
             {activeSection === "analytics" && <AnalyticsPanel />}
-            {activeSection === "calendar" && <CalendarPanel />}
-            {activeSection === "reminders" && <RemindersPanel businessName={businessName} logoUrl={logoUrl} />}
+            {visitedSections.has("calendar") && (
+              <div style={{ display: activeSection === "calendar" ? "block" : "none" }}>
+                <CalendarPanel />
+              </div>
+            )}
+            {visitedSections.has("reminders") && (
+              <div style={{ display: activeSection === "reminders" ? "block" : "none" }}>
+                <RemindersPanel businessName={businessName} logoUrl={logoUrl} />
+              </div>
+            )}
             {activeSection === "tutorial" && <TutorialPanel />}
             {activeSection === "contact" && <ContactPanel />}
           </div>

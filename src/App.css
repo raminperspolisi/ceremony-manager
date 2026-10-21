@@ -1823,6 +1823,7 @@ textarea:focus-visible {
 
   .calendar-page-heading {
     align-items: flex-start;
+    flex-wrap: wrap;
     padding: 14px;
   }
 

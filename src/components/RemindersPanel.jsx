@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import moment from 'jalali-moment';
 import html2canvas from 'html2canvas';
@@ -6,8 +6,11 @@ import { formatPersianDigits } from '../styles';
 
 const getInvoiceItems = (invoice) => (
   [invoice.items_data, invoice.items_json, invoice.items]
-    .find((items) => Array.isArray(items) && items.length > 0) || []
+    .find((items) => Array.isArray(items) && items.length > 0)
+    ?.filter((item) => item && typeof item === 'object') || []
 );
+
+const INVOICE_PAGE_SIZE = 50;
 
 const getUnitPrice = (item) => {
   const priceLevel = String(item.price_level || '1');
@@ -17,9 +20,34 @@ const getUnitPrice = (item) => {
 };
 
 const formatMoney = (value) => `${Math.round(Number(value) || 0).toLocaleString('fa-IR')} تومان`;
-const formatDate = (value) => value
-  ? moment(value).locale('fa').format('jYYYY/jMM/jDD')
-  : 'ثبت نشده';
+const formatDate = (value) => {
+  if (!value) return 'ثبت نشده';
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime())
+      ? 'تاریخ نامعتبر'
+      : moment(value).locale('fa').format('jYYYY/jMM/jDD');
+  }
+
+  const normalized = String(value)
+    .trim()
+    .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
+    .replace(/[٠-٩]/g, (digit) => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
+  const jalaliDate = /^(13|14)\d{2}[/-]/.test(normalized);
+  const isoDate = /^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(normalized);
+  const gregorianSlashDate = /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(normalized);
+  const parsedDate = jalaliDate
+    ? moment(normalized.replace(/-/g, '/'), 'jYYYY/jM/jD', true)
+    : isoDate
+      ? moment(normalized, moment.ISO_8601, true)
+      : gregorianSlashDate
+        ? moment(normalized, 'YYYY/M/D', true)
+        : null;
+
+  return parsedDate?.isValid()
+    ? parsedDate.locale('fa').format('jYYYY/jMM/jDD')
+    : 'تاریخ نامعتبر';
+};
 
 const getInvoiceSummary = (invoice) => {
   const total = Number(invoice.total_price || invoice.total_amount || 0);
@@ -166,33 +194,37 @@ const normalizeTelegramPhone = (phone) => {
 export default function RemindersPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [upcomingEvents, setUpcomingEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasMoreInvoices, setHasMoreInvoices] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [shareStatus, setShareStatus] = useState('');
   const [sharingInvoiceId, setSharingInvoiceId] = useState(null);
   const [preparedInvoiceImage, setPreparedInvoiceImage] = useState(null);
   const [expandedInvoiceId, setExpandedInvoiceId] = useState(null);
 
-  useEffect(() => {
-    const fetchUpcomingCeremonies = async () => {
-      try {
-        setLoading(true);
-        setLoadError('');
-        const { data, error } = await supabase
-          .from('invoices')
-          .select('*')
-          .order('created_at', { ascending: false });
+  const fetchUpcomingCeremonies = useCallback(async (offset = 0, append = false) => {
+    try {
+      setLoading(true);
+      setLoadError('');
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + INVOICE_PAGE_SIZE - 1);
 
-        if (error) throw error;
-        setUpcomingEvents(data || []);
-      } catch (err) {
-        setLoadError(`خطا در دریافت اطلاعات فاکتورها: ${err.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUpcomingCeremonies();
+      if (error) throw error;
+      const invoices = data || [];
+      setUpcomingEvents((current) => append ? [...current, ...invoices] : invoices);
+      setHasMoreInvoices(invoices.length === INVOICE_PAGE_SIZE);
+    } catch (err) {
+      setLoadError(`خطا در دریافت اطلاعات فاکتورها: ${err?.message || String(err)}`);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchUpcomingCeremonies();
+  }, [fetchUpcomingCeremonies]);
 
   const prepareInvoiceImage = async (invoice) => {
     setSharingInvoiceId(invoice.id);
@@ -282,6 +314,15 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
       <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: '0.85rem', lineHeight: 1.8 }}>
         جزئیات فاکتور، اقلام، تاریخ مراسم، مبلغ پرداختی و مانده بدهی را ببینید و متن کامل را برای مشتری بفرستید.
       </p>
+      <button
+        type="button"
+        onClick={fetchUpcomingCeremonies}
+        disabled={loading}
+        className="refresh-button"
+        style={{ marginBottom: '16px' }}
+      >
+        {loading ? 'در حال بارگذاری...' : '↻ تازه‌سازی فاکتورها'}
+      </button>
 
       {shareStatus && (
         <div role="status" style={{ background: '#dcfce7', color: '#166534', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem', fontWeight: 'bold' }}>
@@ -300,6 +341,9 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
         <p style={{ color: '#6b7280' }}>هیچ فاکتوری ثبت نشده است.</p>
       ) : (
         <>
+        <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: '12px' }}>
+          {formatPersianDigits(upcomingEvents.length)} فاکتور بارگذاری شده است.
+        </p>
         <div className="reminders-mobile-list">
           {upcomingEvents.map((invoice) => {
             const summary = getInvoiceSummary(invoice);
@@ -493,6 +537,17 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
             </tbody>
           </table>
         </div>
+        {hasMoreInvoices && (
+          <button
+            type="button"
+            onClick={() => fetchUpcomingCeremonies(upcomingEvents.length, true)}
+            disabled={loading}
+            className="refresh-button"
+            style={{ marginTop: '16px' }}
+          >
+            {loading ? 'در حال بارگذاری...' : 'نمایش فاکتورهای بیشتر'}
+          </button>
+        )}
         </>
       )}
       <p style={{ margin: '12px 0 0', color: '#64748b', fontSize: '0.8rem', lineHeight: 1.8 }}>
