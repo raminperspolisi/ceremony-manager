@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { styles, formatDisplay } from '../styles'; 
+import { formatDisplay, formatPersianDigits } from '../styles';
 import { supabase } from '../supabaseClient';
 import FormattedNumberInput from './FormattedNumberInput';
 
@@ -260,7 +260,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                 <tbody>
                   ${items.map((item, idx) => `
                     <tr>
-                      <td>${idx + 1}</td>
+                      <td>${formatDisplay(idx + 1)}</td>
                       <td style="text-align: right; font-weight: 500;">${item.title}</td>
                       <td>${(item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای') ? 'اجاره‌ای' : 'فروشی'}</td>
                       <td>${getQuantity(item.requestedQuantity)}</td>
@@ -371,19 +371,9 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
   const handleToggleSelectInvoice = (e, id) => {
     e.stopPropagation();
-    if (selectedInvoiceIds.includes(id)) {
-      setSelectedInvoiceIds(selectedInvoiceIds.filter(item => item !== id));
-    } else {
-      setSelectedInvoiceIds([...selectedInvoiceIds, id]);
-    }
-  };
-
-  const handleSelectAllInvoices = (e) => {
-    if (e.target.checked) {
-      setSelectedInvoiceIds(savedInvoices.map(inv => inv.id));
-    } else {
-      setSelectedInvoiceIds([]);
-    }
+    setSelectedInvoiceIds((current) => current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id]);
   };
 
   const handleDeleteSelectedInvoices = async () => {
@@ -392,17 +382,23 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
       return; 
     }
     
-    if (!window.confirm(`آیا از حذف ${selectedInvoiceIds.length} فاکتور انتخاب‌شده اطمینان دارید؟`)) return;
+    if (!window.confirm(`آیا از حذف ${formatDisplay(selectedInvoiceIds.length)} فاکتور انتخاب‌شده اطمینان دارید؟`)) return;
 
-    const quotationIdsToDelete = savedInvoices.filter(i => selectedInvoiceIds.includes(i.id) && i.type === 'quotation').map(i => i.id);
-    const officialIdsToDelete = savedInvoices.filter(i => selectedInvoiceIds.includes(i.id) && i.type === 'official').map(i => i.id);
+    const quotationIdsToDelete = savedInvoices
+      .filter((invoice) => selectedInvoiceIds.includes(`${invoice.type}-${invoice.id}`) && invoice.type === 'quotation')
+      .map((invoice) => invoice.id);
+    const officialIdsToDelete = savedInvoices
+      .filter((invoice) => selectedInvoiceIds.includes(`${invoice.type}-${invoice.id}`) && invoice.type === 'official')
+      .map((invoice) => invoice.id);
 
     try {
       if (quotationIdsToDelete.length > 0) {
-        await supabase.from('quotations').delete().in('id', quotationIdsToDelete);
+        const { error } = await supabase.from('quotations').delete().in('id', quotationIdsToDelete);
+        if (error) throw error;
       }
       if (officialIdsToDelete.length > 0) {
-        await supabase.from('invoices').delete().in('id', officialIdsToDelete);
+        const { error } = await supabase.from('invoices').delete().in('id', officialIdsToDelete);
+        if (error) throw error;
       }
       alert("فاکتورهای انتخاب‌شده با موفقیت حذف شدند.");
       fetchInvoices();
@@ -505,7 +501,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                   setSearchTerm(c["Full name"]); 
                   setIsSearching(false); 
                 }}>
-                <strong>{c["Full name"]}</strong> {c.phone ? `(${c.phone})` : '(بدون تلفن)'}
+                <strong>{c["Full name"]}</strong> {c.phone ? `(${formatPersianDigits(c.phone)})` : '(بدون تلفن)'}
               </div>
             ))}
         </div>
@@ -545,7 +541,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                         حذف
                       </button>
                     </td>
-                    <td data-label="ردیف" style={{ ...win95Style.tableCell, textAlign: 'center', color: '#64748b' }}>{index + 1}</td>
+                    <td data-label="ردیف" style={{ ...win95Style.tableCell, textAlign: 'center', color: '#64748b' }}>{formatDisplay(index + 1)}</td>
                     <td data-label="نام کالا / خدمت" style={{ ...win95Style.tableCell, fontWeight: '500', color: '#1e293b' }}>{item.title}</td>
                     <td data-label="نوع کالا" style={{ ...win95Style.tableCell, textAlign: 'center' }}>
                       <span style={{
@@ -568,17 +564,17 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                       />
                     </td>
                     <td data-label="درجه ۱ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {formatDisplay ? formatDisplay(item.price_level1) : Number(item.price_level1 || 0).toLocaleString()}
+                      {formatDisplay(item.price_level1)}
                     </td>
                     <td data-label="درجه ۲ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {formatDisplay ? formatDisplay(item.price_level2) : Number(item.price_level2 || 0).toLocaleString()}
+                      {formatDisplay(item.price_level2)}
                     </td>
                     <td data-label="درجه ۳ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {formatDisplay ? formatDisplay(item.price_level3) : Number(item.price_level3 || 0).toLocaleString()}
+                      {formatDisplay(item.price_level3)}
                     </td>
                     {showBuyingPrice && (
                       <td data-label="قیمت خرید (تومان)" style={{ ...win95Style.tableCell, color: '#475569' }}>
-                        {formatDisplay ? formatDisplay(item.base_cost) : Number(item.base_cost || 0).toLocaleString()}
+                        {formatDisplay(item.base_cost)}
                       </td>
                     )}
                   </tr>
@@ -598,43 +594,39 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
       </button>
 
       {/* بخش فاکتورهای اخیر */}
-      <div style={{ marginTop: "20px", background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 12px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontWeight: 'bold', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input 
-              type="checkbox" 
-              onChange={handleSelectAllInvoices} 
-              checked={savedInvoices.length > 0 && selectedInvoiceIds.length === savedInvoices.length} 
-            />
+      <div className="recent-invoices" dir="rtl">
+        <div className="recent-invoices-header">
+          <div className="recent-invoices-title">
             <span>فاکتورها و پیش‌فاکتورهای اخیر</span>
           </div>
           {selectedInvoiceIds.length > 0 && (
             <button 
               onClick={handleDeleteSelectedInvoices} 
               style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>
-              حذف موارد انتخاب‌شده ({selectedInvoiceIds.length})
+              حذف موارد انتخاب‌شده ({formatDisplay(selectedInvoiceIds.length)})
             </button>
           )}
         </div>
-        <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+        <div className="recent-invoices-list">
           {savedInvoices.length === 0 ? (
             <div style={{ padding: '15px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
               فاکتور یا پیش‌فاکتور ذخیره‌شده‌ای وجود ندارد.
             </div>
           ) : (
             savedInvoices.map(inv => (
-              <div 
-                key={`${inv.type}-${inv.id}`} 
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', fontSize: '12px', borderBottom: '1px solid #f1f5f9' }}>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                key={`${inv.type}-${inv.id}`}
+                className="recent-invoice-row">
+                <div className="recent-invoice-info">
                   <input 
                     type="checkbox" 
-                    checked={selectedInvoiceIds.includes(inv.id)} 
-                    onChange={(e) => handleToggleSelectInvoice(e, inv.id)} 
+                    className="recent-invoice-checkbox"
+                    aria-label={`انتخاب ${inv.type === 'official' ? 'فاکتور رسمی' : 'پیش‌فاکتور'} ${inv.customer_name || ''}`}
+                    checked={selectedInvoiceIds.includes(`${inv.type}-${inv.id}`)}
+                    onChange={(e) => handleToggleSelectInvoice(e, `${inv.type}-${inv.id}`)}
                   />
-                  <span 
-                    style={{ cursor: 'pointer', color: '#1e293b', fontWeight: '500' }} 
+                  <span
+                    className="recent-invoice-customer"
                     onClick={() => handleLoadInvoice(inv)}>
                     {inv.customer_name} 
                     {inv.type === 'official' ? (
@@ -643,12 +635,12 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                       <span style={{ color: '#0284c7', marginRight: '6px', fontWeight: 'bold' }}>[پیش‌فاکتور]</span>
                     )}
                   </span>
-                  <span style={{ color: '#94a3b8', fontSize: '11px', marginRight: '4px' }}>
+                  <span className="recent-invoice-date">
                     ({inv.created_at ? new Date(inv.created_at).toLocaleDateString('fa-IR') : '—'})
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '6px' }}>
+                <div className="recent-invoice-actions">
                     <button 
                       style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }} 
                       onClick={(e) => handleDeleteInvoice(e, inv)}>

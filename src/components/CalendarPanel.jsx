@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
+import { formatPersianDigits } from "../styles";
 import moment from "jalali-moment";
 
 // تابع نرمال‌سازی تاریخ شمسی
@@ -452,7 +453,7 @@ export default function CalendarPanel() {
               key={d}
               onClick={() => handleDayClick(d)}
               className={`calendar-day${isSelected ? " selected" : ""}${dayEvents.length ? " has-events" : ""}`}
-              aria-label={`${parseInt(dayNum, 10)} ${JMONTHS[jMonth - 1]}، ${dayEvents.length} مراسم`}
+              aria-label={`${Number(dayNum).toLocaleString("fa-IR")} ${JMONTHS[jMonth - 1]}، ${dayEvents.length.toLocaleString("fa-IR")} مراسم`}
             >
               <div className="calendar-day-number">{parseInt(dayNum, 10).toLocaleString("fa-IR")}</div>
               {dayEvents.slice(0, 2).map((event) => {
@@ -496,7 +497,7 @@ export default function CalendarPanel() {
                     <span>{isInvoice ? "فاکتور رسمی" : event.event_type || "مراسم"}</span>
                   </div>
                   <div className="calendar-day-event-meta">
-                    {event.customer_phone && <span>تماس: {event.customer_phone}</span>}
+                    {event.customer_phone && <span>تماس: {formatPersianDigits(event.customer_phone)}</span>}
                     {isInvoice && <span>مبلغ فاکتور: {Number(event.total_price || 0).toLocaleString("fa-IR")} تومان</span>}
                     {isInvoice && <span>پرداخت‌شده: {Number(event.paid_amount || 0).toLocaleString("fa-IR")} تومان</span>}
                     {!isInvoice && event.location && <span>محل: {event.location}</span>}

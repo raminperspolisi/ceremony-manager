@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import FormattedNumberInput from './FormattedNumberInput';
 
+const formatNumber = (value) => Number(value || 0).toLocaleString('fa-IR');
+const toPersianDigits = (value) => String(value).replace(/[0-9٠-٩]/g, (digit) => {
+  const asciiDigit = digit >= '٠' && digit <= '٩'
+    ? String(digit.charCodeAt(0) - 1632)
+    : digit;
+  return String.fromCharCode(asciiDigit.charCodeAt(0) + 1728);
+});
+
 export default function FinancialReportPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,8 +19,6 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
   const [newItemType, setNewItemType] = useState('rent');
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemPrice, setNewItemPrice] = useState('');
-
-  const [newChecklistTask, setNewChecklistTask] = useState('');
 
   useEffect(() => {
     fetchFinancialData();
@@ -117,79 +123,16 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     setInvoices(invoices.map(inv => inv.id === selectedInvoice.id ? updatedInvoiceObj : inv));
   }
 
-  async function handleAddChecklistTask(e) {
-    e.preventDefault();
-    if (!newChecklistTask.trim()) return;
-
-    const currentChecklist = selectedInvoice.checklist || [
-      { text: "هماهنگی نهایی با تالار و باغ", done: false },
-      { text: "بررسی سیستم صوتی و دی‌جی", done: false },
-      { text: "کنترل گل‌آرایی ورودی و جایگاه", done: false }
-    ];
-
-    const updatedChecklist = [
-      ...currentChecklist,
-      { text: newChecklistTask.trim(), done: false }
-    ];
-
-    const { error } = await supabase
-      .from('invoices')
-      .update({ checklist: updatedChecklist })
-      .eq('id', selectedInvoice.id);
-
-    if (error) {
-      alert("خطا در افزودن کار به چک‌لیست: " + error.message);
-      return;
-    }
-
-    const updatedInvoiceObj = {
-      ...selectedInvoice,
-      checklist: updatedChecklist
-    };
-
-    setSelectedInvoice(updatedInvoiceObj);
-    setInvoices(invoices.map(inv => inv.id === selectedInvoice.id ? updatedInvoiceObj : inv));
-    setNewChecklistTask('');
-  }
-
-  async function handleToggleChecklistTask(indexToToggle) {
-    const currentChecklist = selectedInvoice.checklist || [];
-    const updatedChecklist = currentChecklist.map((task, idx) => {
-      if (idx === indexToToggle) {
-        return { ...task, done: !task.done };
-      }
-      return task;
-    });
-
-    const { error } = await supabase
-      .from('invoices')
-      .update({ checklist: updatedChecklist })
-      .eq('id', selectedInvoice.id);
-
-    if (error) {
-      alert("خطا در به‌روزرسانی چک‌لیست: " + error.message);
-      return;
-    }
-
-    const updatedInvoiceObj = {
-      ...selectedInvoice,
-      checklist: updatedChecklist
-    };
-
-    setSelectedInvoice(updatedInvoiceObj);
-    setInvoices(invoices.map(inv => inv.id === selectedInvoice.id ? updatedInvoiceObj : inv));
-  }
-
   function handlePrintInvoice() {
     if (!selectedInvoice) return;
 
     const items = selectedInvoice.items_data || selectedInvoice.items_json || selectedInvoice.items || [];
     const invoiceNumber = selectedInvoice.invoiceNumber || '---';
     const customerName = selectedInvoice.customer_name || 'مشتری محترم';
-    const customerPhone = selectedInvoice.customer_phone || selectedInvoice.phone || 'ثبت نشده';
+    const customerPhone = toPersianDigits(selectedInvoice.customer_phone || selectedInvoice.phone || 'ثبت نشده');
     const ceremonyDate = selectedInvoice.ceremony_date ? new Date(selectedInvoice.ceremony_date).toLocaleDateString('fa-IR') : 'تعیین نشده';
     const registerDate = selectedInvoice.created_at ? new Date(selectedInvoice.created_at).toLocaleDateString('fa-IR') : '---';
-    const totalAmount = Number(selectedInvoice.total_price || selectedInvoice.total_amount || 0).toLocaleString();
+    const totalAmount = formatNumber(selectedInvoice.total_price || selectedInvoice.total_amount);
     const safeBusinessName = String(businessName).replace(/[&<>"']/g, (character) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[character]));
@@ -208,12 +151,12 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
         const typeStr = it.item_type === 'sale' ? 'فروشی' : 'اجاره‌ای';
         itemsHtml += `
           <tr>
-            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${idx + 1}</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${formatNumber(idx + 1)}</td>
             <td style="padding: 8px; border: 1px solid #cbd5e1; font-weight: bold;">${it.title || it.name || 'محصول'}</td>
             <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${typeStr}</td>
-            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${q}</td>
-            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: left;">${p.toLocaleString()}</td>
-            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; font-weight: bold; color: #0369a1;">${rowTotal.toLocaleString()}</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: center;">${formatNumber(q)}</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: left;">${formatNumber(p)}</td>
+            <td style="padding: 8px; border: 1px solid #cbd5e1; text-align: left; font-weight: bold; color: #0369a1;">${formatNumber(rowTotal)}</td>
           </tr>
         `;
       });
@@ -230,7 +173,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
       <html lang="fa" dir="rtl">
       <head>
         <meta charset="UTF-8">
-        <title>فاکتور رسمی ${safeBusinessName} - #${invoiceNumber}</title>
+        <title>فاکتور رسمی ${safeBusinessName} - #${formatNumber(invoiceNumber)}</title>
         <style>
           body { font-family: Tahoma, sans-serif; direction: rtl; padding: 20px; color: #1e293b; background: #fff; }
           .header { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px; }
@@ -253,7 +196,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
         <div class="header">
           <div>
             <div class="title">صورتحساب رسمی خدمات ${safeBusinessName}</div>
-            <div style="font-size: 12px; color: #0369a1; margin-top: 4px;">شماره فاکتور: #${invoiceNumber}</div>
+            <div style="font-size: 12px; color: #0369a1; margin-top: 4px;">شماره فاکتور: #${formatNumber(invoiceNumber)}</div>
           </div>
           <img class="company-logo" src="${safeLogoUrl}" alt="لوگوی ${safeBusinessName}">
           <div style="text-align: left; font-size: 12px; color: #64748b;">تاریخ ثبت: ${registerDate}</div>
@@ -314,7 +257,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     const invTotal = Number(inv.total_price || inv.total_amount || 0);
     totalRevenue += invTotal;
 
-    const customerName = inv.customer_name || `مشتری #${index + 1}`;
+    const customerName = inv.customer_name || `مشتری #${formatNumber(index + 1)}`;
     if (!ceremonyStats[customerName]) {
       ceremonyStats[customerName] = { total: 0, count: 0 };
     }
@@ -400,8 +343,8 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {topCeremonies.map((cer, idx) => (
                   <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', borderBottom: '1px dashed #f1f5f9', paddingBottom: '4px' }}>
-                    <span style={{ color: '#334155', fontWeight: 'bold' }}>{idx + 1}. {cer.name}</span>
-                    <span style={{ color: '#059669', fontWeight: 'bold' }}>{cer.total.toLocaleString()} تومان</span>
+                    <span style={{ color: '#334155', fontWeight: 'bold' }}>{formatNumber(idx + 1)}. {cer.name}</span>
+                    <span style={{ color: '#059669', fontWeight: 'bold' }}>{formatNumber(cer.total)} تومان</span>
                   </div>
                 ))}
               </div>
@@ -417,12 +360,12 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
                 {topProducts.map((prod, idx) => (
                   <div key={idx} style={{ fontSize: '11px', borderBottom: '1px dashed #f1f5f9', paddingBottom: '6px' }}>
                     <div style={{ fontWeight: 'bold', color: '#1e293b', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{idx + 1}. {prod.name} (مجموع: {prod.totalCount} بار)</span>
-                      <span style={{ color: '#0284c7' }}>{prod.totalRevenue.toLocaleString()} ت</span>
+                      <span>{formatNumber(idx + 1)}. {prod.name} (مجموع: {formatNumber(prod.totalCount)} بار)</span>
+                      <span style={{ color: '#0284c7' }}>{formatNumber(prod.totalRevenue)} ت</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '10px', marginTop: '3px', background: '#f8fafc', padding: '4px 6px', borderRadius: '4px' }}>
-                      <span>تعداد اجاره: <strong style={{ color: '#2563eb' }}>{prod.rentalCount} بار</strong></span>
-                      <span>تعداد فروش: <strong style={{ color: '#16a34a' }}>{prod.saleCount} بار</strong></span>
+                      <span>تعداد اجاره: <strong style={{ color: '#2563eb' }}>{formatNumber(prod.rentalCount)} بار</strong></span>
+                      <span>تعداد فروش: <strong style={{ color: '#16a34a' }}>{formatNumber(prod.saleCount)} بار</strong></span>
                     </div>
                   </div>
                 ))}
@@ -435,22 +378,22 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px', marginBottom: '25px' }}>
         <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '15px', borderRadius: '6px' }}>
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>مجموع کل درآمد فاکتورهای رسمی</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0369a1' }}>{totalRevenue.toLocaleString()} تومان</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0369a1' }}>{formatNumber(totalRevenue)} تومان</div>
         </div>
 
         <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '15px', borderRadius: '6px' }}>
           <div style={{ fontSize: '12px', color: '#166534', marginBottom: '8px' }}>درآمد اقلام اجاره‌ای</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#15803d' }}>{totalRentRevenue.toLocaleString()} تومان</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#15803d' }}>{formatNumber(totalRentRevenue)} تومان</div>
         </div>
 
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '15px', borderRadius: '6px' }}>
           <div style={{ fontSize: '12px', color: '#1e40af', marginBottom: '8px' }}>درآمد اقلام فروشی</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1d4ed8' }}>{totalSaleProfit.toLocaleString()} تومان</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1d4ed8' }}>{formatNumber(totalSaleProfit)} تومان</div>
         </div>
 
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '15px', borderRadius: '6px' }}>
           <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '8px' }}>مجموع سود خالص کل</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#dc2626' }}>{totalNetProfit.toLocaleString()} تومان</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#dc2626' }}>{formatNumber(totalNetProfit)} تومان</div>
         </div>
       </div>
 
@@ -483,7 +426,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
                     key={inv.id || idx} 
                     style={{ borderBottom: '1px solid #f1f5f9', background: selectedInvoice?.id === inv.id ? '#e0f2fe' : 'transparent' }}
                   >
-                    <td style={{ padding: '10px', fontWeight: 'bold', color: '#334155' }}>#{invoiceNumber}</td>
+                    <td style={{ padding: '10px', fontWeight: 'bold', color: '#334155' }}>#{formatNumber(invoiceNumber)}</td>
                     <td style={{ padding: '10px' }}>
                       <span 
                         onClick={() => setSelectedInvoice({ ...inv, invoiceNumber })}
@@ -493,7 +436,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
                       </span>
                     </td>
                     <td style={{ padding: '10px' }}>{new Date(inv.created_at).toLocaleDateString('fa-IR')}</td>
-                    <td style={{ padding: '10px', color: '#0369a1', fontWeight: 'bold' }}>{Number(inv.total_price || inv.total_amount || 0).toLocaleString()}</td>
+                    <td style={{ padding: '10px', color: '#0369a1', fontWeight: 'bold' }}>{formatNumber(inv.total_price || inv.total_amount)}</td>
                     <td style={{ padding: '10px', textAlign: 'center' }}>
                       <button 
                         onClick={() => setSelectedInvoice({ ...inv, invoiceNumber })}
@@ -517,7 +460,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '12px', marginBottom: '15px' }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>جزئیات فاکتور رسمی مراسم و تشریفات</h2>
-                <div style={{ fontSize: '12px', color: '#0369a1', fontWeight: 'bold', marginTop: '4px' }}>شماره فاکتور: #{selectedInvoice.invoiceNumber}</div>
+                <div style={{ fontSize: '12px', color: '#0369a1', fontWeight: 'bold', marginTop: '4px' }}>شماره فاکتور: #{formatNumber(selectedInvoice.invoiceNumber)}</div>
               </div>
               <button 
                 onClick={() => setSelectedInvoice(null)}
@@ -530,51 +473,8 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '12px', marginBottom: '15px' }}>
               <div><strong>نام مشتری:</strong> {selectedInvoice.customer_name || 'ثبت نشده'}</div>
               <div><strong>تاریخ ثبت فاکتور:</strong> {new Date(selectedInvoice.created_at).toLocaleDateString('fa-IR')}</div>
-              <div><strong>شماره تماس:</strong> {selectedInvoice.customer_phone || selectedInvoice.phone || 'ثبت نشده'}</div>
+              <div><strong>شماره تماس:</strong> {toPersianDigits(selectedInvoice.customer_phone || selectedInvoice.phone || 'ثبت نشده')}</div>
               <div><strong>تاریخ مراسم:</strong> {selectedInvoice.ceremony_date ? new Date(selectedInvoice.ceremony_date).toLocaleDateString('fa-IR') : 'تعیین نشده'}</div>
-            </div>
-
-            <div style={{ background: '#fdf4ff', border: '1px solid #f5d0fe', padding: '15px', borderRadius: '6px', marginBottom: '20px' }}>
-              <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#86198f' }}>
-                📋 چک‌لیست کارهای روز مراسم برای مشتری: {selectedInvoice.customer_name || 'مشتری'}
-              </h4>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-                {(!selectedInvoice.checklist || selectedInvoice.checklist.length === 0) ? (
-                  <div style={{ fontSize: '11px', color: '#a21caf' }}>هنوز کاری در چک‌لیست ثبت نشده است. از فرم زیر اضافه کنید.</div>
-                ) : (
-                  selectedInvoice.checklist.map((task, tidx) => (
-                    <label key={tidx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', color: '#4a044e' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={task.done} 
-                        onChange={() => handleToggleChecklistTask(tidx)}
-                        style={{ width: '16px', height: '16px', accentColor: '#a21caf', cursor: 'pointer' }}
-                      />
-                      <span style={{ textDecoration: task.done ? 'line-through' : 'none', opacity: task.done ? 0.6 : 1 }}>
-                        {task.text}
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
-
-              <form onSubmit={handleAddChecklistTask} style={{ display: 'flex', gap: '8px' }}>
-                <input 
-                  type="text" 
-                  placeholder="افزودن کار جدید به چک‌لیست..." 
-                  value={newChecklistTask}
-                  onChange={(e) => setNewChecklistTask(e.target.value)}
-                  style={{ flex: 1, padding: '6px 10px', borderRadius: '4px', border: '1px solid #e879f9', fontSize: '11px', background: '#fff' }}
-                  required
-                />
-                <button 
-                  type="submit"
-                  style={{ background: '#a21caf', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold' }}
-                >
-                  ➕ افزودن به چک‌لیست
-                </button>
-              </form>
             </div>
 
             <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#334155' }}>اقلام و خدمات فاکتور:</h4>
@@ -603,12 +503,12 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
                     const p = Number(it.unit_price || it.p1 || it.price || 0);
                     return (
                       <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '8px' }}>{i + 1}</td>
+                        <td style={{ padding: '8px' }}>{formatNumber(i + 1)}</td>
                         <td style={{ padding: '8px', fontWeight: 'bold' }}>{it.title || it.name || 'محصول'}</td>
                         <td style={{ padding: '8px' }}>{it.item_type === 'sale' ? 'فروشی' : 'اجاره‌ای'}</td>
-                        <td style={{ padding: '8px' }}>{q}</td>
-                        <td style={{ padding: '8px' }}>{p.toLocaleString()}</td>
-                        <td style={{ padding: '8px', color: '#0369a1', fontWeight: 'bold' }}>{(p * q).toLocaleString()}</td>
+                        <td style={{ padding: '8px' }}>{formatNumber(q)}</td>
+                        <td style={{ padding: '8px' }}>{formatNumber(p)}</td>
+                        <td style={{ padding: '8px', color: '#0369a1', fontWeight: 'bold' }}>{formatNumber(p * q)}</td>
                         <td style={{ padding: '8px', textAlign: 'center' }}>
                           <button 
                             onClick={() => handleDeleteItem(i)}

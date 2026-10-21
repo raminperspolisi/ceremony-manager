@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { formatDisplay, formatPersianDigits } from '../styles';
 
 export default function FinancialReportPanel() {
   const [invoices, setInvoices] = useState([]);
@@ -65,28 +66,28 @@ export default function FinancialReportPanel() {
         <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
           <div style={{ fontSize: '11px', color: '#64748b' }}>مجموع کل درآمد فاکتورهای رسمی</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0369a1', marginTop: '5px' }}>
-            {totalRevenue.toLocaleString()} <span style={{ fontSize: '11px' }}>تومان</span>
+            {formatDisplay(totalRevenue)} <span style={{ fontSize: '11px' }}>تومان</span>
           </div>
         </div>
 
         <div style={{ background: '#f0fdf4', padding: '12px', borderRadius: '6px', border: '1px solid #bbf7d0' }}>
           <div style={{ fontSize: '11px', color: '#166534' }}>سود اقلام اجاره‌ای (کل درآمد اجاره)</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#15803d', marginTop: '5px' }}>
-            {totalRentProfit.toLocaleString()} <span style={{ fontSize: '11px' }}>تومان</span>
+            {formatDisplay(totalRentProfit)} <span style={{ fontSize: '11px' }}>تومان</span>
           </div>
         </div>
 
         <div style={{ background: '#eff6ff', padding: '12px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
           <div style={{ fontSize: '11px', color: '#1e40af' }}>سود اقلام فروشی (فروش - خرید)</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#1d4ed8', marginTop: '5px' }}>
-            {totalSaleProfit.toLocaleString()} <span style={{ fontSize: '11px' }}>تومان</span>
+            {formatDisplay(totalSaleProfit)} <span style={{ fontSize: '11px' }}>تومان</span>
           </div>
         </div>
 
         <div style={{ background: '#fef2f2', padding: '12px', borderRadius: '6px', border: '1px solid #fecaca' }}>
           <div style={{ fontSize: '11px', color: '#991b1b' }}>مجموع سود خالص کل مراسم‌ها</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#dc2626', marginTop: '5px' }}>
-            {totalProfit.toLocaleString()} <span style={{ fontSize: '11px' }}>تومان</span>
+            {formatDisplay(totalProfit)} <span style={{ fontSize: '11px' }}>تومان</span>
           </div>
         </div>
       </div>
@@ -111,11 +112,11 @@ export default function FinancialReportPanel() {
             ) : (
               invoices.map((inv, idx) => (
                 <tr key={inv.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '10px' }}>{idx + 1}</td>
+                  <td style={{ padding: '10px' }}>{formatDisplay(idx + 1)}</td>
                   <td style={{ padding: '10px', fontWeight: 'bold' }}>{inv.customer_name}</td>
-                  <td style={{ padding: '10px' }}>{inv.order_date || 'ثبت نشده'}</td>
-                  <td style={{ padding: '10px' }}>{inv.ceremony_date || 'ثبت نشده'}</td>
-                  <td style={{ padding: '10px', color: '#0369a1' }}>{Number(inv.total_price || 0).toLocaleString()}</td>
+                  <td style={{ padding: '10px' }}>{inv.order_date ? formatPersianDigits(inv.order_date) : 'ثبت نشده'}</td>
+                  <td style={{ padding: '10px' }}>{inv.ceremony_date ? formatPersianDigits(inv.ceremony_date) : 'ثبت نشده'}</td>
+                  <td style={{ padding: '10px', color: '#0369a1' }}>{formatDisplay(inv.total_price || 0)}</td>
                 </tr>
               ))
             )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 
 // مقادیر مجاز وضعیت پرداخت
@@ -33,6 +34,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
 
   // حالت نمایش چک‌لیست برای هر فاکتور
   const [checklistOpenId, setChecklistOpenId] = useState(null);
+  const [newChecklistTask, setNewChecklistTask] = useState('');
 
   useEffect(() => {
     fetchOfficialInvoices();
@@ -91,7 +93,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
 
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`آیا از حذف ${selectedIds.length} فاکتور انتخاب‌شده مطمئن هستید؟`)) return;
+    if (!window.confirm(`آیا از حذف ${formatDisplay(selectedIds.length)} فاکتور انتخاب‌شده مطمئن هستید؟`)) return;
 
     const { error } = await supabase.from('invoices').delete().in('id', selectedIds);
     if (error) {
@@ -122,11 +124,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     const text = encodeURIComponent(
       `سلام ${inv.customer_name || 'مشتری عزیز'} عزیز،\n` +
       `با تشکر از انتخاب ${businessName} 🕊️\n` +
-      `جزئیات فاکتور شماره #${inv.id}:\n` +
+      `جزئیات فاکتور شماره #${formatPersianDigits(inv.id)}:\n` +
       `📅 تاریخ مراسم: ${inv.ceremony_date || 'تعیین نشده'}\n` +
-      `💰 مبلغ کل: ${total.toLocaleString()} تومان\n` +
-      `✅ مبلغ پرداختی (بیعانه): ${paid.toLocaleString()} تومان\n` +
-      `📌 مانده بدهی: ${remaining.toLocaleString()} تومان\n` +
+      `💰 مبلغ کل: ${formatDisplay(total)} تومان\n` +
+      `✅ مبلغ پرداختی (بیعانه): ${formatDisplay(paid)} تومان\n` +
+      `📌 مانده بدهی: ${formatDisplay(remaining)} تومان\n` +
       `🔖 وضعیت پرداخت: ${statusMeta.label}\n` +
       `در صورت داشتن هرگونه سوال در خدمت شما هستیم.`
     );
@@ -161,6 +163,29 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     } else {
       fetchOfficialInvoices();
     }
+  };
+
+  const handleAddChecklistItem = async (event, inv) => {
+    event.preventDefault();
+    const title = newChecklistTask.trim();
+    if (!title) return;
+
+    const currentChecklist = Array.isArray(inv.checklist)
+      ? inv.checklist
+      : getDefaultChecklist();
+    const updatedChecklist = [...currentChecklist, { title, done: false }];
+    const { error } = await supabase
+      .from('invoices')
+      .update({ checklist: updatedChecklist })
+      .eq('id', inv.id);
+
+    if (error) {
+      alert("خطا در افزودن کار به چک‌لیست: " + error.message);
+      return;
+    }
+
+    setNewChecklistTask('');
+    fetchOfficialInvoices();
   };
 
   // کمکی برای گرفتن قیمت فعال بر اساس سطح انتخابی کالا
@@ -334,7 +359,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
           <div class="header-container">
             <img class="company-logo" src="${safeLogoUrl}" alt="لوگوی ${safeBusinessName}">
             <h2>فاکتور رسمی فروش و اجاره ${safeBusinessName}</h2>
-            <div class="invoice-number">شماره فاکتور: #${inv.id}</div>
+            <div class="invoice-number">شماره فاکتور: #${formatPersianDigits(inv.id)}</div>
           </div>
           <div class="info-box">
             <div class="info-row">
@@ -342,8 +367,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               <div><strong>تاریخ صدور سیستم:</strong> ${new Date(inv.created_at).toLocaleDateString('fa-IR')}</div>
             </div>
             <div class="info-row">
-              <div><strong>تاریخ سفارش:</strong> ${inv.order_date || 'وارد نشده'}</div>
-              <div><strong>تاریخ مراسم:</strong> ${inv.ceremony_date || 'وارد نشده'}</div>
+              <div><strong>تاریخ سفارش:</strong> ${inv.order_date ? formatPersianDigits(inv.order_date) : 'وارد نشده'}</div>
+              <div><strong>تاریخ مراسم:</strong> ${inv.ceremony_date ? formatPersianDigits(inv.ceremony_date) : 'وارد نشده'}</div>
             </div>
             <div><strong>آدرس مشتری:</strong> ${inv.customer_address || 'وارد نشده'}</div>
           </div>
@@ -367,13 +392,13 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                 const levelText = item.price_level === '2' ? 'درجه ۲' : item.price_level === '3' ? 'درجه ۳' : 'درجه ۱';
                 return `
                   <tr>
-                    <td>${idx + 1}</td>
+                    <td>${formatDisplay(idx + 1)}</td>
                     <td>${item.title}</td>
                     <td><span class="${isRent ? 'badge-rent' : 'badge-sale'}">${isRent ? 'اجاره‌ای' : 'فروشی'}</span></td>
                     <td>${levelText}</td>
-                    <td>${qty}</td>
-                    <td>${price.toLocaleString()}</td>
-                    <td>${(qty * price).toLocaleString()}</td>
+                    <td>${formatDisplay(qty)}</td>
+                    <td>${formatDisplay(price)}</td>
+                    <td>${formatDisplay(qty * price)}</td>
                   </tr>
                 `;
               }).join('')}
@@ -381,9 +406,9 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
           </table>
 
           <div class="payment-box">
-            <div class="payment-row"><span><strong>مبلغ کل فاکتور:</strong></span><span>${total.toLocaleString()} تومان</span></div>
-            <div class="payment-row"><span><strong>مبلغ پرداختی (بیعانه):</strong></span><span>${paid.toLocaleString()} تومان</span></div>
-            <div class="payment-row"><span><strong>مانده بدهی:</strong></span><span style="color:${remaining > 0 ? '#dc2626' : '#16a34a'}; font-weight:bold;">${remaining.toLocaleString()} تومان</span></div>
+            <div class="payment-row"><span><strong>مبلغ کل فاکتور:</strong></span><span>${formatDisplay(total)} تومان</span></div>
+            <div class="payment-row"><span><strong>مبلغ پرداختی (بیعانه):</strong></span><span>${formatDisplay(paid)} تومان</span></div>
+            <div class="payment-row"><span><strong>مانده بدهی:</strong></span><span style="color:${remaining > 0 ? '#dc2626' : '#16a34a'}; font-weight:bold;">${formatDisplay(remaining)} تومان</span></div>
             <div class="payment-row"><span><strong>وضعیت تسویه:</strong></span><span style="background:${statusMeta.bg}; color:${statusMeta.color}; padding: 2px 8px; border-radius: 4px; font-weight: bold;">${statusMeta.label}</span></div>
           </div>
 
@@ -403,13 +428,13 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   return (
     <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <h3 style={{ margin: 0, color: '#1e293b', fontSize: '15px' }}>لیست فاکتورهای رسمی و چک‌لیست مراسم</h3>
+        <h3 style={{ margin: 0, color: '#1e293b', fontSize: '15px' }}>لیست فاکتورهای رسمی</h3>
 
         {selectedIds.length > 0 && (
           <button
             onClick={handleDeleteSelected}
             style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
-            حذف موارد انتخاب‌شده ({selectedIds.length})
+            حذف موارد انتخاب‌شده ({formatDisplay(selectedIds.length)})
           </button>
         )}
       </div>
@@ -444,11 +469,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                 <td colSpan="12" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>هیچ فاکتور رسمی ثبت نشده است.</td>
               </tr>
             ) : (
-              invoices.map((inv, idx) => {
+              invoices.map((inv) => {
                 const isEditing = editingId === inv.id;
                 const isChecklistOpen = checklistOpenId === inv.id;
                 const profit = calculateInvoiceProfit(isEditing ? editableItems : inv.items_data);
-                const currentChecklist = inv.checklist || getDefaultChecklist();
+                const currentChecklist = Array.isArray(inv.checklist) ? inv.checklist : getDefaultChecklist();
                 const currentTotal = isEditing
                   ? editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0)
                   : Number(inv.total_price || 0);
@@ -467,7 +492,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                           onChange={() => handleToggleSelect(inv.id)}
                         />
                       </td>
-                      <td style={{ padding: '10px', fontWeight: 'bold', color: '#0284c7' }}>#{inv.id}</td>
+                      <td style={{ padding: '10px', fontWeight: 'bold', color: '#0284c7' }}>#{formatPersianDigits(inv.id)}</td>
 
                       <td style={{ padding: '10px', fontWeight: 'bold' }}>
                         {isEditing ? (
@@ -509,7 +534,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                                       style={{ display: 'flex', flexDirection: 'column', width: '100%', padding: '8px', border: 0, borderBottom: '1px solid #e2e8f0', background: '#fff', textAlign: 'right', cursor: 'pointer' }}
                                     >
                                       <span>{customer['Full name'] || 'بدون نام'}</span>
-                                      <small dir="ltr" style={{ color: '#64748b', textAlign: 'right' }}>{customer.phone || 'بدون شماره'}</small>
+                                      <small dir="ltr" style={{ color: '#64748b', textAlign: 'right' }}>{customer.phone ? formatPersianDigits(customer.phone) : 'بدون شماره'}</small>
                                     </button>
                                   )) : (
                                     <div style={{ padding: '8px', color: '#64748b', whiteSpace: 'normal' }}>
@@ -530,7 +555,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                         ) : (
                           <div>
                             <div>{inv.customer_name}</div>
-                            {inv.customer_phone && <div style={{ fontSize: '10px', color: '#64748b' }}>{inv.customer_phone}</div>}
+                            {inv.customer_phone && <div style={{ fontSize: '10px', color: '#64748b' }}>{formatPersianDigits(inv.customer_phone)}</div>}
                           </div>
                         )}
                       </td>
@@ -545,7 +570,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                             style={{ width: '80px', padding: '4px', fontSize: '11px' }}
                           />
                         ) : (
-                          inv.order_date || <span style={{ color: '#94a3b8' }}>ثبت نشده</span>
+                          (inv.order_date ? formatPersianDigits(inv.order_date) : <span style={{ color: '#94a3b8' }}>ثبت نشده</span>)
                         )}
                       </td>
 
@@ -559,7 +584,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                             style={{ width: '80px', padding: '4px', fontSize: '11px' }}
                           />
                         ) : (
-                          inv.ceremony_date || <span style={{ color: '#94a3b8' }}>ثبت نشده</span>
+                          (inv.ceremony_date ? formatPersianDigits(inv.ceremony_date) : <span style={{ color: '#94a3b8' }}>ثبت نشده</span>)
                         )}
                       </td>
 
@@ -578,7 +603,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                       </td>
 
                       <td style={{ padding: '10px', color: '#0369a1' }}>
-                        {currentTotal.toLocaleString()}
+                        {formatDisplay(currentTotal)}
                       </td>
 
                       <td style={{ padding: '10px', color: '#0d9488' }}>
@@ -590,12 +615,12 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                             style={{ width: '80px', padding: '4px', fontSize: '11px', textAlign: 'center' }}
                           />
                         ) : (
-                          currentPaid.toLocaleString()
+                          formatDisplay(currentPaid)
                         )}
                       </td>
 
                       <td style={{ padding: '10px', color: currentRemaining > 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>
-                        {currentRemaining.toLocaleString()}
+                        {formatDisplay(currentRemaining)}
                       </td>
 
                       <td style={{ padding: '10px', textAlign: 'center' }}>
@@ -623,7 +648,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                         )}
                       </td>
 
-                      <td style={{ padding: '10px', color: '#16a34a', fontWeight: 'bold' }}>{Number(profit).toLocaleString()}</td>
+                      <td style={{ padding: '10px', color: '#16a34a', fontWeight: 'bold' }}>{formatDisplay(profit)}</td>
 
                       <td className="official-invoices-actions-cell" style={{ padding: '10px', textAlign: 'center' }}>
                         <div className="official-invoices-actions" style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -691,11 +716,31 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                                     style={{ width: '16px', height: '16px', accentColor: '#9333ea' }}
                                   />
                                   <span style={{ textDecoration: item.done ? 'line-through' : 'none', color: item.done ? '#6b7280' : '#1f2937' }}>
-                                    {item.title}
+                                    {item.title || item.text}
                                   </span>
                                 </label>
                               ))}
                             </div>
+                            <form
+                              onSubmit={(event) => handleAddChecklistItem(event, inv)}
+                              style={{ display: 'flex', gap: '8px', marginTop: '10px' }}
+                            >
+                              <input
+                                type="text"
+                                value={newChecklistTask}
+                                onChange={(event) => setNewChecklistTask(event.target.value)}
+                                placeholder="افزودن کار جدید به چک‌لیست..."
+                                aria-label="عنوان کار جدید در چک‌لیست"
+                                required
+                                style={{ flex: 1, margin: 0, padding: '6px 10px', border: '1px solid #d8b4fe', borderRadius: '4px', fontSize: '11px' }}
+                              />
+                              <button
+                                type="submit"
+                                style={{ background: '#8b5cf6', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}
+                              >
+                                افزودن
+                              </button>
+                            </form>
                           </div>
                         </td>
                       </tr>
@@ -788,7 +833,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                               <div>
                                 <strong style={{ color: '#0369a1' }}>مبلغ کل فاکتور:</strong>{' '}
                                 <span style={{ color: '#0369a1', fontWeight: 'bold' }}>
-                                  {editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0).toLocaleString()} تومان
+                                  {formatDisplay(editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0))} تومان
                                 </span>
                               </div>
                               <div>
@@ -802,7 +847,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                               <div>
                                 <strong style={{ color: '#dc2626' }}>مانده بدهی:</strong>{' '}
                                 <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
-                                  {calcRemaining(editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0), paidAmount).toLocaleString()} تومان
+                                  {formatDisplay(calcRemaining(editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0), paidAmount))} تومان
                                 </span>
                               </div>
                               <div>

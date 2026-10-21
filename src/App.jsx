@@ -8,6 +8,9 @@ import OfficialInvoicesPanel from './components/OfficialInvoicesPanel';
 import AnalyticsPanel from './components/AnalyticsPanel';
 import RemindersPanel from './components/RemindersPanel'; // 🔔 یادآوری مراسم
 import CalendarPanel from './components/CalendarPanel'; // 📅 تقویم مراسم‌ها
+import TutorialPanel from './components/TutorialPanel';
+import ContactPanel from './components/ContactPanel';
+import { formatDisplay } from './styles';
 
 const DEFAULT_BUSINESS_NAME = 'تشریفات آژو';
 const DEFAULT_LOGO_URL = '/azho-logo.png';
@@ -555,7 +558,7 @@ export default function App() {
             >
               <span className="nav-icon">▦</span>
               <span className="nav-text">موجودی انبار</span>
-              <span className="nav-count">{inventory.length}</span>
+              <span className="nav-count">{formatDisplay(inventory.length)}</span>
               <span className="nav-shortcut">F2</span>
             </button>
 
@@ -568,7 +571,7 @@ export default function App() {
             >
               <span className="nav-icon">▤</span>
               <span className="nav-text">پیش‌فاکتور</span>
-              <span className="nav-count">{selectedItems.length}</span>
+              <span className="nav-count">{formatDisplay(selectedItems.length)}</span>
               <span className="nav-shortcut">F3</span>
             </button>
 
@@ -631,6 +634,24 @@ export default function App() {
               <span className="nav-text">یادآوری مراسم و تسویه</span>
               <span className="nav-shortcut">F8</span>
             </button>
+
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "tutorial" ? "active" : ""}`}
+              onClick={() => handleSectionChange("tutorial")}
+            >
+              <span className="nav-icon">📖</span>
+              <span className="nav-text">آموزش نرم‌افزار</span>
+            </button>
+
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "contact" ? "active" : ""}`}
+              onClick={() => handleSectionChange("contact")}
+            >
+              <span className="nav-icon">📞</span>
+              <span className="nav-text">ارتباط با ما</span>
+            </button>
           </nav>
 
           <div className="sidebar-note">
@@ -658,7 +679,11 @@ export default function App() {
                   ? "آنالیز پیشرفته و سود و زیان"
                   : activeSection === "calendar"
                   ? "تقویم مراسم‌ها"
-                  : "یادآوری مراسم و پیگیری تسویه"}
+                  : activeSection === "reminders"
+                  ? "یادآوری مراسم و پیگیری تسویه"
+                  : activeSection === "tutorial"
+                  ? "آموزش نرم‌افزار"
+                  : "ارتباط با ما"}
               </h2>
             </div>
 
@@ -685,6 +710,8 @@ export default function App() {
             {activeSection === "analytics" && <AnalyticsPanel />}
             {activeSection === "calendar" && <CalendarPanel />}
             {activeSection === "reminders" && <RemindersPanel businessName={businessName} logoUrl={logoUrl} />}
+            {activeSection === "tutorial" && <TutorialPanel />}
+            {activeSection === "contact" && <ContactPanel />}
           </div>
         </section>
       </div>

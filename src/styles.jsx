@@ -30,6 +30,9 @@ export const styles = {
 };
 
 // تابع فرمت کردن اعداد به صورت پول با کاما
+export const formatPersianDigits = (value) =>
+  String(value ?? '').replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
+
 export const formatDisplay = (num) => {
   if (!num && num !== 0) return '۰';
   return Number(num).toLocaleString('fa-IR');

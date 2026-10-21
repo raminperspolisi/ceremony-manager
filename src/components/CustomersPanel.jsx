@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 
 const CEREMONY_TYPES = ['عروسی', 'عقد', 'نامزدی', 'تولد', 'حنابندان', 'همایش', 'سایر'];
@@ -269,7 +270,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
                 <select id="customer-referral" style={styles.input} value={selectedIntroducer} onChange={e => setSelectedIntroducer(e.target.value)}>
                 <option value="">-- انتخاب معرف از بین مشتریان --</option>
                 {customers.map(c => (
-                  <option key={c.id} value={c["Full name"]}>{c["Full name"]} ({c.phone})</option>
+                  <option key={c.id} value={c["Full name"]}>{c["Full name"]} ({formatPersianDigits(c.phone)})</option>
                 ))}
                 </select>
               </>
@@ -308,7 +309,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
               <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #cbd5e1', borderRadius: '0 0 5px 5px', maxHeight: '130px', overflowY: 'auto', zIndex: 100, boxShadow: '0 4px 6px rgba(0,0,0,0.08)' }}>
                 {filteredCustomers.length > 0 ? filteredCustomers.map(c => (
                   <div key={c.id} onClick={() => handleCustomerSelect(c)} style={{ padding: '5px 8px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '11px' }}>
-                    <strong>{c["Full name"]}</strong> — {c.phone}
+                    <strong>{c["Full name"]}</strong> — {formatPersianDigits(c.phone)}
                   </div>
                 )) : <div style={{ padding: '5px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>یافت نشد</div>}
               </div>
@@ -317,14 +318,14 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
         </div>
         {selectedCustomer && (
           <div style={{ marginTop: '6px', padding: '5px 8px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '5px', fontSize: '11px', color: '#166534' }}>
-            ✅ مشتری انتخاب‌شده: <strong>{selectedCustomer["Full name"]}</strong> ({selectedCustomer.phone})
+            ✅ مشتری انتخاب‌شده: <strong>{selectedCustomer["Full name"]}</strong> ({formatPersianDigits(selectedCustomer.phone)})
           </div>
         )}
       </div>
 
       {/* لیست مشتریان */}
       <div style={styles.cardBox}>
-        <h3 style={styles.sectionTitle}>📋 لیست مشتریان ({customers.length}) — [دابل‌کلیک = ویرایش]</h3>
+        <h3 style={styles.sectionTitle}>📋 لیست مشتریان ({formatDisplay(customers.length)}) — [دابل‌کلیک = ویرایش]</h3>
         {customers.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '8px', fontSize: '12px' }}>هنوز مشتری‌ای ثبت نشده است.</p>}
         <ul className="customer-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {customers.map(c => (
@@ -334,7 +335,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
                 style={{ padding: '5px 8px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: selectedCustomer?.id === c.id ? '#fffbeb' : 'transparent' }}>
               <div>
                 <div style={{ fontSize: '12px', fontWeight: '600' }}>{c["Full name"]}</div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>📞 {c.phone}{c.referral ? ` | 👤 معرف: ${c.referral}` : ''}</div>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>📞 {formatPersianDigits(c.phone)}{c.referral ? ` | 👤 معرف: ${c.referral}` : ''}</div>
               </div>
               <div style={{ display: 'flex', gap: '4px' }}>
                 <button style={{ ...styles.btnSmall, background: '#78350f' }} onClick={(e) => { e.stopPropagation(); handleCustomerSelect(c); }}>مراسم‌ها</button>
@@ -348,7 +349,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       {/* مراسم‌های مشتری انتخاب‌شده */}
       {selectedCustomer && (
         <div style={{ ...styles.cardBox, border: '2px solid #d97706' }}>
-          <h3 style={styles.sectionTitle}>🎉 مراسم‌های «{selectedCustomer["Full name"]}» ({ceremonies.length})</h3>
+          <h3 style={styles.sectionTitle}>🎉 مراسم‌های «{selectedCustomer["Full name"]}» ({formatDisplay(ceremonies.length)})</h3>
 
           <div className="accounting-form-grid ceremony-form-grid" style={styles.formGrid}>
             <div className="accounting-field">
@@ -401,7 +402,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
               {ceremonies.map(c => (
                 <tr key={c.id}>
                   <td style={styles.td}><span style={styles.badge}>{c.ceremony_type}</span></td>
-                  <td style={styles.td}>{c.ceremony_date}</td>
+                  <td style={styles.td}>{formatPersianDigits(c.ceremony_date)}</td>
                   <td style={styles.td}>{fmt(c.guest_count)}</td>
                   <td style={styles.td}>{fmt(c.budget)}</td>
                   <td style={styles.td}>{c.notes || '—'}</td>

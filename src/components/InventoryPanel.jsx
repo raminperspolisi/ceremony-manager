@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { formatDisplay } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 
 export default function InventoryPanel({ items, refresh, onItemSelected, onItemUpdated }) {
@@ -214,7 +215,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
       <div style={{ background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ padding: '10px 12px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 'bold', color: '#334155' }}>لیست اقلام انبار ({filteredItems.length} از {items.length})</span>
+            <span style={{ fontWeight: 'bold', color: '#334155' }}>لیست اقلام انبار ({formatDisplay(filteredItems.length)} از {formatDisplay(items.length)})</span>
             
             {/* کادر جستجوی محصول */}
             <input 
@@ -286,7 +287,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                       }}
                       title="کلیک برای افزودن به فاکتور"
                     >
-                      <td style={{ padding: '8px 10px', color: '#64748b' }}>{index + 1}</td>
+                      <td style={{ padding: '8px 10px', color: '#64748b' }}>{formatDisplay(index + 1)}</td>
                       
                       <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', fontWeight: '500', color: '#1e293b' }}>
                         {isEditing ? (
@@ -321,7 +322,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                           {isEditing ? (
                             <FormattedNumberInput value={editForm.base_cost} onValueChange={(value) => setEditForm({...editForm, base_cost: value})} emptyWhenZero style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                           ) : (
-                            `${Number(item.base_cost || 0).toLocaleString()} ت`
+                            `${formatDisplay(item.base_cost || 0)} ت`
                           )}
                         </td>
                       )}
@@ -330,7 +331,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                         {isEditing ? (
                           <FormattedNumberInput value={editForm[`price_level${displayedPriceLevel}`]} onValueChange={(value) => setEditForm({ ...editForm, [`price_level${displayedPriceLevel}`]: value })} emptyWhenZero style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                         ) : (
-                          `${Number(item[`price_level${displayedPriceLevel}`] || 0).toLocaleString()} ت`
+                          `${formatDisplay(item[`price_level${displayedPriceLevel}`] || 0)} ت`
                         )}
                       </td>
 

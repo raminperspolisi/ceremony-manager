@@ -2558,3 +2558,135 @@ textarea:focus-visible {
     content: none;
   }
 }
+
+.recent-invoices {
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  direction: rtl;
+  font-family: "Vazirmatn", Tahoma, sans-serif;
+}
+
+.recent-invoices,
+.recent-invoices button,
+.recent-invoices input {
+  font-family: inherit;
+}
+
+.recent-invoices-header {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.recent-invoices-title {
+  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.recent-invoices-header > button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 6px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.recent-invoices-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.recent-invoice-row {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 12px;
+  text-align: right;
+}
+
+.recent-invoice-row:last-child {
+  border-bottom: 0;
+}
+
+.recent-invoice-info {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  text-align: right;
+}
+
+.recent-invoice-checkbox {
+  width: 16px !important;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0 !important;
+  accent-color: var(--app-primary);
+}
+
+.recent-invoice-customer {
+  overflow: hidden;
+  color: #1e293b;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-invoice-date {
+  flex: 0 0 auto;
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.recent-invoice-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.recent-invoice-actions button {
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .recent-invoices-header {
+    align-items: flex-start;
+  }
+
+  .recent-invoice-row {
+    gap: 8px;
+    padding: 7px 8px;
+    font-size: 11px;
+  }
+
+  .recent-invoice-info {
+    gap: 6px;
+  }
+
+  .recent-invoice-date {
+    font-size: 10px;
+  }
+
+  .recent-invoice-actions {
+    gap: 4px;
+  }
+}

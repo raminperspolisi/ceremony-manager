@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import moment from 'jalali-moment';
 import html2canvas from 'html2canvas';
+import { formatPersianDigits } from '../styles';
 
 const getInvoiceItems = (invoice) => (
   [invoice.items_data, invoice.items_json, invoice.items]
@@ -83,8 +84,8 @@ const createInvoiceImageMarkup = (invoice, businessName, logoUrl) => {
         <div style="font-size:17px;font-weight:700;">سلام ${escapeHtml(invoice.customer_name || 'مشتری گرامی')} محترم،</div>
         <div>یادآوری مراسم شما را از طرف ${escapeHtml(businessName)} تقدیم می‌کنیم. مشتاق دیدار شما هستیم.</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px 28px;margin-top:8px;">
-          <span><strong>شماره فاکتور:</strong> #${escapeHtml(invoiceNumber)}</span>
-          <span><strong>شماره تماس:</strong> ${escapeHtml(invoice.customer_phone || invoice.phone || 'ثبت نشده')}</span>
+          <span><strong>شماره فاکتور:</strong> #${escapeHtml(formatPersianDigits(invoiceNumber))}</span>
+          <span><strong>شماره تماس:</strong> ${escapeHtml(formatPersianDigits(invoice.customer_phone || invoice.phone || 'ثبت نشده'))}</span>
           <span><strong>تاریخ ثبت:</strong> ${escapeHtml(formatDate(invoice.order_date || invoice.created_at))}</span>
           <span><strong>تاریخ مراسم:</strong> ${escapeHtml(formatDate(invoice.ceremony_date))}</span>
         </div>
@@ -266,7 +267,7 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
     if (telegramWindow) telegramWindow.opener = null;
     clipboardWrite.then(() => {
       setShareStatus(telegramWindow
-        ? `چت شمارهٔ ${invoice.customer_phone || invoice.phone} باز شد و تصویر کپی شد؛ داخل تلگرام در کادر پیام Paste کنید و ارسال بزنید. هیچ فایلی ذخیره نشد. اگر چت باز نشد، تنظیم حریم خصوصی تلگرام اجازهٔ پیدا کردن شما با این شماره را نمی‌دهد.`
+        ? `چت شمارهٔ ${formatPersianDigits(invoice.customer_phone || invoice.phone)} باز شد و تصویر کپی شد؛ داخل تلگرام در کادر پیام Paste کنید و ارسال بزنید. هیچ فایلی ذخیره نشد. اگر چت باز نشد، تنظیم حریم خصوصی تلگرام اجازهٔ پیدا کردن شما با این شماره را نمی‌دهد.`
         : 'تصویر کپی شد اما مرورگر بازشدن تلگرام را مسدود کرد؛ تلگرام را دستی باز کنید و تصویر را Paste کنید. هیچ فایلی ذخیره نشد.');
     }).catch((error) => {
       setShareStatus(`چت تلگرام باز شد، اما مرورگر/گوشی کپی تصویر را رد کرد: ${error.message}. هیچ فایلی ذخیره نشده است؛ از «بازکردن فهرست اشتراک» برای فرستادن تصویر به تلگرام استفاده کنید.`);
