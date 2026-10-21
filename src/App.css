@@ -2224,3 +2224,337 @@ textarea:focus-visible {
     font-size: 11px;
   }
 }
+
+.mobile-menu-toggle {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--app-primary-dark);
+}
+
+.mobile-menu-toggle span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.mobile-menu-backdrop {
+  display: none;
+}
+
+.app-header {
+  z-index: 22;
+}
+
+@media (min-width: 901px) {
+  .app-header {
+    min-height: 136px;
+    align-items: flex-start;
+    padding-bottom: 58px;
+  }
+
+  .mobile-menu-toggle {
+    position: absolute;
+    top: 82px;
+    right: 32px;
+  }
+}
+
+.app-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sidebar {
+  position: fixed;
+  z-index: 21;
+  inset: 0 0 0 auto;
+  width: min(320px, 88vw);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: auto;
+  border: 0;
+  background: #fbfcfd;
+  box-shadow: -14px 0 36px rgb(15 23 42 / 16%);
+  transform: translateX(105%);
+  visibility: hidden;
+  transition: transform 180ms ease, visibility 180ms ease;
+}
+
+.sidebar.mobile-menu-open {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.mobile-menu-backdrop {
+  position: fixed;
+  z-index: 19;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgb(15 23 42 / 42%);
+}
+
+.inventory-price-level-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.inventory-price-level-control select {
+  width: auto;
+  min-height: 30px;
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .app-header {
+    position: sticky;
+    z-index: 22;
+    top: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 10px 16px;
+  }
+
+  .brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .mobile-menu-toggle {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    align-content: center;
+    justify-items: center;
+    gap: 5px;
+    padding: 8px;
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--app-primary-dark);
+  }
+
+  .mobile-menu-toggle span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+  }
+
+  .header-status {
+    width: 100%;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .sidebar {
+    position: fixed;
+    z-index: 21;
+    inset: 0 0 0 auto;
+    width: min(320px, 88vw);
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    padding: 140px 16px 24px;
+    overflow-y: auto;
+    border: 0;
+    background: #fbfcfd;
+    box-shadow: -14px 0 36px rgb(15 23 42 / 16%);
+    transform: translateX(105%);
+    visibility: hidden;
+    transition: transform 180ms ease, visibility 180ms ease;
+  }
+
+  .sidebar.mobile-menu-open {
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .sidebar-label {
+    display: block;
+  }
+
+  .sidebar-note {
+    display: flex;
+  }
+
+  .section-nav {
+    display: grid;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .nav-button {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    background: transparent;
+  }
+
+  .mobile-menu-backdrop {
+    position: fixed;
+    z-index: 19;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgb(15 23 42 / 42%);
+  }
+}
+
+@media (max-width: 600px) {
+  .header-status {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .header-status > span:not(.status-dot) {
+    flex: 1;
+  }
+
+  .header-status .profile-button {
+    padding: 5px 7px;
+    font-size: 10px;
+  }
+
+  .header-status .mobile-menu-toggle {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+
+  .inventory-table-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .inventory-table-controls > span {
+    display: none;
+  }
+
+  .inventory-table-wrap {
+    overflow-x: hidden !important;
+  }
+
+  .inventory-table {
+    table-layout: fixed;
+  }
+
+  .inventory-table th,
+  .inventory-table td {
+    padding: 5px 3px !important;
+    font-size: 10px !important;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .inventory-table th:first-child,
+  .inventory-table td:first-child {
+    width: 34px;
+  }
+
+  .inventory-table th:nth-child(2),
+  .inventory-table td:nth-child(2) {
+    width: 27%;
+  }
+
+  .inventory-table th:last-child,
+  .inventory-table td:last-child {
+    width: 96px;
+  }
+
+  .quotation-items-table-wrap {
+    overflow: visible !important;
+  }
+
+  .quotation-items-table {
+    display: block;
+    width: 100%;
+  }
+
+  .quotation-items-table thead {
+    display: none;
+  }
+
+  .quotation-items-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .quotation-items-table tbody tr:not(.quotation-items-empty-row) {
+    display: grid;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .quotation-items-table tbody td {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 0 !important;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right !important;
+  }
+
+  .quotation-items-table tbody td::before {
+    flex: 0 0 42%;
+    color: #64748b;
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .quotation-items-table tbody tr td:last-child {
+    border-bottom: 0;
+  }
+
+  .quotation-items-table tbody .quotation-items-empty-row {
+    display: block;
+  }
+
+  .quotation-items-table tbody .quotation-items-empty-row td {
+    display: block;
+  }
+
+  .quotation-items-table tbody .quotation-items-empty-row td::before {
+    content: none;
+  }
+}

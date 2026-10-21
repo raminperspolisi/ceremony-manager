@@ -30,13 +30,13 @@ const formatNumber = (value) => {
   return toPersianDigits(formatted);
 };
 
-const countNumericCharacters = (value) => (value.match(/[0-9.]/g) || []).length;
+const countNumericCharacters = (value) => (value.match(/[0-9۰-۹٠-٩.]/g) || []).length;
 
 const findCaretPosition = (value, numericCharacterCount) => {
   if (numericCharacterCount === 0) return 0;
   let count = 0;
   for (let index = 0; index < value.length; index += 1) {
-    if (/[۰-۹.]/.test(value[index])) count += 1;
+    if (/[0-9۰-۹٠-٩.]/.test(value[index])) count += 1;
     if (count === numericCharacterCount) return index + 1;
   }
   return value.length;
@@ -46,11 +46,13 @@ export default function FormattedNumberInput({
   value,
   onValueChange,
   allowDecimal = true,
+  emptyWhenZero = false,
   inputMode = 'decimal',
   ...inputProps
 }) {
   const inputRef = useRef(null);
-  const rawValue = normalizeNumber(value ?? '', allowDecimal);
+  const normalizedValue = normalizeNumber(value ?? '', allowDecimal);
+  const rawValue = emptyWhenZero && Number(normalizedValue) === 0 ? '' : normalizedValue;
 
   const handleChange = (event) => {
     const input = event.currentTarget;

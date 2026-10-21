@@ -77,6 +77,7 @@ export default function App() {
   const [password, setPassword] = useState('');
   // پیش‌فرض را روی مشتریان می‌گذاریم چون اولین گزینه منو است
   const [activeSection, setActiveSection] = useState('customers');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const businessName = session?.user?.user_metadata?.business_name?.trim() || DEFAULT_BUSINESS_NAME;
@@ -142,11 +143,26 @@ export default function App() {
 
       event.preventDefault();
       setActiveSection(section);
+      setMobileMenuOpen(false);
     };
 
     window.addEventListener('keydown', handleFunctionKey);
     return () => window.removeEventListener('keydown', handleFunctionKey);
   }, [profileOpen, session]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setMobileMenuOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [mobileMenuOpen]);
+
+  const handleSectionChange = (section) => {
+    setActiveSection(section);
+    setMobileMenuOpen(false);
+  };
 
   const handleSignIn = async (e) => {
     e.preventDefault();
@@ -369,6 +385,18 @@ export default function App() {
         </div>
 
         <div className="header-status">
+          <button
+            type="button"
+            className="mobile-menu-toggle"
+            aria-label={mobileMenuOpen ? 'بستن منو' : 'باز کردن منو'}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="main-navigation"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
           <span className="status-dot" />
           <span>{session.user.user_metadata?.display_name || session.user.email || 'کاربر واردشده'}</span>
           <button type="button" className="profile-button" onClick={handleOpenProfile}>
@@ -494,7 +522,15 @@ export default function App() {
       {authError && <div role="alert" style={{ margin: '12px 20px', padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
 
       <div className="app-layout">
-        <aside className="sidebar">
+        {mobileMenuOpen && (
+          <button
+            type="button"
+            className="mobile-menu-backdrop"
+            aria-label="بستن منو"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
+        <aside className={`sidebar ${mobileMenuOpen ? 'mobile-menu-open' : ''}`} id="main-navigation">
           <p className="sidebar-label">منوی اصلی</p>
 
           <nav className="section-nav" aria-label="بخش‌های برنامه">
@@ -503,7 +539,7 @@ export default function App() {
               type="button"
               className={`nav-button ${activeSection === "customers" ? "active" : ""}`}
               aria-keyshortcuts="F1"
-              onClick={() => setActiveSection("customers")}
+              onClick={() => handleSectionChange("customers")}
             >
               <span className="nav-icon">👤</span>
               <span className="nav-text">مشتریان</span>
@@ -515,7 +551,7 @@ export default function App() {
               type="button"
               className={`nav-button ${activeSection === "inventory" ? "active" : ""}`}
               aria-keyshortcuts="F2"
-              onClick={() => setActiveSection("inventory")}
+              onClick={() => handleSectionChange("inventory")}
             >
               <span className="nav-icon">▦</span>
               <span className="nav-text">موجودی انبار</span>
@@ -528,7 +564,7 @@ export default function App() {
               type="button"
               className={`nav-button ${activeSection === "quotations" ? "active" : ""}`}
               aria-keyshortcuts="F3"
-              onClick={() => setActiveSection("quotations")}
+              onClick={() => handleSectionChange("quotations")}
             >
               <span className="nav-icon">▤</span>
               <span className="nav-text">پیش‌فاکتور</span>
@@ -541,7 +577,7 @@ export default function App() {
               type="button"
               className={`nav-button ${activeSection === "official" ? "active" : ""}`}
               aria-keyshortcuts="F4"
-              onClick={() => setActiveSection("official")}
+              onClick={() => handleSectionChange("official")}
             >
               <span className="nav-icon">📜</span>
               <span className="nav-text">فاکتور رسمی</span>
@@ -553,7 +589,7 @@ export default function App() {
               type="button"
               className={`nav-button ${activeSection === "reports" ? "active" : ""}`}
               aria-keyshortcuts="F5"
-              onClick={() => setActiveSection("reports")}
+              onClick={() => handleSectionChange("reports")}
             >
               <span className="nav-icon">📊</span>
               <span className="nav-text">گزارش مالی</span>
@@ -565,7 +601,7 @@ export default function App() {
               type="button"
               className={`nav-button ${activeSection === "analytics" ? "active" : ""}`}
               aria-keyshortcuts="F6"
-              onClick={() => setActiveSection("analytics")}
+              onClick={() => handleSectionChange("analytics")}
             >
               <span className="nav-icon">📈</span>
               <span className="nav-text">آنالیز پیشرفته</span>
@@ -577,7 +613,7 @@ export default function App() {
               type="button"
               className={`nav-button ${activeSection === "calendar" ? "active" : ""}`}
               aria-keyshortcuts="F7"
-              onClick={() => setActiveSection("calendar")}
+              onClick={() => handleSectionChange("calendar")}
             >
               <span className="nav-icon">📅</span>
               <span className="nav-text">تقویم مراسم‌ها</span>
@@ -589,7 +625,7 @@ export default function App() {
               type="button"
               className={`nav-button ${activeSection === "reminders" ? "active" : ""}`}
               aria-keyshortcuts="F8"
-              onClick={() => setActiveSection("reminders")}
+              onClick={() => handleSectionChange("reminders")}
             >
               <span className="nav-icon">🔔</span>
               <span className="nav-text">یادآوری مراسم و تسویه</span>

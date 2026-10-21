@@ -28,7 +28,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const [isCustomerListOpen, setIsCustomerListOpen] = useState(false);
   const [customerLoadError, setCustomerLoadError] = useState('');
   const [editableItems, setEditableItems] = useState([]);
-  const [paidAmount, setPaidAmount] = useState(0);
+  const [paidAmount, setPaidAmount] = useState('');
   const [paymentStatus, setPaymentStatus] = useState('unpaid');
 
   // حالت نمایش چک‌لیست برای هر فاکتور
@@ -166,9 +166,9 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   // کمکی برای گرفتن قیمت فعال بر اساس سطح انتخابی کالا
   const getActiveUnitPrice = (item) => {
     const lvl = String(item.price_level || '1');
-    if (lvl === '2') return Number(item.p2 || 0);
-    if (lvl === '3') return Number(item.p3 || 0);
-    return Number(item.p1 || item.price || 0);
+    if (lvl === '2') return Number(item.p2 ?? 0);
+    if (lvl === '3') return Number(item.p3 ?? 0);
+    return Number(item.p1 ?? item.price ?? 0);
   };
 
   const calculateInvoiceProfit = (items) => {
@@ -197,7 +197,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     setOrderDate(inv.order_date || '');
     setCeremonyDate(inv.ceremony_date || '');
     setCustomerAddress(inv.customer_address || '');
-    setPaidAmount(Number(inv.paid_amount || 0));
+    setPaidAmount(inv.paid_amount || '');
     setPaymentStatus(inv.payment_status || 'unpaid');
 
     const normalizedItems = (inv.items_data || []).map(item => {
@@ -232,12 +232,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const handleUnitPriceChange = (index, value) => {
     const updated = [...editableItems];
     const item = updated[index];
-    const val = Number(value);
     const lvl = String(item.price_level || '1');
 
-    if (lvl === '2') item.p2 = val;
-    else if (lvl === '3') item.p3 = val;
-    else item.p1 = val;
+    if (lvl === '2') item.p2 = value;
+    else if (lvl === '3') item.p3 = value;
+    else item.p1 = value;
 
     setEditableItems(updated);
   };
@@ -245,7 +244,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const handleAddEditableItem = () => {
     setEditableItems([
       ...editableItems,
-      { title: '', item_type: 'sale', price_level: '1', qty: 1, p1: 0, p2: 0, p3: 0, base_cost: 0 }
+      { title: '', item_type: 'sale', price_level: '1', qty: 1, p1: '', p2: '', p3: '', base_cost: '' }
     ]);
   };
 
@@ -254,7 +253,15 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   };
 
   const handleSaveEdit = async (id) => {
-    const newTotalPrice = editableItems.reduce((sum, item) => {
+    const normalizedItems = editableItems.map((item) => ({
+      ...item,
+      p1: Number(item.p1) || 0,
+      p2: Number(item.p2) || 0,
+      p3: Number(item.p3) || 0,
+      base_cost: Number(item.base_cost) || 0,
+      qty: Number(item.qty) || 1,
+    }));
+    const newTotalPrice = normalizedItems.reduce((sum, item) => {
       const q = Number(item.qty || 1);
       const p = getActiveUnitPrice(item);
       return sum + (q * p);
@@ -268,7 +275,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
         order_date: orderDate,
         ceremony_date: ceremonyDate,
         customer_address: customerAddress,
-        items_data: editableItems,
+        items_data: normalizedItems,
         total_price: newTotalPrice,
         paid_amount: Number(paidAmount || 0),
         payment_status: paymentStatus
@@ -579,6 +586,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                           <FormattedNumberInput
                             value={paidAmount}
                             onValueChange={(value) => setPaidAmount(value)}
+                            emptyWhenZero
                             style={{ width: '80px', padding: '4px', fontSize: '11px', textAlign: 'center' }}
                           />
                         ) : (
@@ -759,6 +767,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                                       <FormattedNumberInput
                                         value={getActiveUnitPrice(item)}
                                         onValueChange={(value) => handleUnitPriceChange(itemIdx, value)}
+                                        emptyWhenZero
                                         style={{ width: '100px', padding: '4px', textAlign: 'center' }}
                                       />
                                     </td>

@@ -326,7 +326,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       <div style={styles.cardBox}>
         <h3 style={styles.sectionTitle}>📋 لیست مشتریان ({customers.length}) — [دابل‌کلیک = ویرایش]</h3>
         {customers.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '8px', fontSize: '12px' }}>هنوز مشتری‌ای ثبت نشده است.</p>}
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: '200px', overflowY: 'auto' }}>
+        <ul className="customer-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {customers.map(c => (
             <li key={c.id}
                 onDoubleClick={() => handleStartEdit(c)}

@@ -16,6 +16,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
   // استیت برای نمایش یا مخفی کردن قیمت خرید
   const [showCostPrice, setShowCostPrice] = useState(false);
+  const [displayedPriceLevel, setDisplayedPriceLevel] = useState('1');
 
   // استیت برای نگهداری شناسه آیتم‌های انتخاب‌شده
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -164,7 +165,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
           <FormattedNumberInput
             value={baseCost}
             onValueChange={setBaseCost}
-            placeholder="۰"
+            emptyWhenZero
             style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
           />
         </div>
@@ -174,7 +175,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
           <FormattedNumberInput
             value={price1}
             onValueChange={setPrice1}
-            placeholder="۰"
+            emptyWhenZero
             style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
           />
         </div>
@@ -184,7 +185,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
           <FormattedNumberInput
             value={price2}
             onValueChange={setPrice2}
-            placeholder="۰"
+            emptyWhenZero
             style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
           />
         </div>
@@ -194,7 +195,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
           <FormattedNumberInput
             value={price3}
             onValueChange={setPrice3}
-            placeholder="۰"
+            emptyWhenZero
             style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
           />
         </div>
@@ -225,8 +226,20 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="inventory-table-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '11px', color: '#64748b' }}>💡 دابل‌کلیک برای ویرایش</span>
+            <label className="inventory-price-level-control">
+              <span>نمایش نرخ</span>
+              <select
+                value={displayedPriceLevel}
+                onChange={(e) => setDisplayedPriceLevel(e.target.value)}
+                aria-label="انتخاب سطح قیمت برای نمایش"
+              >
+                <option value="1">سطح ۱</option>
+                <option value="2">سطح ۲</option>
+                <option value="3">سطح ۳</option>
+              </select>
+            </label>
             <button 
               type="button" 
               onClick={() => setShowCostPrice(!showCostPrice)} 
@@ -237,24 +250,22 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
           </div>
         </div>
         
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
+        <div className="inventory-table-wrap" style={{ overflowX: 'auto' }}>
+          <table className="inventory-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
                 <th style={{ padding: '8px 10px' }}>ردیف</th>
                 <th style={{ padding: '8px 10px' }}>عنوان کالا / خدمت</th>
                 <th style={{ padding: '8px 10px' }}>نوع کالا</th>
                 {showCostPrice && <th style={{ padding: '8px 10px', color: '#b91c1c' }}>قیمت خرید</th>}
-                <th style={{ padding: '8px 10px' }}>نرخ سطح ۱</th>
-                <th style={{ padding: '8px 10px' }}>نرخ سطح ۲</th>
-                <th style={{ padding: '8px 10px' }}>نرخ سطح ۳</th>
+                <th style={{ padding: '8px 10px' }}>نرخ سطح {displayedPriceLevel}</th>
                 <th style={{ padding: '8px 10px', textAlign: 'center' }}>عملیات</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={showCostPrice ? "8" : "7"} style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
+                  <td colSpan={showCostPrice ? "6" : "5"} style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
                     {items.length === 0 ? 'هیچ کالایی در انبار ثبت نشده است.' : 'نتیجه‌ای برای جستجوی شما یافت نشد.'}
                   </td>
                 </tr>
@@ -308,7 +319,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                       {showCostPrice && (
                         <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#b91c1c', fontWeight: 'bold' }}>
                           {isEditing ? (
-                            <FormattedNumberInput value={editForm.base_cost} onValueChange={(value) => setEditForm({...editForm, base_cost: value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                            <FormattedNumberInput value={editForm.base_cost} onValueChange={(value) => setEditForm({...editForm, base_cost: value})} emptyWhenZero style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                           ) : (
                             `${Number(item.base_cost || 0).toLocaleString()} ت`
                           )}
@@ -317,25 +328,9 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
                       <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
                         {isEditing ? (
-                          <FormattedNumberInput value={editForm.price_level1} onValueChange={(value) => setEditForm({...editForm, price_level1: value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                          <FormattedNumberInput value={editForm[`price_level${displayedPriceLevel}`]} onValueChange={(value) => setEditForm({ ...editForm, [`price_level${displayedPriceLevel}`]: value })} emptyWhenZero style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                         ) : (
-                          `${Number(item.price_level1 || 0).toLocaleString()} ت`
-                        )}
-                      </td>
-
-                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
-                        {isEditing ? (
-                          <FormattedNumberInput value={editForm.price_level2} onValueChange={(value) => setEditForm({...editForm, price_level2: value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
-                        ) : (
-                          `${Number(item.price_level2 || 0).toLocaleString()} ت`
-                        )}
-                      </td>
-
-                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
-                        {isEditing ? (
-                          <FormattedNumberInput value={editForm.price_level3} onValueChange={(value) => setEditForm({...editForm, price_level3: value})} style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
-                        ) : (
-                          `${Number(item.price_level3 || 0).toLocaleString()} ت`
+                          `${Number(item[`price_level${displayedPriceLevel}`] || 0).toLocaleString()} ت`
                         )}
                       </td>
 

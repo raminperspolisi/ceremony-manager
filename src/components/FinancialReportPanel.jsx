@@ -10,7 +10,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
   const [newItemTitle, setNewItemTitle] = useState('');
   const [newItemType, setNewItemType] = useState('rent');
   const [newItemQty, setNewItemQty] = useState(1);
-  const [newItemPrice, setNewItemPrice] = useState(0);
+  const [newItemPrice, setNewItemPrice] = useState('');
 
   const [newChecklistTask, setNewChecklistTask] = useState('');
 
@@ -80,7 +80,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
 
     setNewItemTitle('');
     setNewItemQty(1);
-    setNewItemPrice(0);
+    setNewItemPrice('');
   }
 
   async function handleDeleteItem(indexToRemove) {
@@ -669,6 +669,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
                   placeholder="مبلغ"
                   value={newItemPrice}
                   onValueChange={setNewItemPrice}
+                  emptyWhenZero
                   style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', background: '#fff' }}
                 />
                 </div>

@@ -513,8 +513,8 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
       {/* جدول اقلام انتخاب‌شده */}
       <div style={{ background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '15px' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "right", fontSize: '12px' }}>
+        <div className="quotation-items-table-wrap" style={{ overflowX: 'auto' }}>
+          <table className="quotation-items-table" style={{ width: "100%", borderCollapse: "collapse", textAlign: "right", fontSize: '12px' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
                 <th style={{ ...win95Style.tableHeader, textAlign: 'center', width: '60px' }}>حذف</th>
@@ -530,7 +530,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
             </thead>
             <tbody>
               {items.length === 0 ? (
-                <tr>
+                <tr className="quotation-items-empty-row">
                   <td colSpan={showBuyingPrice ? 9 : 8} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
                     هیچ کالایی به پیش‌فاکتور اضافه نشده است. (کالاهای مورد نظر را از بخش انبار انتخاب کنید)
                   </td>
@@ -538,16 +538,16 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
               ) : (
                 items.map((item, index) => (
                   <tr key={item.id || index}>
-                    <td style={{ ...win95Style.tableCell, textAlign: 'center' }}>
+                    <td data-label="حذف" style={{ ...win95Style.tableCell, textAlign: 'center' }}>
                       <button 
                         style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }} 
                         onClick={() => handleRemoveItem(item.id)}>
                         حذف
                       </button>
                     </td>
-                    <td style={{ ...win95Style.tableCell, textAlign: 'center', color: '#64748b' }}>{index + 1}</td>
-                    <td style={{ ...win95Style.tableCell, fontWeight: '500', color: '#1e293b' }}>{item.title}</td>
-                    <td style={{ ...win95Style.tableCell, textAlign: 'center' }}>
+                    <td data-label="ردیف" style={{ ...win95Style.tableCell, textAlign: 'center', color: '#64748b' }}>{index + 1}</td>
+                    <td data-label="نام کالا / خدمت" style={{ ...win95Style.tableCell, fontWeight: '500', color: '#1e293b' }}>{item.title}</td>
+                    <td data-label="نوع کالا" style={{ ...win95Style.tableCell, textAlign: 'center' }}>
                       <span style={{
                         padding: '2px 8px',
                         borderRadius: '10px',
@@ -559,7 +559,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                         {(item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای') ? 'اجاره‌ای' : 'فروشی'}
                       </span>
                     </td>
-                    <td style={{ ...win95Style.tableCell, width: '85px' }}>
+                    <td data-label="تعداد" style={{ ...win95Style.tableCell, width: '85px' }}>
                       <FormattedNumberInput
                         allowDecimal={false}
                         value={item.requestedQuantity ?? ""} 
@@ -567,17 +567,17 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                         style={{ ...win95Style.input, width: '100%', textAlign: 'center' }} 
                       />
                     </td>
-                    <td style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
+                    <td data-label="درجه ۱ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
                       {formatDisplay ? formatDisplay(item.price_level1) : Number(item.price_level1 || 0).toLocaleString()}
                     </td>
-                    <td style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
+                    <td data-label="درجه ۲ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
                       {formatDisplay ? formatDisplay(item.price_level2) : Number(item.price_level2 || 0).toLocaleString()}
                     </td>
-                    <td style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
+                    <td data-label="درجه ۳ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
                       {formatDisplay ? formatDisplay(item.price_level3) : Number(item.price_level3 || 0).toLocaleString()}
                     </td>
                     {showBuyingPrice && (
-                      <td style={{ ...win95Style.tableCell, color: '#475569' }}>
+                      <td data-label="قیمت خرید (تومان)" style={{ ...win95Style.tableCell, color: '#475569' }}>
                         {formatDisplay ? formatDisplay(item.base_cost) : Number(item.base_cost || 0).toLocaleString()}
                       </td>
                     )}
