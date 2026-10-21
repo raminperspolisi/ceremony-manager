@@ -375,7 +375,7 @@ export default function OfficialInvoicesPanel() {
       </div>
 
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
+        <table className="official-invoices-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
               <th style={{ padding: '10px', width: '40px', textAlign: 'center' }}>
@@ -545,8 +545,8 @@ export default function OfficialInvoicesPanel() {
 
                       <td style={{ padding: '10px', color: '#16a34a', fontWeight: 'bold' }}>{Number(profit).toLocaleString()}</td>
 
-                      <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <td className="official-invoices-actions-cell" style={{ padding: '10px', textAlign: 'center' }}>
+                        <div className="official-invoices-actions" style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
                           {isEditing ? (
                             <>
                               <button

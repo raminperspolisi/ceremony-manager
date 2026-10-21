@@ -14,6 +14,13 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileMessage, setProfileMessage] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   // پیش‌فرض را روی مشتریان می‌گذاریم چون اولین گزینه منو است
@@ -88,6 +95,47 @@ export default function App() {
     }
   };
 
+  const handleOpenProfile = () => {
+    setProfileName(session.user.user_metadata?.display_name || '');
+    setProfileEmail(session.user.email || '');
+    setProfilePassword('');
+    setProfileError('');
+    setProfileMessage('');
+    setProfileOpen(true);
+  };
+
+  const handleProfileSave = async (e) => {
+    e.preventDefault();
+    setProfileLoading(true);
+    setProfileError('');
+    setProfileMessage('');
+
+    const emailChanged = profileEmail.trim() !== (session.user.email || '');
+    const attributes = {
+      data: { display_name: profileName.trim() }
+    };
+    if (emailChanged) attributes.email = profileEmail.trim();
+    if (profilePassword) attributes.password = profilePassword;
+
+    try {
+      const { data, error } = await supabase.auth.updateUser(attributes);
+      if (error) throw error;
+      if (data.user) {
+        setSession((current) => current ? { ...current, user: data.user } : current);
+      }
+      setProfilePassword('');
+      setProfileMessage(
+        emailChanged
+          ? 'پروفایل ذخیره شد. برای تأیید ایمیل جدید، صندوق ورودی آن را بررسی کنید.'
+          : 'تغییرات پروفایل با موفقیت ذخیره شد.'
+      );
+    } catch (error) {
+      setProfileError('ذخیره پروفایل ناموفق بود: ' + error.message);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   // آپدیت زنده کالا در انبار و پیش‌فاکتورِ جاری
   const handleItemUpdated = (updatedItem) => {
     setInventory((prev) =>
@@ -135,7 +183,8 @@ export default function App() {
 
   if (!session) {
     return (
-      <main style={{ maxWidth: 420, margin: '10vh auto', padding: 24, direction: 'rtl', background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(15, 23, 42, 0.1)' }}>
+      <main className="login-card" style={{ maxWidth: 420, margin: '10vh auto', padding: 24, direction: 'rtl', background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(15, 23, 42, 0.1)' }}>
+        <img src="/azho-logo.png" alt="لوگوی آژو مراسم" className="login-logo" />
         <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>ورود به مدیریت تشریفات</h1>
         <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 14 }}>برای دسترسی به سامانه با حساب کاربری خود وارد شوید.</p>
         {authError && <div role="alert" style={{ marginBottom: 14, padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
@@ -167,7 +216,7 @@ export default function App() {
     >
       <header className="app-header">
         <div className="brand">
-          <img src="/azho2.png" alt="لوگو" className="header-logo" />
+          <img src="/azho-logo.png" alt="لوگوی آژو مراسم" className="header-logo" />
           <div className="header-title">
             <h1 className="brand-title">مدیریت تشریفات</h1>
             <p className="brand-subtitle">مدیریت انبار و پیش‌فاکتورها</p>
@@ -176,12 +225,86 @@ export default function App() {
 
         <div className="header-status">
           <span className="status-dot" />
-          <span>{session.user.email || 'کاربر واردشده'}</span>
+          <span>{session.user.user_metadata?.display_name || session.user.email || 'کاربر واردشده'}</span>
+          <button type="button" className="profile-button" onClick={handleOpenProfile}>
+            ویرایش پروفایل
+          </button>
           <button type="button" onClick={handleSignOut} style={{ padding: '4px 10px', border: '1px solid #dbe5e2', background: '#fff', color: '#1e5048' }}>
             خروج
           </button>
         </div>
       </header>
+
+      {profileOpen && (
+        <div
+          className="profile-modal-backdrop"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !profileLoading) setProfileOpen(false);
+          }}
+        >
+          <section className="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" dir="rtl">
+            <div className="profile-modal-header">
+              <div>
+                <p className="page-eyebrow">حساب کاربری</p>
+                <h2 id="profile-modal-title">ویرایش پروفایل</h2>
+              </div>
+              <button
+                type="button"
+                className="profile-modal-close"
+                aria-label="بستن"
+                onClick={() => setProfileOpen(false)}
+                disabled={profileLoading}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleProfileSave}>
+              <label htmlFor="profile-name">نام نمایشی</label>
+              <input
+                id="profile-name"
+                type="text"
+                autoComplete="name"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                placeholder="نام شما"
+              />
+              <label htmlFor="profile-email">ایمیل</label>
+              <input
+                id="profile-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={profileEmail}
+                onChange={(e) => setProfileEmail(e.target.value)}
+              />
+              <label htmlFor="profile-password">رمز عبور جدید</label>
+              <input
+                id="profile-password"
+                type="password"
+                autoComplete="new-password"
+                minLength={6}
+                value={profilePassword}
+                onChange={(e) => setProfilePassword(e.target.value)}
+                placeholder="برای حفظ رمز فعلی خالی بگذارید"
+              />
+              <p className="profile-password-hint">برای تغییر رمز، حداقل ۶ کاراکتر وارد کنید.</p>
+
+              {profileError && <div className="profile-notice error" role="alert">{profileError}</div>}
+              {profileMessage && <div className="profile-notice success" role="status">{profileMessage}</div>}
+
+              <div className="profile-modal-actions">
+                <button type="button" className="profile-cancel-button" onClick={() => setProfileOpen(false)} disabled={profileLoading}>
+                  بستن
+                </button>
+                <button type="submit" className="profile-save-button" disabled={profileLoading}>
+                  {profileLoading ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       {authError && <div role="alert" style={{ margin: '12px 20px', padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
 
