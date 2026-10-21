@@ -218,25 +218,58 @@ export default function RemindersPanel() {
       return;
     }
     const draftText = `سلام ${invoice.customer_name || 'مشتری گرامی'} عزیز، تصویر فاکتور و یادآوری مراسم شما از طرف تشریفات آژو تقدیم می‌شود.`;
+    const file = new File(
+      [preparedInvoiceImage.blob],
+      preparedInvoiceImage.fileName,
+      { type: 'image/png' },
+    );
+    const shareData = {
+      files: [file],
+      title: `فاکتور ${invoice.customer_name || ''}`,
+      text: draftText,
+    };
+    const supportsImageClipboard = Boolean(
+      window.isSecureContext &&
+      navigator.clipboard?.write &&
+      typeof ClipboardItem !== 'undefined' &&
+      (!ClipboardItem.supports || ClipboardItem.supports('image/png'))
+    );
+
+    if (!supportsImageClipboard) {
+      if (navigator.share && navigator.canShare?.(shareData)) {
+        navigator.share(shareData)
+          .then(() => setShareStatus('فاکتور تصویری به فهرست اشتراک گوشی فرستاده شد؛ تلگرام را انتخاب کنید و در گفت‌وگو ارسال را بزنید.'))
+          .catch((error) => {
+            if (error.name === 'AbortError') setShareStatus('اشتراک‌گذاری لغو شد.');
+            else setShareStatus(`گوشی نتوانست تصویر را کپی یا به اشتراک بگذارد: ${error.message}`);
+          });
+        return;
+      }
+      setShareStatus('این مرورگر کپی تصویر را پشتیبانی نمی‌کند. از دکمهٔ «بازکردن فهرست اشتراک» استفاده کنید تا تصویر به تلگرام فرستاده شود؛ اگر آن هم در دسترس نبود، مرورگر/سیستم‌عامل باید از اشتراک فایل پشتیبانی کند.');
+      return;
+    }
+
+    let clipboardWrite;
+    try {
+      clipboardWrite = navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': preparedInvoiceImage.blob }),
+      ]);
+    } catch (error) {
+      setShareStatus(`مرورگر اجازهٔ کپی تصویر را نداد: ${error.message}`);
+      return;
+    }
+
     const telegramWindow = window.open(
       `https://t.me/+${phone}?text=${encodeURIComponent(draftText)}`,
       '_blank',
     );
-    if (!telegramWindow) {
-      setShareStatus('مرورگر بازشدن تلگرام را مسدود کرد؛ اجازهٔ بازشدن پنجرهٔ جدید را بدهید و دوباره بزنید.');
-      return;
-    }
-    telegramWindow.opener = null;
-    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
-      setShareStatus('چت تلگرام باز شد، اما مرورگر کپی تصویر را پشتیبانی نمی‌کند. برای ارسال بدون ذخیره از گوشی/مرورگر دارای اشتراک تصویر استفاده کنید.');
-      return;
-    }
-    navigator.clipboard.write([
-      new ClipboardItem({ 'image/png': preparedInvoiceImage.blob }),
-    ]).then(() => {
-      setShareStatus(`چت شمارهٔ ${invoice.customer_phone || invoice.phone} باز شد و تصویر کپی شد؛ داخل تلگرام در کادر پیام Paste کنید و ارسال بزنید. هیچ فایلی ذخیره نشد. اگر چت باز نشد، تنظیم حریم خصوصی تلگرام اجازهٔ پیدا کردن شما با این شماره را نمی‌دهد.`);
+    if (telegramWindow) telegramWindow.opener = null;
+    clipboardWrite.then(() => {
+      setShareStatus(telegramWindow
+        ? `چت شمارهٔ ${invoice.customer_phone || invoice.phone} باز شد و تصویر کپی شد؛ داخل تلگرام در کادر پیام Paste کنید و ارسال بزنید. هیچ فایلی ذخیره نشد. اگر چت باز نشد، تنظیم حریم خصوصی تلگرام اجازهٔ پیدا کردن شما با این شماره را نمی‌دهد.`
+        : 'تصویر کپی شد اما مرورگر بازشدن تلگرام را مسدود کرد؛ تلگرام را دستی باز کنید و تصویر را Paste کنید. هیچ فایلی ذخیره نشد.');
     }).catch((error) => {
-      setShareStatus(`چت تلگرام باز شد، اما کپی تصویر مسدود شد: ${error.message}. هیچ فایلی ذخیره نشده است.`);
+      setShareStatus(`چت تلگرام باز شد، اما مرورگر/گوشی کپی تصویر را رد کرد: ${error.message}. هیچ فایلی ذخیره نشده است؛ از «بازکردن فهرست اشتراک» برای فرستادن تصویر به تلگرام استفاده کنید.`);
     });
   };
 
