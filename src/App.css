@@ -1315,6 +1315,10 @@ textarea:focus-visible {
   font-weight: 800 !important;
 }
 
+.reminders-mobile-list {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .analytics-breakdown {
     grid-template-columns: minmax(0, 1fr);
@@ -1425,6 +1429,148 @@ textarea:focus-visible {
     border: 0;
     border-radius: 0 !important;
     box-shadow: none !important;
+  }
+
+  .reminders-panel {
+    padding: 14px !important;
+    border-radius: 0 !important;
+  }
+
+  .reminders-desktop-table {
+    display: none;
+  }
+
+  .reminders-mobile-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .reminders-mobile-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid #dbe3ea;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
+  }
+
+  .reminders-mobile-card-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .reminders-mobile-card-heading > div {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .reminders-mobile-card-heading strong {
+    overflow-wrap: anywhere;
+    color: #1e293b;
+    font-size: 14px;
+  }
+
+  .reminders-mobile-card-heading > div > span {
+    color: #64748b;
+    font-size: 11px;
+  }
+
+  .reminders-mobile-debt {
+    flex: 0 0 auto;
+    color: #15803d;
+    font-size: 11px;
+    font-weight: 800;
+    text-align: left;
+  }
+
+  .reminders-mobile-debt.has-debt {
+    color: #b91c1c;
+  }
+
+  .reminders-mobile-meta {
+    display: grid;
+    gap: 6px;
+    padding: 10px 0;
+    color: #475569;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .reminders-mobile-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .reminders-mobile-button {
+    width: 100%;
+    min-height: 44px;
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .reminders-mobile-button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+  }
+
+  .reminders-mobile-button.details {
+    border: 1px solid #bae6fd;
+    background: #e0f2fe;
+    color: #075985;
+  }
+
+  .reminders-mobile-button.prepare {
+    background: #0f766e;
+  }
+
+  .reminders-mobile-button.share {
+    background: #2563eb;
+  }
+
+  .reminders-mobile-details {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #f8fafc;
+  }
+
+  .reminders-mobile-items {
+    display: grid;
+    gap: 8px;
+  }
+
+  .reminders-mobile-item {
+    display: grid;
+    gap: 4px;
+    padding: 9px;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    background: #fff;
+    color: #475569;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+
+  .reminders-mobile-item strong {
+    color: #1e293b;
+    font-size: 12px;
+  }
+
+  .reminders-mobile-no-items {
+    color: #92400e;
+    font-size: 12px;
   }
 
   .app-header {

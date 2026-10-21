@@ -234,7 +234,7 @@ export default function RemindersPanel() {
   };
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'IRANSans, Tahoma, sans-serif', direction: 'rtl', background: '#f9fafb', borderRadius: '12px' }}>
+    <div className="reminders-panel" style={{ padding: '20px', fontFamily: 'IRANSans, Tahoma, sans-serif', direction: 'rtl', background: '#f9fafb', borderRadius: '12px' }}>
       <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '8px', color: '#1f2937' }}>
         🔔 یادآوری‌ها و مراسم‌های پیش‌رو (پیگیری و تسویه)
       </h2>
@@ -258,7 +258,82 @@ export default function RemindersPanel() {
       ) : upcomingEvents.length === 0 ? (
         <p style={{ color: '#6b7280' }}>هیچ فاکتوری ثبت نشده است.</p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <>
+        <div className="reminders-mobile-list">
+          {upcomingEvents.map((invoice) => {
+            const summary = getInvoiceSummary(invoice);
+            const isExpanded = expandedInvoiceId === invoice.id;
+            const isPreparing = sharingInvoiceId === invoice.id;
+            return (
+              <article className="reminders-mobile-card" key={invoice.id}>
+                <div className="reminders-mobile-card-heading">
+                  <div>
+                    <strong>{invoice.customer_name || 'نامشخص'}</strong>
+                    <span>فاکتور #{String(invoice.invoice_number || invoice.invoiceNumber || invoice.id).toLocaleString('fa-IR')}</span>
+                  </div>
+                  <span className={`reminders-mobile-debt ${summary.remaining ? 'has-debt' : ''}`}>
+                    {summary.remaining ? `بدهی: ${formatMoney(summary.remaining)}` : 'تسویه شده'}
+                  </span>
+                </div>
+                <div className="reminders-mobile-meta">
+                  <span><strong>تماس:</strong> {invoice.customer_phone || invoice.phone || 'ثبت نشده'}</span>
+                  <span><strong>مراسم:</strong> {formatDate(invoice.ceremony_date)}</span>
+                  <span><strong>مبلغ:</strong> {formatMoney(summary.total)}</span>
+                  <span><strong>پرداختی:</strong> {formatMoney(summary.paid)}</span>
+                </div>
+                <div className="reminders-mobile-actions">
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedInvoiceId(isExpanded ? null : invoice.id)}
+                    className="reminders-mobile-button details"
+                  >
+                    {isExpanded ? 'بستن جزئیات' : 'نمایش جزئیات فاکتور'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPreparing}
+                    onClick={() => prepareInvoiceImage(invoice)}
+                    className="reminders-mobile-button prepare"
+                  >
+                    {isPreparing ? 'در حال ساخت تصویر...' : preparedInvoiceImage?.invoiceId === invoice.id ? 'بازسازی تصویر فاکتور' : '🖼️ ساخت تصویر فاکتور'}
+                  </button>
+                  {preparedInvoiceImage?.invoiceId === invoice.id && (
+                    <button
+                      type="button"
+                      onClick={() => sharePreparedInvoiceImage(invoice)}
+                      className="reminders-mobile-button share"
+                    >
+                      📤 بازکردن فهرست اشتراک
+                    </button>
+                  )}
+                </div>
+                {isExpanded && (
+                  <div className="reminders-mobile-details">
+                    <div className="reminders-mobile-meta">
+                      <span><strong>تاریخ ثبت:</strong> {formatDate(invoice.order_date || invoice.created_at)}</span>
+                      {(invoice.customer_address || invoice.address) && <span><strong>نشانی:</strong> {invoice.customer_address || invoice.address}</span>}
+                    </div>
+                    {summary.items.length ? (
+                      <div className="reminders-mobile-items">
+                        {summary.items.map((item, index) => (
+                          <div className="reminders-mobile-item" key={`${invoice.id}-mobile-${index}`}>
+                            <strong>{(index + 1).toLocaleString('fa-IR')}. {item.title}</strong>
+                            <span>{item.type} · تعداد: {item.quantity.toLocaleString('fa-IR')}</span>
+                            <span>واحد: {formatMoney(item.unitPrice)} · جمع: {formatMoney(item.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="reminders-mobile-no-items">ریز اقلام فاکتور ثبت نشده است.</p>
+                    )}
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+        <div className="reminders-desktop-table" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', minWidth: '850px', borderCollapse: 'collapse', background: '#fff', borderRadius: '8px', overflow: 'hidden' }}>
             <thead>
               <tr style={{ background: '#f3f4f6', color: '#374151', textAlign: 'right', borderBottom: '2px solid #e5e7eb' }}>
@@ -377,6 +452,7 @@ export default function RemindersPanel() {
             </tbody>
           </table>
         </div>
+        </>
       )}
       <p style={{ margin: '12px 0 0', color: '#64748b', fontSize: '0.8rem', lineHeight: 1.8 }}>
         بعد از آماده‌سازی تصویر، «بازکردن فهرست اشتراک» را بزنید و تلگرام را انتخاب کنید؛ در دستگاه‌های پشتیبانی‌شده تصویر بدون دانلود به تلگرام می‌رود و فقط انتخاب چت و زدن ارسال می‌ماند. اگر اشتراک فایل در مرورگر موجود نباشد، برنامه کپی تصویر به کلیپ‌بورد را امتحان می‌کند و هیچ فایلی ذخیره نمی‌کند.
