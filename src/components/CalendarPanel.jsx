@@ -56,12 +56,20 @@ const JMONTHS = [
 ];
 const JWEEKDAYS = ["شنبه","یکشنبه","دوشنبه","سه‌شنبه","چهارشنبه","پنج‌شنبه","جمعه"];
 
+const getInvoiceItemPrice = (item) => {
+  const level = String(item.price_level || "1");
+  if (level === "2") return Number(item.p2 || 0);
+  if (level === "3") return Number(item.p3 || 0);
+  return Number(item.p1 ?? item.unit_price ?? item.price ?? 0);
+};
+
 export default function CalendarPanel() {
   const todayJ = moment().locale("fa");
   const [jYear, setJYear] = useState(todayJ.jYear());
   const [jMonth, setJMonth] = useState(todayJ.jMonth() + 1);
   const [selectedDay, setSelectedDay] = useState(gregorianISOToJalali(moment().format("YYYY-MM-DD")));
   const [events, setEvents] = useState([]);
+  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -122,6 +130,34 @@ export default function CalendarPanel() {
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  const fetchInvoices = useCallback(async () => {
+    try {
+      const { data, error: err } = await supabase
+        .from("invoices")
+        .select("*")
+        .not("ceremony_date", "is", null);
+      if (err) throw err;
+      setInvoices(data || []);
+    } catch (err) {
+      setError((currentError) => currentError || "خطا در بارگذاری تاریخ مراسم فاکتورهای رسمی: " + err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchInvoices();
+    const invoiceSubscription = supabase
+      .channel("calendar-invoice-dates")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "invoices" },
+        fetchInvoices,
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(invoiceSubscription);
+    };
+  }, [fetchInvoices]);
 
   const fetchCustomers = useCallback(async () => {
     try {
@@ -222,9 +258,18 @@ export default function CalendarPanel() {
   }, [jYear, jMonth]);
 
   const eventsByJalaliDate = useMemo(() => {
-    return events.reduce((grouped, event) => {
-      if (!event.event_date) return grouped;
+    const datedEvents = events.map((event) => ({ ...event, calendarKind: "event" }));
+    const datedInvoices = invoices.map((invoice) => ({
+      ...invoice,
+      id: `invoice-${invoice.id}`,
+      event_date: invoice.ceremony_date,
+      event_type: "فاکتور رسمی",
+      calendarKind: "invoice",
+      total_cost: invoice.total_price,
+    }));
 
+    return [...datedEvents, ...datedInvoices].reduce((grouped, event) => {
+      if (!event.event_date) return grouped;
       const rawDate = String(event.event_date).trim()
         .replace(/[۰-۹]/g, (digit) => "۰۱۲۳۴۵۶۷۸۹".indexOf(digit))
         .replace(/[٠-٩]/g, (digit) => "٠١٢٣٤٥٦٧٨٩".indexOf(digit));
@@ -236,25 +281,35 @@ export default function CalendarPanel() {
       (grouped[eventDate] ||= []).push(event);
       return grouped;
     }, {});
-  }, [events]);
+  }, [events, invoices]);
+
+  const selectedDayEvents = eventsByJalaliDate[selectedDay] || [];
 
   return (
-    <div style={{ padding: 20, direction: "rtl", fontFamily: "Tahoma, sans-serif" }}>
-      <h2 style={{ marginBottom: 20 }}>تقویم رویدادها</h2>
+    <div className="calendar-panel">
+      <div className="calendar-page-heading">
+        <div>
+          <span className="calendar-eyebrow">برنامه‌ریزی و پیگیری</span>
+          <h2>تقویم مراسم‌ها</h2>
+          <p>مراسم‌های ثبت‌شده و تاریخ مراسم فاکتورهای رسمی را یکجا ببینید.</p>
+        </div>
+        <div className="calendar-month-badge">{JMONTHS[jMonth - 1]} {jYear.toLocaleString("fa-IR")}</div>
+      </div>
 
       {error && (
-        <div style={{ background: "#fee2e2", color: "#b91c1c", padding: 10, borderRadius: 6, marginBottom: 15 }}>
+        <div className="calendar-error" role="alert">
           {error}
         </div>
       )}
 
       {/* فرم ثبت رویداد */}
-      <form onSubmit={handleSave} style={{ background: "#f9fafb", padding: 20, borderRadius: 8, marginBottom: 20, border: "1px solid #e5e7eb" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15, marginBottom: 15 }}>
-          <div>
-            <label style={{ display: "block", marginBottom: 5, fontSize: 13 }}>نام مشتری</label>
+      <form onSubmit={handleSave} className="calendar-form">
+        <div className="calendar-form-grid">
+          <div className="calendar-field">
+            <label>نام مشتری</label>
             <div style={{ position: "relative" }}>
               <input
+                className="calendar-input"
                 type="text"
                 value={customerSearch}
                 onFocus={() => setIsCustomerListOpen(true)}
@@ -269,13 +324,12 @@ export default function CalendarPanel() {
                 role="combobox"
                 aria-expanded={isCustomerListOpen && filteredCustomers.length > 0}
                 aria-controls="calendar-customer-options"
-                style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #d1d5db", boxSizing: "border-box" }}
               />
               {isCustomerListOpen && customerSearch.trim() && (
                 <div
                   id="calendar-customer-options"
                   role="listbox"
-                  style={{ position: "absolute", zIndex: 10, top: "100%", right: 0, left: 0, maxHeight: 220, overflowY: "auto", background: "#fff", border: "1px solid #d1d5db", borderRadius: 4, boxShadow: "0 4px 10px rgba(0,0,0,0.1)" }}
+                  className="calendar-customer-options"
                 >
                   {filteredCustomers.length ? filteredCustomers.map((customer) => (
                     <button
@@ -293,7 +347,7 @@ export default function CalendarPanel() {
                         setCustomerSearch(customer["Full name"] || customer.phone || "");
                         setIsCustomerListOpen(false);
                       }}
-                      style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "9px 10px", border: 0, borderBottom: "1px solid #f1f5f9", background: "#fff", textAlign: "right", cursor: "pointer" }}
+                      className="calendar-customer-option"
                     >
                       <span>{customer["Full name"] || "بدون نام"}</span>
                       <span style={{ color: "#64748b" }}>{customer.phone || "بدون شماره"}</span>
@@ -307,12 +361,12 @@ export default function CalendarPanel() {
               )}
             </div>
           </div>
-          <div>
-            <label style={{ display: "block", marginBottom: 5, fontSize: 13 }}>نوع مراسم</label>
+          <div className="calendar-field">
+            <label>نوع مراسم</label>
             <select
+              className="calendar-input"
               value={form.event_type}
               onChange={(e) => setForm({ ...form, event_type: e.target.value })}
-              style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #d1d5db" }}
             >
               <option value="مهمانی">مهمانی</option>
               <option value="جشن تولد">جشن تولد</option>
@@ -322,25 +376,28 @@ export default function CalendarPanel() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15, marginBottom: 15 }}>
-          <div>
-            <label style={{ display: "block", marginBottom: 5, fontSize: 13 }}>تاریخ مراسم</label>
+        <div className="calendar-form-grid">
+          <div className="calendar-field">
+            <label>تاریخ مراسم</label>
             <input
+              className="calendar-input calendar-date-input"
               type="text"
               value={form.event_date}
               onChange={(e) => setForm({ ...form, event_date: e.target.value })}
-              placeholder="1404/05/10"
-              style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #d1d5db" }}
+              placeholder="مثلاً ۱۴۰۵/۰۲/۱۰"
+              inputMode="numeric"
+              aria-label="تاریخ مراسم به شمسی"
             />
+            <small>تاریخ شمسی را وارد کنید یا یک روز را از تقویم انتخاب کنید.</small>
           </div>
-          <div>
-            <label style={{ display: "block", marginBottom: 5, fontSize: 13 }}>توضیح (اختیاری)</label>
+          <div className="calendar-field">
+            <label>توضیح (اختیاری)</label>
             <input
+              className="calendar-input"
               type="text"
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               placeholder="توضیحات..."
-              style={{ width: "100%", padding: 8, borderRadius: 4, border: "1px solid #d1d5db" }}
             />
           </div>
         </div>
@@ -348,39 +405,39 @@ export default function CalendarPanel() {
         <button
           type="submit"
           disabled={saving}
-          style={{ background: "#065f46", color: "#fff", padding: "10.px 20px", border: "none", borderRadius: 6, cursor: "pointer", width: "100%", fontWeight: "bold" }}
+          className="calendar-save-button"
         >
           {saving ? "در حال ثبت..." : "ثبت رویداد"}
         </button>
       </form>
 
       {/* ناوبری ماه تقویم */}
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 15, marginBottom: 15 }}>
+      <div className="calendar-month-nav">
         <button
+          type="button"
           onClick={() => {
             if (jMonth === 1) { setJYear(jYear - 1); setJMonth(12); }
             else { setJMonth(jMonth - 1); }
           }}
-          style={{ padding: "5px 12px", cursor: "pointer" }}
         >
           قبلی ←
         </button>
-        <span style={{ fontWeight: "bold", fontSize: 16 }}>{JMONTHS[jMonth - 1]} {jYear}</span>
+        <span>{JMONTHS[jMonth - 1]} {jYear.toLocaleString("fa-IR")}</span>
         <button
+          type="button"
           onClick={() => {
             if (jMonth === 12) { setJYear(jYear + 1); setJMonth(1); }
             else { setJMonth(jMonth + 1); }
           }}
-          style={{ padding: "5px 12px", cursor: "pointer" }}
         >
           → بعدی
         </button>
       </div>
 
       {/* جدول تقویم ماهانه */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+      <div className="calendar-grid">
         {JWEEKDAYS.map((w) => (
-          <div key={w} style={{ textAlign: "center", fontWeight: "bold", padding: 8, background: "#e5e7eb", borderRadius: 4, fontSize: 13 }}>
+          <div className="calendar-weekday" key={w}>
             {w}
           </div>
         ))}
@@ -390,40 +447,82 @@ export default function CalendarPanel() {
           const isSelected = selectedDay === d;
           const dayEvents = eventsByJalaliDate[d] || [];
           return (
-            <div
+            <button
+              type="button"
               key={d}
               onClick={() => handleDayClick(d)}
-              style={{
-                border: isSelected ? "2px solid #065f46" : "1px solid #d1d5db",
-                borderRadius: 6,
-                minHeight: 70,
-                padding: 6,
-                cursor: "pointer",
-                background: isSelected ? "#ecfdf5" : dayEvents.length ? "#f0fdf4" : "#fff",
-                transition: "all 0.2s",
-              }}
+              className={`calendar-day${isSelected ? " selected" : ""}${dayEvents.length ? " has-events" : ""}`}
+              aria-label={`${parseInt(dayNum, 10)} ${JMONTHS[jMonth - 1]}، ${dayEvents.length} مراسم`}
             >
-              <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>{parseInt(dayNum, 10)}</div>
+              <div className="calendar-day-number">{parseInt(dayNum, 10).toLocaleString("fa-IR")}</div>
               {dayEvents.slice(0, 2).map((event) => {
                 const customer = customers.find((item) => String(item.id) === String(event.customer_id));
                 const customerName = event.customer_name || customer?.["Full name"] || "مشتری";
                 return (
-                  <div
+                  <span
                     key={event.id}
                     title={`${event.event_type || "مراسم"} - ${customerName}`}
-                    style={{ marginTop: 3, padding: "2px 4px", overflow: "hidden", borderRadius: 4, background: "#dcfce7", color: "#166534", fontSize: 10, lineHeight: 1.5, textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    className={`calendar-event-chip${event.calendarKind === "invoice" ? " invoice" : ""}`}
                   >
-                    {event.event_type || "مراسم"}: {customerName}
-                  </div>
+                    {event.calendarKind === "invoice" ? "فاکتور" : event.event_type || "مراسم"}: {customerName}
+                  </span>
                 );
               })}
               {dayEvents.length > 2 && (
-                <div style={{ marginTop: 2, color: "#15803d", fontSize: 10 }}>+{dayEvents.length - 2} مراسم دیگر</div>
+                <span className="calendar-more-events">+{(dayEvents.length - 2).toLocaleString("fa-IR")} مورد دیگر</span>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
+      {selectedDayEvents.length > 0 && (
+        <section className="calendar-day-details">
+          <div className="calendar-day-details-heading">
+            <div>
+              <span className="calendar-eyebrow">برنامهٔ روز انتخاب‌شده</span>
+              <h3>{selectedDay.replace(/\d+/g, (digit) => Number(digit).toLocaleString("fa-IR"))} {JMONTHS[jMonth - 1]} {jYear.toLocaleString("fa-IR")}</h3>
+            </div>
+            <span className="calendar-day-count">{selectedDayEvents.length.toLocaleString("fa-IR")} مورد</span>
+          </div>
+          <div className="calendar-day-event-list">
+            {selectedDayEvents.map((event) => {
+              const isInvoice = event.calendarKind === "invoice";
+              const eventItems = [event.items_data, event.items_json, event.items]
+                .find((items) => Array.isArray(items) && items.length > 0) || [];
+              return (
+                <article className={`calendar-day-event-card${isInvoice ? " invoice" : ""}`} key={`${event.calendarKind}-${event.id}`}>
+                  <div className="calendar-day-event-title">
+                    <strong>{event.customer_name || "مشتری ثبت‌نشده"}</strong>
+                    <span>{isInvoice ? "فاکتور رسمی" : event.event_type || "مراسم"}</span>
+                  </div>
+                  <div className="calendar-day-event-meta">
+                    {event.customer_phone && <span>تماس: {event.customer_phone}</span>}
+                    {isInvoice && <span>مبلغ فاکتور: {Number(event.total_price || 0).toLocaleString("fa-IR")} تومان</span>}
+                    {isInvoice && <span>پرداخت‌شده: {Number(event.paid_amount || 0).toLocaleString("fa-IR")} تومان</span>}
+                    {!isInvoice && event.location && <span>محل: {event.location}</span>}
+                    {!isInvoice && event.guest_count && <span>تعداد مهمان: {Number(event.guest_count).toLocaleString("fa-IR")}</span>}
+                    {!isInvoice && event.notes && <span>توضیح: {event.notes}</span>}
+                  </div>
+                  {isInvoice && eventItems.length > 0 && (
+                    <div className="calendar-invoice-items">
+                      {eventItems.map((item, index) => {
+                        const quantity = Number(item.qty || item.quantity || item.requestedQuantity || 1);
+                        const unitPrice = getInvoiceItemPrice(item);
+                        return (
+                          <span key={`${event.id}-item-${index}`}>
+                            {item.title || item.item_name || item.name || "قلم"} × {quantity.toLocaleString("fa-IR")}
+                            {" · "}{(quantity * unitPrice).toLocaleString("fa-IR")} تومان
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {loading && <p style={{ marginTop: 12, textAlign: "center", color: "#64748b", fontSize: 12 }}>در حال بارگذاری مراسم‌ها...</p>}
     </div>
   );
