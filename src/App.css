@@ -28,7 +28,7 @@ body,
 #root {
   width: 100%;
   max-width: 100%;
-  min-width: 320px;
+  min-width: 0;
   min-height: 100%;
   margin: 0;
   background: var(--app-background);
@@ -436,39 +436,353 @@ button {
   font-size: 14px;
 }
 
-/* واکنش‌گرایی موبایل */
-@media (max-width: 768px) {
-  .app-header {
-    padding: 10px 16px;
-    min-height: 64px;
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgb(40 100 90 / 22%);
+  outline-offset: 2px;
+}
+
+.app-container {
+  width: calc(100% - 48px);
+  max-width: 1500px !important;
+  margin: 24px auto !important;
+  border: 1px solid var(--app-border);
+  border-radius: 18px !important;
+}
+
+.panel-container,
+.panel-container > *,
+.panel-container form,
+.panel-container table {
+  min-width: 0;
+}
+
+.panel-container table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.panel-container img,
+.panel-container canvas,
+.panel-container svg {
+  max-width: 100%;
+}
+
+.analytics-loading {
+  padding: 28px 12px;
+  color: var(--app-muted);
+  text-align: center;
+}
+
+.analytics-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.analytics-title {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.analytics-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 14px;
+}
+
+.analytics-stat-card,
+.analytics-items-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgb(15 23 42 / 4%);
+}
+
+.analytics-stat-card {
+  border-top: 3px solid var(--app-primary);
+}
+
+.analytics-stat-card.profit {
+  border-top-color: #16a36a;
+}
+
+.analytics-stat-card.ceremonies {
+  border-top-color: #7c5ce0;
+}
+
+.analytics-stat-card p {
+  margin: 0 0 8px;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.analytics-stat-card h3 {
+  margin: 0;
+  color: var(--app-primary-dark);
+  font-size: clamp(18px, 2vw, 24px);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.analytics-stat-card.profit h3 {
+  color: #168257;
+}
+
+.analytics-stat-card.ceremonies h3 {
+  color: #6846c7;
+}
+
+.analytics-stat-card h3 span {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.analytics-items-card h3 {
+  margin: 0 0 14px;
+  color: var(--app-text);
+  font-size: 16px;
+}
+
+.analytics-empty {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.analytics-items-card .overflow-x-auto {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.analytics-items-card .analytics-table {
+  display: table;
+  min-width: 420px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.analytics-table th,
+.analytics-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--app-border);
+  text-align: right;
+}
+
+.analytics-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+}
+
+.analytics-table td {
+  color: #334155;
+  font-size: 13px;
+}
+
+.analytics-table tbody td:last-child {
+  color: var(--app-primary);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .app-container {
+    width: calc(100% - 32px);
+    margin: 16px auto !important;
   }
 
   .app-layout {
-    grid-template-columns: 80px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
   }
 
   .sidebar {
-    padding: 14px 6px;
+    position: sticky;
+    z-index: 9;
+    top: 64px;
+    padding: 10px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--app-border);
   }
 
-  .nav-text, .sidebar-label, .sidebar-note, .brand-subtitle, .nav-count {
-    display: none; /* در موبایل آیکون‌محور می‌شود تا جا باز شود */
+  .sidebar-label,
+  .sidebar-note {
+    display: none;
+  }
+
+  .section-nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 0 6px;
+    scrollbar-width: thin;
+    overscroll-behavior-inline: contain;
   }
 
   .nav-button {
-    justify-content: center;
-    padding: 0;
+    width: auto;
+    min-width: max-content;
+    min-height: 42px;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 12px;
+    background: #fff;
   }
 
-  .nav-icon {
-    font-size: 20px;
+  .nav-text,
+  .nav-count {
+    display: inline;
+  }
+
+  .nav-count {
+    display: grid;
   }
 
   .main-content {
-    padding: 16px 12px;
+    padding: 22px 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-container {
+    width: 100%;
+    margin: 0 !important;
+    border: 0;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .app-header {
+    position: relative;
+    min-height: 0;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .brand {
+    min-width: 0;
+    gap: 9px;
+  }
+
+  .header-logo {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+  }
+
+  .brand-title {
+    font-size: 16px;
+  }
+
+  .brand-subtitle {
+    font-size: 11px;
+  }
+
+  .header-status {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .header-status > span:not(.status-dot) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sidebar {
+    top: 0;
+    padding: 8px 12px;
+  }
+
+  .nav-button {
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .nav-icon {
+    width: 20px;
+    flex-basis: 20px;
+    font-size: 16px;
+  }
+
+  .main-content {
+    padding: 18px 12px 24px;
+  }
+
+  .page-heading {
+    align-items: flex-start;
+    margin-bottom: 14px;
+  }
+
+  .page-heading h2 {
+    font-size: 19px;
+    line-height: 1.6;
+  }
+
+  .refresh-button {
+    min-height: 36px;
+    padding: 0 9px;
+    font-size: 11px;
   }
 
   .panel-container {
-    padding: 14px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .panel-container [style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .panel-container [style*="display: flex"] {
+    flex-wrap: wrap;
+  }
+
+  .panel-container th,
+  .panel-container td {
+    padding: 9px !important;
+    font-size: 12px;
+  }
+
+  .panel-header-actions {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  .main-content {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .panel-container {
+    padding: 9px;
+  }
+
+  .header-status {
+    font-size: 11px;
   }
 }

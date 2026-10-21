@@ -61,54 +61,54 @@ export default function AnalyticsPanel() {
   };
 
   if (loading) {
-    return <div className="p-6 text-center text-gray-600" dir="rtl">در حال بارگذاری اطلاعات هوش تجاری...</div>;
+    return <div className="analytics-loading" dir="rtl">در حال بارگذاری اطلاعات هوش تجاری...</div>;
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen text-right" dir="rtl" style={{ fontFamily: 'IranSans, sans-serif' }}>
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">تحلیل و هوش تجاری مالی</h2>
+    <div className="analytics-panel" dir="rtl">
+      <h2 className="analytics-title">تحلیل و هوش تجاری مالی</h2>
 
       {/* کارت‌های آماری بالا */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-5 rounded-xl shadow border border-gray-200">
-          <p className="text-sm text-gray-500 mb-1">کل درآمد مجموعه</p>
-          <h3 className="text-2xl font-bold text-indigo-600">
-            {stats.totalRevenue.toLocaleString()} <span className="text-sm font-normal">تومان</span>
+      <div className="analytics-stats">
+        <div className="analytics-stat-card revenue">
+          <p>کل درآمد مجموعه</p>
+          <h3>
+            {stats.totalRevenue.toLocaleString('fa-IR')} <span>تومان</span>
           </h3>
         </div>
-        <div className="bg-white p-5 rounded-xl shadow border border-gray-200">
-          <p className="text-sm text-gray-500 mb-1">سود خالص تخمینی</p>
-          <h3 className="text-2xl font-bold text-green-600">
-            {stats.totalProfit.toLocaleString()} <span className="text-sm font-normal">تومان</span>
+        <div className="analytics-stat-card profit">
+          <p>سود خالص تخمینی</p>
+          <h3>
+            {stats.totalProfit.toLocaleString('fa-IR')} <span>تومان</span>
           </h3>
         </div>
-        <div className="bg-white p-5 rounded-xl shadow border border-gray-200">
-          <p className="text-sm text-gray-500 mb-1">تعداد کل مراسم ثبت شده</p>
-          <h3 className="text-2xl font-bold text-purple-600">
-            {stats.totalCeremonies} <span className="text-sm font-normal">مراسم</span>
+        <div className="analytics-stat-card ceremonies">
+          <p>تعداد کل مراسم ثبت شده</p>
+          <h3>
+            {stats.totalCeremonies.toLocaleString('fa-IR')} <span>مراسم</span>
           </h3>
         </div>
       </div>
 
       {/* بخش اقلام و خدمات پربازده */}
-      <div className="bg-white p-6 rounded-xl shadow border border-gray-200">
-        <h3 className="text-lg font-semibold mb-4 text-gray-700">پرفروش‌ترین و پربازده‌ترین اقلام / خدمات</h3>
+      <div className="analytics-items-card">
+        <h3>پرفروش‌ترین و پربازده‌ترین اقلام / خدمات</h3>
         {topItems.length === 0 ? (
-          <p className="text-gray-500 text-sm">داده‌ای برای اقلام فاکتور ثبت نشده است.</p>
+          <p className="analytics-empty">داده‌ای برای اقلام فاکتور ثبت نشده است.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-right border-collapse">
+            <table className="analytics-table">
               <thead>
-                <tr className="bg-gray-100 text-gray-600 text-sm">
-                  <th className="p-3 border">نام خدمت / کالا</th>
-                  <th className="p-3 border">تعداد دفعات استفاده / اجاره</th>
+                <tr>
+                  <th>نام خدمت / کالا</th>
+                  <th>تعداد دفعات استفاده / اجاره</th>
                 </tr>
               </thead>
               <tbody>
-                {topItems.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 text-sm">
-                    <td className="p-3 border font-medium text-gray-800">{item.name}</td>
-                    <td className="p-3 border text-indigo-600 font-bold">{item.qty} بار</td>
+                {topItems.map((item) => (
+                  <tr key={item.name}>
+                    <td>{item.name}</td>
+                    <td>{Number(item.qty).toLocaleString('fa-IR')} بار</td>
                   </tr>
                 ))}
               </tbody>
