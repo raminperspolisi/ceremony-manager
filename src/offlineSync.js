@@ -71,7 +71,28 @@ const makePendingId = () => `${PENDING_ID_PREFIX}${crypto.randomUUID()}`;
 const isNetworkError = (error) =>
   !navigator.onLine ||
   error?.name === 'TypeError' ||
+  error?.name === 'AbortError' ||
   /failed to fetch|network|offline|load failed|fetch failed|timed? ?out/i.test(error?.message || '');
+
+const updateNetworkStatus = async () => {
+  if (syncPromise) return;
+  if (!navigator.onLine) {
+    notifyStatus('offline-pending');
+    return;
+  }
+
+  let timeoutId;
+  try {
+    const controller = new AbortController();
+    timeoutId = setTimeout(() => controller.abort(), 4000);
+    await fetch('/manifest.webmanifest', { cache: 'no-store', signal: controller.signal });
+    clearTimeout(timeoutId);
+    notifyStatus('online');
+  } catch (error) {
+    if (timeoutId) clearTimeout(timeoutId);
+    notifyStatus('offline-pending');
+  }
+};
 
 const getMappings = async (userId) => {
   const { store } = await getStore('idMappings');
@@ -590,14 +611,29 @@ export async function syncPendingMutations() {
 }
 
 if (typeof window !== 'undefined') {
-  const resumeSync = () => {
+  const resumeSync = async () => {
     if (!navigator.onLine || document.visibilityState === 'hidden') return;
+    await updateNetworkStatus();
+    if (syncStatus === 'offline-pending' || syncStatus === 'offline') return;
     notifyStatus('syncing');
-    syncPendingMutations();
+    void syncPendingMutations();
   };
-  window.addEventListener('online', resumeSync);
-  window.addEventListener('focus', resumeSync);
-  window.addEventListener('pageshow', resumeSync);
-  document.addEventListener('visibilitychange', resumeSync);
+  window.addEventListener('online', () => {
+    void resumeSync();
+  });
+  window.addEventListener('focus', () => {
+    void resumeSync();
+  });
+  window.addEventListener('pageshow', () => {
+    void resumeSync();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      void resumeSync();
+    }
+  });
   window.addEventListener('offline', () => notifyStatus('offline-pending'));
+  window.addEventListener('load', () => {
+    void updateNetworkStatus();
+  });
 }
