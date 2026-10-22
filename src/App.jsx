@@ -91,6 +91,7 @@ export default function App() {
   const [visitedSections, setVisitedSections] = useState(() => new Set(['customers']));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [offlineStatus, setOfflineStatus] = useState(getOfflineSyncStatus);
+  const [browserOnline, setBrowserOnline] = useState(() => navigator.onLine);
   const [offlineCacheUserId, setOfflineCacheUserId] = useState(null);
   const [offlineSyncError, setOfflineSyncError] = useState('');
   const [inventory, setInventory] = useState([]);
@@ -133,13 +134,16 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = subscribeOfflineSyncStatus(setOfflineStatus);
     const handleSyncError = (event) => setOfflineSyncError(event.detail || 'همگام‌سازی ناموفق بود.');
-    const clearSyncError = () => setOfflineSyncError('');
+    const handleOnline = () => setBrowserOnline(true);
+    const handleOffline = () => setBrowserOnline(false);
     window.addEventListener('offline-sync-error', handleSyncError);
-    window.addEventListener('online', clearSyncError);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     return () => {
       unsubscribe();
       window.removeEventListener('offline-sync-error', handleSyncError);
-      window.removeEventListener('online', clearSyncError);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -494,11 +498,12 @@ export default function App() {
           <span role="status" aria-live="polite" className={`offline-status offline-status-${offlineStatus}`}>
             {offlineSyncError ? 'خطا در همگام‌سازی' :
               !offlineCacheReady ? 'در حال آماده‌سازی آفلاین…' :
-              offlineStatus === 'online' ? 'آنلاین' :
+              !browserOnline ? 'آفلاین؛ تغییرات ذخیره می‌شوند' :
+              offlineStatus === 'server-unavailable' ? 'آنلاین؛ ارتباط با سرور برقرار نیست' :
               offlineStatus === 'syncing' ? 'در حال همگام‌سازی…' :
                 offlineStatus === 'sync-error' ? 'خطا در همگام‌سازی' :
-                  offlineStatus === 'pending' ? 'تغییرات در صف همگام‌سازی' :
-                    'آفلاین؛ تغییرات ذخیره می‌شوند'}
+                  offlineStatus === 'pending' || offlineStatus === 'offline-pending' ? 'آنلاین؛ همگام‌سازی در انتظار' :
+                    'آنلاین'}
           </span>
           <span className="status-dot" />
           <span className="header-user-name">{session.user.user_metadata?.display_name || session.user.email || 'کاربر واردشده'}</span>

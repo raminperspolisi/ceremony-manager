@@ -95,7 +95,7 @@ const updateNetworkStatus = async () => {
     notifyStatus('online');
   } catch {
     if (timeoutId) clearTimeout(timeoutId);
-    notifyStatus('offline-pending');
+    notifyStatus(navigator.onLine ? 'server-unavailable' : 'offline-pending');
   }
 };
 
@@ -257,7 +257,7 @@ export async function readTable(table, options = {}) {
         return { data: data || [], error: null, offline: false };
       }
       if (!isNetworkError(error)) return { data: null, error };
-      notifyStatus('offline-pending');
+      notifyStatus(navigator.onLine ? 'server-unavailable' : 'offline-pending');
     }
 
     let rows = await getCachedRows(userId, table);
@@ -358,7 +358,7 @@ export async function insertRows(table, rows) {
 
   try {
     const data = await saveOfflineInsert(userId, table, rows);
-    notifyStatus('offline-pending');
+    notifyStatus(navigator.onLine ? 'pending' : 'offline-pending');
     if (navigator.onLine) void syncPendingMutations();
     return { data, error: null, offline: true };
   } catch (error) {
@@ -603,7 +603,7 @@ export async function syncPendingMutations() {
             await removeMutation(mutation.seq);
           } catch (error) {
             if (isNetworkError(error)) {
-              notifyStatus('offline-pending');
+              notifyStatus(navigator.onLine ? 'server-unavailable' : 'offline-pending');
               return;
             }
             notifyStatus('sync-error');
@@ -631,18 +631,25 @@ export async function syncPendingMutations() {
 
 if (typeof window !== 'undefined') {
   const resumeSync = async (retryPending = false) => {
-    if (!navigator.onLine || document.visibilityState === 'hidden') return;
-    const previousStatus = syncStatus;
-    await updateNetworkStatus();
-    if (syncStatus === 'offline-pending' || syncStatus === 'offline') return;
-    if ((retryPending || previousStatus === 'offline-pending') && activeUserId) {
+    if (document.visibilityState === 'hidden') return;
+    if (!navigator.onLine) {
+      notifyStatus('offline-pending');
+      return;
+    }
+    if (syncPromise) return;
+    if (activeUserId) {
       try {
-        if ((await getPendingMutations(activeUserId)).length) void syncPendingMutations();
+        const mutations = await getPendingMutations(activeUserId);
+        if (mutations.length) {
+          await syncPendingMutations();
+          return;
+        }
       } catch (error) {
         notifyStatus('sync-error');
         window.dispatchEvent(new CustomEvent('offline-sync-error', { detail: error.message }));
       }
     }
+    if (retryPending || syncStatus !== 'online') await updateNetworkStatus();
   };
   window.addEventListener('online', () => {
     void resumeSync(true);

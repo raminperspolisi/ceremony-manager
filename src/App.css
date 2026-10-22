@@ -489,6 +489,11 @@ button {
   color: #b91c1c;
 }
 
+.offline-status-server-unavailable {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .sidebar-note {
   display: flex;
   align-items: flex-start;
