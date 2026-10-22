@@ -358,20 +358,6 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     alert(`پیش‌فاکتور مشتری «${inv.customer_name}» بارگذاری شد.`);
   };
 
-  const handleDeleteInvoice = async (e, inv) => {
-    e.stopPropagation();
-    if (!window.confirm(`آیا از حذف این ${inv.type === 'official' ? 'فاکتور رسمی' : 'پیش‌فاکتور'} اطمینان دارید؟`)) return;
-    
-    const table = inv.type === 'official' ? 'invoices' : 'quotations';
-    const { error } = await deleteRows(table, [{ column: 'id', operator: 'eq', value: inv.id }]);
-    
-    if (error) {
-      alert("خطا در حذف: " + error.message);
-    } else {
-      fetchInvoices();
-    }
-  };
-
   const handleToggleSelectInvoice = (e, id) => {
     e.stopPropagation();
     setSelectedInvoiceIds((current) => current.includes(id)
@@ -643,20 +629,15 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                   </span>
                 </div>
 
-                <div className="recent-invoice-actions">
-                    <button 
-                      style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }} 
-                      onClick={(e) => handleDeleteInvoice(e, inv)}>
-                      حذف
+                {inv.type !== 'official' && (
+                  <div className="recent-invoice-actions">
+                    <button
+                      style={{ backgroundColor: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+                      onClick={(e) => handleConvertToInvoice(e, inv)}>
+                      صدور رسمی
                     </button>
-                    {inv.type !== 'official' && (
-                      <button 
-                        style={{ backgroundColor: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }} 
-                        onClick={(e) => handleConvertToInvoice(e, inv)}>
-                        صدور رسمی
-                      </button>
-                    )}
-                </div>
+                  </div>
+                )}
 
               </div>
             ))

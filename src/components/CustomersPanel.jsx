@@ -22,6 +22,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   // لیست مشتریان
   const [customers, setCustomers] = useState([]);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -110,8 +111,40 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       const { error: e2 } = await deleteRows('customers', [{ column: 'id', operator: 'eq', value: id }]);
       if (e2) throw e2;
       setCustomers((currentCustomers) => currentCustomers.filter((customer) => String(customer.id) !== String(id)));
+      setSelectedCustomerIds((currentIds) => new Set([...currentIds].filter((selectedId) => String(selectedId) !== String(id))));
       if (String(selectedCustomer?.id) === String(id)) { setSelectedCustomer(null); setCeremonies([]); }
     } catch (err) { alert('خطا در حذف: ' + err.message); }
+  }
+
+  async function handleDeleteSelectedCustomers() {
+    const selectedIds = Array.from(selectedCustomerIds);
+    if (!selectedIds.length) return;
+    if (!window.confirm(`آیا از حذف ${formatDisplay(selectedIds.length)} مشتری و مراسم‌هایشان مطمئن هستید؟`)) return;
+
+    try {
+      const { error: ceremonyError } = await deleteRows('ceremonies', [{ column: 'customer_id', operator: 'in', value: selectedIds }]);
+      if (ceremonyError) throw ceremonyError;
+      const { error: customerError } = await deleteRows('customers', [{ column: 'id', operator: 'in', value: selectedIds }]);
+      if (customerError) throw customerError;
+
+      setCustomers((currentCustomers) => currentCustomers.filter((customer) => !selectedIds.some((id) => String(id) === String(customer.id))));
+      setSelectedCustomerIds(new Set());
+      if (selectedCustomer && selectedIds.some((id) => String(id) === String(selectedCustomer.id))) {
+        setSelectedCustomer(null);
+        setCeremonies([]);
+      }
+    } catch (err) {
+      alert('خطا در حذف گروهی مشتریان: ' + err.message);
+    }
+  }
+
+  function handleToggleCustomerSelection(id) {
+    setSelectedCustomerIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      if (nextIds.has(id)) nextIds.delete(id);
+      else nextIds.add(id);
+      return nextIds;
+    });
   }
 
   function handleStartEdit(customer) {
@@ -337,17 +370,48 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
       {/* لیست مشتریان */}
       <div style={styles.cardBox}>
-        <h3 style={styles.sectionTitle}>📋 لیست مشتریان ({formatDisplay(customers.length)}) — [دابل‌کلیک = ویرایش]</h3>
+        <div className="customer-list-toolbar">
+          <div className="customer-list-heading">
+            <h3 style={{ ...styles.sectionTitle, margin: 0, borderBottom: 0, paddingBottom: 0 }}>📋 لیست مشتریان ({formatDisplay(customers.length)})</h3>
+            <label className="customer-select-all">
+              <input
+                type="checkbox"
+                checked={customers.length > 0 && selectedCustomerIds.size === customers.length}
+                onChange={(event) => setSelectedCustomerIds(event.target.checked ? new Set(customers.map((customer) => customer.id)) : new Set())}
+                aria-label="انتخاب همه مشتریان"
+              />
+              انتخاب همه
+            </label>
+          </div>
+          <div className="customer-list-actions">
+            <span>دابل‌کلیک روی نام مشتری برای ویرایش</span>
+            {selectedCustomerIds.size > 0 && (
+              <button type="button" className="customer-bulk-delete" onClick={handleDeleteSelectedCustomers}>
+                حذف انتخاب‌شده‌ها ({formatDisplay(selectedCustomerIds.size)})
+              </button>
+            )}
+          </div>
+        </div>
         {customers.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '8px', fontSize: '12px' }}>هنوز مشتری‌ای ثبت نشده است.</p>}
         <ul className="customer-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {customers.map(c => (
             <li key={c.id}
                 onDoubleClick={() => handleStartEdit(c)}
                 title="دابل‌کلیک برای ویرایش"
-                style={{ padding: '5px 8px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: selectedCustomer?.id === c.id ? '#fffbeb' : 'transparent' }}>
-              <div>
-                <div style={{ fontSize: '12px', fontWeight: '600' }}>{c["Full name"]}</div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>📞 {formatPersianDigits(c.phone)}{c.referral ? ` | 👤 معرف: ${c.referral}` : ''}</div>
+                style={{ padding: '7px 8px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', cursor: 'pointer', background: selectedCustomerIds.has(c.id) ? '#f0f9ff' : selectedCustomer?.id === c.id ? '#fffbeb' : 'transparent' }}>
+              <div className="customer-list-identity">
+                <input
+                  type="checkbox"
+                  checked={selectedCustomerIds.has(c.id)}
+                  onChange={() => handleToggleCustomerSelection(c.id)}
+                  onClick={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  aria-label={`انتخاب مشتری ${c['Full name'] || ''}`}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600' }}>{c["Full name"]}</div>
+                  <div style={{ fontSize: '11px', color: '#64748b' }}>📞 {formatPersianDigits(c.phone)}{c.referral ? ` | 👤 معرف: ${c.referral}` : ''}</div>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: '4px' }}>
                 <button style={{ ...styles.btnSmall, background: '#78350f' }} onClick={(e) => { e.stopPropagation(); handleCustomerSelect(c); }}>مراسم‌ها</button>
