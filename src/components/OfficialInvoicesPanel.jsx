@@ -38,6 +38,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const [checklistOpenId, setChecklistOpenId] = useState(null);
   const [newChecklistTask, setNewChecklistTask] = useState('');
 
+  // پاپ‌آپ‌های عملیات فاکتور
+  const [printInvoice, setPrintInvoice] = useState(null);
+  const [whatsAppInvoice, setWhatsAppInvoice] = useState(null);
+  const [whatsAppPhone, setWhatsAppPhone] = useState('');
+
   useEffect(() => {
     fetchOfficialInvoices();
     const fetchCustomers = async () => {
@@ -104,6 +109,30 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     }
   };
 
+  // انجام عملیات انتخاب‌شده روی یک فاکتور مشخص (دابل‌کلیک روی ردیف یا دکمهٔ «انجام»)
+  const runInvoiceAction = async (action, invoice) => {
+    if (!action) {
+      alert('ابتدا از فهرست «عملیات» یک مورد را انتخاب کنید، سپس روی ردیف فاکتور دابل‌کلیک کنید.');
+      return;
+    }
+
+    if (action === 'delete') {
+      if (!window.confirm(`آیا از حذف فاکتور #${formatPersianDigits(invoice.id)} اطمینان دارید؟`)) return;
+      const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'eq', value: invoice.id }]);
+      if (error) alert('خطا در حذف فاکتور: ' + error.message);
+      else fetchOfficialInvoices();
+      return;
+    }
+
+    if (action === 'edit') handleStartEdit(invoice);
+    if (action === 'print') setPrintInvoice(invoice);
+    if (action === 'whatsapp') {
+      setWhatsAppPhone(invoice.customer_phone || invoice.phone || '');
+      setWhatsAppInvoice(invoice);
+    }
+    if (action === 'checklist') setChecklistOpenId(invoice.id);
+  };
+
   const handleApplyBulkAction = async () => {
     if (!bulkAction) {
       alert('ابتدا یک عملیات را انتخاب کنید.');
@@ -127,34 +156,17 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       alert('فاکتور انتخاب‌شده پیدا نشد. فهرست را تازه‌سازی کنید.');
       return;
     }
-    if (bulkAction === 'edit') handleStartEdit(invoice);
-    if (bulkAction === 'print') handlePrint(invoice);
-    if (bulkAction === 'whatsapp') handleWhatsAppShare(invoice);
-    if (bulkAction === 'checklist') {
-      setChecklistOpenId((currentId) => currentId === invoice.id ? null : invoice.id);
-    }
+    await runInvoiceAction(bulkAction, invoice);
   };
 
-  // ارسال پیام مستقیم به واتساپ مشتری
-  const handleWhatsAppShare = (inv) => {
-    let phone = inv.customer_phone || inv.phone || '';
-    if (!phone) {
-      phone = prompt("لطفا شماره موبایل مشتری را وارد کنید (مثلاً 09123456789):", "");
-      if (!phone) return;
-    }
-
-    let cleanPhone = phone.trim();
-    if (cleanPhone.startsWith('0')) {
-      cleanPhone = '98' + cleanPhone.slice(1);
-    }
-
+  // ساخت متن پیام واتساپ برای پیش‌نمایش و ارسال
+  const buildWhatsAppMessage = (inv) => {
     const paid = Number(inv.paid_amount || 0);
     const total = Number(inv.total_price || 0);
     const remaining = calcRemaining(total, paid);
     const statusMeta = getStatusMeta(inv.payment_status);
 
-    const text = encodeURIComponent(
-      `سلام ${inv.customer_name || 'مشتری عزیز'} عزیز،\n` +
+    return `سلام ${inv.customer_name || 'مشتری عزیز'} عزیز،\n` +
       `با تشکر از انتخاب ${businessName} 🕊️\n` +
       `جزئیات فاکتور شماره #${formatPersianDigits(inv.id)}:\n` +
       `📅 تاریخ مراسم: ${inv.ceremony_date || 'تعیین نشده'}\n` +
@@ -162,10 +174,21 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       `✅ مبلغ پرداختی (بیعانه): ${formatDisplay(paid)} تومان\n` +
       `📌 مانده بدهی: ${formatDisplay(remaining)} تومان\n` +
       `🔖 وضعیت پرداخت: ${statusMeta.label}\n` +
-      `در صورت داشتن هرگونه سوال در خدمت شما هستیم.`
-    );
+      `در صورت داشتن هرگونه سوال در خدمت شما هستیم.`;
+  };
 
+  // ارسال پیام مستقیم به واتساپ مشتری از پاپ‌آپ
+  const handleSendWhatsApp = () => {
+    const digits = String(whatsAppPhone || '').replace(/\D/g, '');
+    if (!digits) {
+      alert('لطفا شماره موبایل مشتری را وارد کنید.');
+      return;
+    }
+
+    const cleanPhone = digits.startsWith('0') ? `98${digits.slice(1)}` : digits;
+    const text = encodeURIComponent(buildWhatsAppMessage(whatsAppInvoice));
     window.open(`https://wa.me/${cleanPhone}?text=${text}`, '_blank');
+    setWhatsAppInvoice(null);
   };
 
   // مدیریت چک‌لیست مراسم
@@ -340,8 +363,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   };
 
   // ================= چاپ فاکتور رسمی A4 =================
-  const handlePrint = (inv) => {
-    const printWindow = window.open("", "_blank");
+  const buildInvoiceHtml = (inv, autoPrint = false) => {
     const items = inv.items_data || [];
     const paid = Number(inv.paid_amount || 0);
     const total = Number(inv.total_price || 0);
@@ -354,7 +376,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[character]));
 
-    printWindow.document.write(`
+    return `
       <html dir="rtl">
         <head>
           <style>
@@ -440,12 +462,35 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
             <div class="signature-box">امضای مشتری</div>
           </div>
 
-          <script>window.onload = function() { window.print(); window.close(); };</script>
+          ${autoPrint ? '<script>window.onload = function() { window.print(); window.close(); };</script>' : ''}
         </body>
       </html>
-    `);
+    `;
+  };
+
+  // باز کردن پنجرهٔ چاپ مرورگر با همان قالب پیش‌نمایش
+  const handlePrint = (inv) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('مرورگر اجازهٔ باز کردن پنجرهٔ چاپ را نداد؛ لطفا اجازهٔ پاپ‌آپ را فعال کنید.');
+      return;
+    }
+    printWindow.document.write(buildInvoiceHtml(inv, true));
     printWindow.document.close();
   };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setIsCustomerListOpen(false);
+  };
+
+  // داده‌های پاپ‌آپ‌ها
+  const checklistInvoice = invoices.find((invoice) => invoice.id === checklistOpenId) || null;
+  const checklistItems = Array.isArray(checklistInvoice?.checklist)
+    ? checklistInvoice.checklist
+    : getDefaultChecklist();
+  const editableTotal = editableItems.reduce((sum, item) => sum + (Number(item.qty || 1) * getActiveUnitPrice(item)), 0);
+  const whatsAppMessage = whatsAppInvoice ? buildWhatsAppMessage(whatsAppInvoice) : '';
 
   // ================= رابط کاربری =================
   return (
@@ -453,37 +498,29 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       <div className="official-invoices-toolbar">
         <h3 style={{ margin: 0, color: '#1e293b', fontSize: '15px' }}>لیست فاکتورهای رسمی</h3>
         <div className="official-invoices-bulk-actions">
-          {editingId !== null ? (
-            <>
-              <button type="button" className="official-invoices-apply-button" onClick={() => handleSaveEdit(editingId)}>ذخیره ویرایش</button>
-              <button type="button" className="official-invoices-cancel-button" onClick={() => setEditingId(null)}>انصراف</button>
-            </>
-          ) : (
-            <>
-              <label className="official-invoices-action-select-label" htmlFor="official-invoices-action">عملیات</label>
-              <select
-                id="official-invoices-action"
-                value={bulkAction}
-                onChange={(event) => setBulkAction(event.target.value)}
-                aria-label="عملیات روی فاکتورهای انتخاب‌شده"
-              >
-                <option value="">انتخاب عملیات</option>
-                <option value="print" disabled={selectedIds.length > 1}>چاپ فاکتور</option>
-                <option value="whatsapp" disabled={selectedIds.length > 1}>ارسال در واتساپ</option>
-                <option value="checklist" disabled={selectedIds.length > 1}>نمایش چک‌لیست</option>
-                <option value="edit" disabled={selectedIds.length > 1}>ویرایش فاکتور</option>
-                <option value="delete">حذف فاکتور</option>
-              </select>
-              <button type="button" className="official-invoices-apply-button" onClick={handleApplyBulkAction}>
-                انجام
-              </button>
-              <span className="official-invoices-selected-count">
-                {selectedIds.length > 1
-                  ? `${formatDisplay(selectedIds.length)} انتخاب‌شده؛ این عملیات فقط برای یک فاکتور است`
-                  : `${formatDisplay(selectedIds.length)} انتخاب‌شده`}
-              </span>
-            </>
-          )}
+          <label className="official-invoices-action-select-label" htmlFor="official-invoices-action">عملیات</label>
+          <select
+            id="official-invoices-action"
+            value={bulkAction}
+            onChange={(event) => setBulkAction(event.target.value)}
+            aria-label="عملیات روی فاکتورهای انتخاب‌شده"
+          >
+            <option value="">انتخاب عملیات</option>
+            <option value="print" disabled={selectedIds.length > 1}>چاپ فاکتور</option>
+            <option value="whatsapp" disabled={selectedIds.length > 1}>ارسال در واتساپ</option>
+            <option value="checklist" disabled={selectedIds.length > 1}>نمایش چک‌لیست</option>
+            <option value="edit" disabled={selectedIds.length > 1}>ویرایش فاکتور</option>
+            <option value="delete">حذف فاکتور</option>
+          </select>
+          <button type="button" className="official-invoices-apply-button" onClick={handleApplyBulkAction}>
+            انجام
+          </button>
+          <span className="official-invoices-hint">💡 دابل‌کلیک روی ردیف = انجام همین عملیات</span>
+          <span className="official-invoices-selected-count">
+            {selectedIds.length > 1
+              ? `${formatDisplay(selectedIds.length)} انتخاب‌شده؛ این عملیات فقط برای یک فاکتور است`
+              : `${formatDisplay(selectedIds.length)} انتخاب‌شده`}
+          </span>
         </div>
       </div>
 
@@ -513,327 +550,387 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               </tr>
             ) : (
               invoices.map((inv) => {
-                const isEditing = editingId === inv.id;
-                const isChecklistOpen = checklistOpenId === inv.id;
-                const currentChecklist = Array.isArray(inv.checklist) ? inv.checklist : getDefaultChecklist();
-                const currentTotal = isEditing
-                  ? editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0)
-                  : Number(inv.total_price || 0);
-                const currentStatus = isEditing ? paymentStatus : (inv.payment_status || 'unpaid');
-                const statusMeta = getStatusMeta(currentStatus);
+                const statusMeta = getStatusMeta(inv.payment_status || 'unpaid');
 
                 return (
-                  <React.Fragment key={inv.id}>
-                    <tr style={{ borderBottom: '1px solid #f1f5f9', background: selectedIds.includes(inv.id) ? '#f8fafc' : 'transparent' }}>
-                      <td style={{ padding: '10px', textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(inv.id)}
-                          onChange={() => handleToggleSelect(inv.id)}
-                        />
-                      </td>
-                      <td style={{ padding: '10px', fontWeight: 'bold', color: '#0284c7' }}>#{formatPersianDigits(inv.id)}</td>
-
-                      <td style={{ padding: '10px', fontWeight: 'bold' }}>
-                        {isEditing ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <input
-                              type="text"
-                              value={customerName}
-                              onFocus={() => {
-                                setCustomerSearch(customerName);
-                                setIsCustomerListOpen(true);
-                              }}
-                              onChange={(e) => {
-                                setCustomerName(e.target.value);
-                                setCustomerSearch(e.target.value);
-                                setIsCustomerListOpen(true);
-                              }}
-                              placeholder="جست‌وجوی مشتری"
-                              autoComplete="off"
-                              style={{ width: '170px', padding: '4px', fontSize: '11px' }}
-                            />
-                            {isCustomerListOpen && (
-                              <div style={{ position: 'relative', zIndex: 20 }}>
-                                <div style={{ position: 'absolute', top: 0, right: 0, width: '220px', maxHeight: '180px', overflowY: 'auto', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '5px', boxShadow: '0 4px 12px rgba(15,23,42,.15)' }}>
-                                  {customerLoadError ? (
-                                    <div role="alert" style={{ padding: '8px', color: '#b91c1c', whiteSpace: 'normal' }}>{customerLoadError}</div>
-                                  ) : filteredCustomers.length ? filteredCustomers.map((customer) => (
-                                    <button
-                                      key={customer.id}
-                                      type="button"
-                                      onMouseDown={(event) => event.preventDefault()}
-                                      onClick={() => {
-                                        const name = customer['Full name'] || '';
-                                        setCustomerName(name);
-                                        setCustomerSearch(name);
-                                        setCustomerPhone(customer.phone || '');
-                                        setCustomerAddress(customer.address || '');
-                                        setIsCustomerListOpen(false);
-                                      }}
-                                      style={{ display: 'flex', flexDirection: 'column', width: '100%', padding: '8px', border: 0, borderBottom: '1px solid #e2e8f0', background: '#fff', textAlign: 'right', cursor: 'pointer' }}
-                                    >
-                                      <span>{customer['Full name'] || 'بدون نام'}</span>
-                                      <small dir="ltr" style={{ color: '#64748b', textAlign: 'right' }}>{customer.phone ? formatPersianDigits(customer.phone) : 'بدون شماره'}</small>
-                                    </button>
-                                  )) : (
-                                    <div style={{ padding: '8px', color: '#64748b', whiteSpace: 'normal' }}>
-                                      {customerSearch.trim() ? 'مشتری پیدا نشد؛ نام را می‌توانید دستی وارد کنید.' : 'برای جست‌وجو نام یا شماره را بنویسید.'}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                            <input
-                              type="text"
-                              value={customerPhone}
-                              onChange={(e) => setCustomerPhone(e.target.value)}
-                              placeholder="موبایل (09...)"
-                              style={{ width: '110px', padding: '4px', fontSize: '11px' }}
-                            />
-                            <input type="text" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} placeholder="تاریخ سفارش" style={{ width: '110px', padding: '4px', fontSize: '11px' }} />
-                            <input type="text" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="آدرس مشتری" style={{ width: '170px', padding: '4px', fontSize: '11px' }} />
-                            <FormattedNumberInput value={paidAmount} onValueChange={(value) => setPaidAmount(value)} emptyWhenZero style={{ width: '120px', padding: '4px', fontSize: '11px' }} aria-label="مبلغ پرداختی" />
-                          </div>
-                        ) : (
-                          <div>
-                            <div>{inv.customer_name}</div>
-                            {inv.customer_phone && <div style={{ fontSize: '10px', color: '#64748b' }}>{formatPersianDigits(inv.customer_phone)}</div>}
-                          </div>
-                        )}
-                      </td>
-
-                      <td style={{ padding: '10px' }}>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={ceremonyDate}
-                            onChange={(e) => setCeremonyDate(e.target.value)}
-                            placeholder="1405/02/15"
-                            style={{ width: '80px', padding: '4px', fontSize: '11px' }}
-                          />
-                        ) : (
-                          (inv.ceremony_date ? formatPersianDigits(inv.ceremony_date) : <span style={{ color: '#94a3b8' }}>ثبت نشده</span>)
-                        )}
-                      </td>
-
-                      <td style={{ padding: '10px', color: '#0369a1' }}>
-                        {formatDisplay(currentTotal)}
-                      </td>
-
-                      <td style={{ padding: '10px', textAlign: 'center' }}>
-                        {isEditing ? (
-                          <select
-                            value={paymentStatus}
-                            onChange={(e) => setPaymentStatus(e.target.value)}
-                            style={{ padding: '4px', fontSize: '11px', borderRadius: '4px' }}>
-                            {PAYMENT_STATUSES.map(s => (
-                              <option key={s.value} value={s.value}>{s.label}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span style={{
-                            background: statusMeta.bg,
-                            color: statusMeta.color,
-                            padding: '3px 8px',
-                            borderRadius: '12px',
-                            fontSize: '10px',
-                            fontWeight: 'bold',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {statusMeta.label}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="official-invoices-actions-cell" style={{ padding: '10px', textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          className="official-invoice-details-button"
-                          aria-label={`نمایش جزئیات فاکتور ${formatPersianDigits(inv.id)}`}
-                          title="نمایش همهٔ جزئیات فاکتور"
-                          onClick={() => setDetailsInvoice(inv)}
-                        >
-                          ◉
-                        </button>
-                      </td>
-                    </tr>
-
-                    {/* پنل چک‌لیست مراسم */}
-                    {isChecklistOpen && !isEditing && (
-                      <tr style={{ background: '#faf5ff' }}>
-                        <td colSpan="7" style={{ padding: '12px 20px' }}>
-                          <div style={{ background: '#fff', border: '1px solid #d8b4fe', padding: '12px', borderRadius: '6px' }}>
-                            <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#6b21a8', marginBottom: '8px' }}>
-                              ✅ چک‌لیست کارهای روز مراسم برای مشتری: {inv.customer_name} (تاریخ: {inv.ceremony_date || 'تعیین نشده'})
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              {currentChecklist.map((item, itemIdx) => (
-                                <label key={itemIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', background: item.done ? '#f3e8ff' : '#f8fafc', padding: '6px 10px', borderRadius: '4px', border: '1px solid #e9d5ff' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={item.done}
-                                    onChange={() => handleToggleChecklistItem(inv, itemIdx)}
-                                    style={{ width: '16px', height: '16px', accentColor: '#9333ea' }}
-                                  />
-                                  <span style={{ textDecoration: item.done ? 'line-through' : 'none', color: item.done ? '#6b7280' : '#1f2937' }}>
-                                    {item.title || item.text}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                            <form
-                              onSubmit={(event) => handleAddChecklistItem(event, inv)}
-                              style={{ display: 'flex', gap: '8px', marginTop: '10px' }}
-                            >
-                              <input
-                                type="text"
-                                value={newChecklistTask}
-                                onChange={(event) => setNewChecklistTask(event.target.value)}
-                                placeholder="افزودن کار جدید به چک‌لیست..."
-                                aria-label="عنوان کار جدید در چک‌لیست"
-                                required
-                                style={{ flex: 1, margin: 0, padding: '6px 10px', border: '1px solid #d8b4fe', borderRadius: '4px', fontSize: '11px' }}
-                              />
-                              <button
-                                type="submit"
-                                style={{ background: '#8b5cf6', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold' }}
-                              >
-                                افزودن
-                              </button>
-                            </form>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* پنل پیشرفته ویرایش اقلام فاکتور */}
-                    {isEditing && (
-                      <tr style={{ background: '#f8fafc' }}>
-                        <td colSpan="7" style={{ padding: '12px 20px' }}>
-                          <div style={{ background: '#fff', border: '1px solid #cbd5e1', padding: '12px', borderRadius: '6px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                              <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#334155' }}>مدیریت اقلام فاکتور (حفظ همزمان قیمت‌های درجه ۱، ۲ و ۳):</div>
-                              <button
-                                onClick={handleAddEditableItem}
-                                style={{ background: '#10b981', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                                + افزودن قلم جدید
-                              </button>
-                            </div>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                              <thead>
-                                <tr style={{ background: '#e2e8f0' }}>
-                                  <th style={{ padding: '6px', border: '1px solid #cbd5e1' }}>نام کالا / خدمت</th>
-                                  <th style={{ padding: '6px', border: '1px solid #cbd5e1' }}>نوع کالا</th>
-                                  <th style={{ padding: '6px', border: '1px solid #cbd5e1' }}>سطح قیمت فعال</th>
-                                  <th style={{ padding: '6px', border: '1px solid #cbd5e1' }}>تعداد</th>
-                                  <th style={{ padding: '6px', border: '1px solid #cbd5e1' }}>قیمت واحد فعال (تومان)</th>
-                                  <th style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>عملیات</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {editableItems.map((item, itemIdx) => (
-                                  <tr key={itemIdx}>
-                                    <td style={{ padding: '6px', border: '1px solid #cbd5e1' }}>
-                                      <input
-                                        type="text"
-                                        value={item.title || ''}
-                                        onChange={(e) => handleItemChange(itemIdx, 'title', e.target.value)}
-                                        style={{ width: '95%', padding: '4px' }}
-                                      />
-                                    </td>
-                                    <td style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                      <select
-                                        value={item.item_type || 'sale'}
-                                        onChange={(e) => handleItemChange(itemIdx, 'item_type', e.target.value)}
-                                        style={{ padding: '4px', fontSize: '11px' }}>
-                                        <option value="sale">فروشی</option>
-                                        <option value="rent">اجاره‌ای</option>
-                                      </select>
-                                    </td>
-                                    <td style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                      <select
-                                        value={item.price_level || '1'}
-                                        onChange={(e) => handlePriceLevelChange(itemIdx, e.target.value)}
-                                        style={{ padding: '4px', fontSize: '11px' }}>
-                                        <option value="1">درجه ۱ (پایه: {item.p1 || 0})</option>
-                                        <option value="2">درجه ۲ (پایه: {item.p2 || 0})</option>
-                                        <option value="3">درجه ۳ (پایه: {item.p3 || 0})</option>
-                                      </select>
-                                    </td>
-                                    <td style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                      <FormattedNumberInput
-                                        allowDecimal={false}
-                                        value={item.qty || 1}
-                                        onValueChange={(value) => handleItemChange(itemIdx, 'qty', Number(value))}
-                                        style={{ width: '50px', padding: '4px', textAlign: 'center' }}
-                                      />
-                                    </td>
-                                    <td style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                      <FormattedNumberInput
-                                        value={getActiveUnitPrice(item)}
-                                        onValueChange={(value) => handleUnitPriceChange(itemIdx, value)}
-                                        emptyWhenZero
-                                        style={{ width: '100px', padding: '4px', textAlign: 'center' }}
-                                      />
-                                    </td>
-                                    <td style={{ padding: '6px', border: '1px solid #cbd5e1', textAlign: 'center' }}>
-                                      <button
-                                        onClick={() => handleRemoveEditableItem(itemIdx)}
-                                        style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '3px 6px', borderRadius: '4px', cursor: 'pointer', fontSize: '10px' }}>
-                                        حذف قلم
-                                      </button>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-
-                            {/* بخش پرداخت و تسویه در حالت ویرایش */}
-                            <div style={{ marginTop: '12px', padding: '10px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '6px', display: 'flex', flexWrap: 'wrap', gap: '15px', alignItems: 'center', fontSize: '12px' }}>
-                              <div>
-                                <strong style={{ color: '#0369a1' }}>مبلغ کل فاکتور:</strong>{' '}
-                                <span style={{ color: '#0369a1', fontWeight: 'bold' }}>
-                                  {formatDisplay(editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0))} تومان
-                                </span>
-                              </div>
-                              <div>
-                                <strong style={{ color: '#0d9488' }}>مبلغ پرداختی (بیعانه):</strong>{' '}
-                                <FormattedNumberInput
-                                  value={paidAmount}
-                                  onValueChange={(value) => setPaidAmount(value)}
-                                  style={{ width: '100px', padding: '4px', fontSize: '11px', textAlign: 'center' }}
-                                /> تومان
-                              </div>
-                              <div>
-                                <strong style={{ color: '#dc2626' }}>مانده بدهی:</strong>{' '}
-                                <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
-                                  {formatDisplay(calcRemaining(editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0), paidAmount))} تومان
-                                </span>
-                              </div>
-                              <div>
-                                <strong style={{ color: '#334155' }}>وضعیت تسویه:</strong>{' '}
-                                <select
-                                  value={paymentStatus}
-                                  onChange={(e) => setPaymentStatus(e.target.value)}
-                                  style={{ padding: '4px', fontSize: '11px', borderRadius: '4px' }}>
-                                  {PAYMENT_STATUSES.map(s => (
-                                    <option key={s.value} value={s.value}>{s.label}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                  <tr
+                    key={inv.id}
+                    onDoubleClick={() => void runInvoiceAction(bulkAction, inv)}
+                    title="دابل‌کلیک: انجام عملیات انتخاب‌شده در فهرست «عملیات»"
+                    style={{
+                      borderBottom: '1px solid #f1f5f9',
+                      background: selectedIds.includes(inv.id) ? '#f8fafc' : 'transparent',
+                      cursor: 'pointer',
+                      touchAction: 'manipulation'
+                    }}
+                  >
+                    <td style={{ padding: '10px', textAlign: 'center' }} onDoubleClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(inv.id)}
+                        onChange={() => handleToggleSelect(inv.id)}
+                      />
+                    </td>
+                    <td style={{ padding: '10px', fontWeight: 'bold', color: '#0284c7' }}>#{formatPersianDigits(inv.id)}</td>
+                    <td style={{ padding: '10px', fontWeight: 'bold' }}>
+                      <div>
+                        <div>{inv.customer_name}</div>
+                        {inv.customer_phone && <div style={{ fontSize: '10px', color: '#64748b' }}>{formatPersianDigits(inv.customer_phone)}</div>}
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px' }}>
+                      {inv.ceremony_date ? formatPersianDigits(inv.ceremony_date) : <span style={{ color: '#94a3b8' }}>ثبت نشده</span>}
+                    </td>
+                    <td style={{ padding: '10px', color: '#0369a1' }}>
+                      {formatDisplay(inv.total_price || 0)}
+                    </td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      <span style={{
+                        background: statusMeta.bg,
+                        color: statusMeta.color,
+                        padding: '3px 8px',
+                        borderRadius: '12px',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {statusMeta.label}
+                      </span>
+                    </td>
+                    <td className="official-invoices-actions-cell" style={{ padding: '10px', textAlign: 'center' }} onDoubleClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="official-invoice-details-button"
+                        aria-label={`نمایش جزئیات فاکتور ${formatPersianDigits(inv.id)}`}
+                        title="نمایش همهٔ جزئیات فاکتور"
+                        onClick={() => setDetailsInvoice(inv)}
+                      >
+                        ◉
+                      </button>
+                    </td>
+                  </tr>
                 );
               })
             )}
           </tbody>
         </table>
       </div>
+
+      {/* پایین: پاپ‌آپ‌های عملیات فاکتور */}
+
+      {/* پاپ‌آپ ویرایش فاکتور */}
+      {editingId !== null && (
+        <div
+          className="invoice-details-backdrop official-invoice-backdrop"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) handleCancelEdit(); }}
+        >
+          <section className="invoice-details-modal official-invoice-modal official-invoice-modal-wide" role="dialog" aria-modal="true" aria-labelledby="official-invoice-edit-title" dir="rtl">
+            <div className="invoice-details-heading">
+              <div>
+                <span className="page-eyebrow">ویرایش فاکتور</span>
+                <h3 id="official-invoice-edit-title">فاکتور شماره #{formatPersianDigits(editingId)}</h3>
+              </div>
+              <button type="button" className="invoice-details-close" onClick={handleCancelEdit} aria-label="بستن ویرایش فاکتور">×</button>
+            </div>
+
+            <div className="official-invoice-edit-grid">
+              <label className="official-invoice-edit-field official-invoice-edit-field-wide">
+                <span>نام مشتری</span>
+                <input
+                  type="text"
+                  value={customerName}
+                  onFocus={() => {
+                    setCustomerSearch(customerName);
+                    setIsCustomerListOpen(true);
+                  }}
+                  onChange={(e) => {
+                    setCustomerName(e.target.value);
+                    setCustomerSearch(e.target.value);
+                    setIsCustomerListOpen(true);
+                  }}
+                  placeholder="جست‌وجوی مشتری"
+                  autoComplete="off"
+                />
+                {isCustomerListOpen && (
+                  <div className="official-invoice-customer-list">
+                    {customerLoadError ? (
+                      <div role="alert" className="official-invoice-customer-error">{customerLoadError}</div>
+                    ) : filteredCustomers.length ? filteredCustomers.map((customer) => (
+                      <button
+                        key={customer.id}
+                        type="button"
+                        className="official-invoice-customer-option"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          const name = customer['Full name'] || '';
+                          setCustomerName(name);
+                          setCustomerSearch(name);
+                          setCustomerPhone(customer.phone || '');
+                          setCustomerAddress(customer.address || '');
+                          setIsCustomerListOpen(false);
+                        }}
+                      >
+                        <span>{customer['Full name'] || 'بدون نام'}</span>
+                        <small dir="ltr">{customer.phone ? formatPersianDigits(customer.phone) : 'بدون شماره'}</small>
+                      </button>
+                    )) : (
+                      <div className="official-invoice-customer-hint">
+                        {customerSearch.trim() ? 'مشتری پیدا نشد؛ نام را می‌توانید دستی وارد کنید.' : 'برای جست‌وجو نام یا شماره را بنویسید.'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </label>
+              <label className="official-invoice-edit-field">
+                <span>موبایل</span>
+                <input type="text" dir="ltr" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="09..." />
+              </label>
+              <label className="official-invoice-edit-field">
+                <span>تاریخ سفارش</span>
+                <input type="text" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} placeholder="1405/02/15" />
+              </label>
+              <label className="official-invoice-edit-field">
+                <span>تاریخ مراسم</span>
+                <input type="text" value={ceremonyDate} onChange={(e) => setCeremonyDate(e.target.value)} placeholder="1405/02/15" />
+              </label>
+              <label className="official-invoice-edit-field official-invoice-edit-field-wide">
+                <span>نشانی مشتری</span>
+                <input type="text" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="آدرس مشتری" />
+              </label>
+            </div>
+
+            <div className="official-invoice-items-head">
+              <h4 className="invoice-details-items-title">مدیریت اقلام فاکتور</h4>
+              <button type="button" className="official-invoice-add-item" onClick={handleAddEditableItem}>
+                + افزودن قلم جدید
+              </button>
+            </div>
+
+            <div className="invoice-details-items-wrap">
+              <table className="invoice-details-items official-invoice-edit-items">
+                <thead>
+                  <tr>
+                    <th>نام کالا / خدمت</th>
+                    <th>نوع کالا</th>
+                    <th>سطح قیمت فعال</th>
+                    <th>تعداد</th>
+                    <th>قیمت واحد فعال (تومان)</th>
+                    <th style={{ textAlign: 'center' }}>عملیات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {editableItems.map((item, itemIdx) => (
+                    <tr key={itemIdx}>
+                      <td>
+                        <input
+                          type="text"
+                          value={item.title || ''}
+                          onChange={(e) => handleItemChange(itemIdx, 'title', e.target.value)}
+                          style={{ width: '100%', padding: '5px', fontSize: '12px' }}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <select
+                          value={item.item_type || 'sale'}
+                          onChange={(e) => handleItemChange(itemIdx, 'item_type', e.target.value)}
+                          style={{ padding: '5px', fontSize: '12px' }}>
+                          <option value="sale">فروشی</option>
+                          <option value="rent">اجاره‌ای</option>
+                        </select>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <select
+                          value={item.price_level || '1'}
+                          onChange={(e) => handlePriceLevelChange(itemIdx, e.target.value)}
+                          style={{ padding: '5px', fontSize: '12px' }}>
+                          <option value="1">درجه ۱ (پایه: {formatDisplay(item.p1 || 0)})</option>
+                          <option value="2">درجه ۲ (پایه: {formatDisplay(item.p2 || 0)})</option>
+                          <option value="3">درجه ۳ (پایه: {formatDisplay(item.p3 || 0)})</option>
+                        </select>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <FormattedNumberInput
+                          allowDecimal={false}
+                          value={item.qty || 1}
+                          onValueChange={(value) => handleItemChange(itemIdx, 'qty', Number(value))}
+                          style={{ width: '60px', padding: '5px', fontSize: '12px', textAlign: 'center' }}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <FormattedNumberInput
+                          value={getActiveUnitPrice(item)}
+                          onValueChange={(value) => handleUnitPriceChange(itemIdx, value)}
+                          emptyWhenZero
+                          style={{ width: '110px', padding: '5px', fontSize: '12px', textAlign: 'center' }}
+                        />
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          className="official-invoice-remove-item"
+                          onClick={() => handleRemoveEditableItem(itemIdx)}>
+                          حذف قلم
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="official-invoice-payment-summary">
+              <div>
+                <strong style={{ color: '#0369a1' }}>مبلغ کل فاکتور:</strong>{' '}
+                <span style={{ color: '#0369a1', fontWeight: 'bold' }}>{formatDisplay(editableTotal)} تومان</span>
+              </div>
+              <div>
+                <strong style={{ color: '#0d9488' }}>مبلغ پرداختی (بیعانه):</strong>{' '}
+                <FormattedNumberInput
+                  value={paidAmount}
+                  onValueChange={(value) => setPaidAmount(value)}
+                  style={{ width: '110px', padding: '5px', fontSize: '12px', textAlign: 'center' }}
+                /> تومان
+              </div>
+              <div>
+                <strong style={{ color: '#dc2626' }}>مانده بدهی:</strong>{' '}
+                <span style={{ color: '#dc2626', fontWeight: 'bold' }}>{formatDisplay(calcRemaining(editableTotal, paidAmount))} تومان</span>
+              </div>
+              <div>
+                <strong style={{ color: '#334155' }}>وضعیت تسویه:</strong>{' '}
+                <select
+                  value={paymentStatus}
+                  onChange={(e) => setPaymentStatus(e.target.value)}
+                  style={{ padding: '5px', fontSize: '12px', borderRadius: '6px' }}>
+                  {PAYMENT_STATUSES.map(s => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="official-invoice-modal-actions">
+              <button type="button" className="official-invoices-apply-button" onClick={() => handleSaveEdit(editingId)}>ذخیره تغییرات</button>
+              <button type="button" className="official-invoices-cancel-button" onClick={handleCancelEdit}>انصراف</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* پاپ‌آپ چک‌لیست مراسم */}
+      {checklistInvoice && (
+        <div
+          className="invoice-details-backdrop official-invoice-backdrop"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setChecklistOpenId(null); }}
+        >
+          <section className="invoice-details-modal official-invoice-modal official-invoice-modal-narrow" role="dialog" aria-modal="true" aria-labelledby="official-invoice-checklist-title" dir="rtl">
+            <div className="invoice-details-heading">
+              <div>
+                <span className="page-eyebrow">چک‌لیست مراسم</span>
+                <h3 id="official-invoice-checklist-title">{checklistInvoice.customer_name || 'مشتری بدون نام'}</h3>
+                <div className="official-invoice-modal-subtitle">
+                  فاکتور #{formatPersianDigits(checklistInvoice.id)} — تاریخ مراسم: {checklistInvoice.ceremony_date ? formatPersianDigits(checklistInvoice.ceremony_date) : 'تعیین نشده'}
+                </div>
+              </div>
+              <button type="button" className="invoice-details-close" onClick={() => setChecklistOpenId(null)} aria-label="بستن چک‌لیست">×</button>
+            </div>
+
+            <div className="official-invoice-checklist">
+              {checklistItems.map((item, itemIdx) => (
+                <label key={itemIdx} className={`official-invoice-checklist-item${item.done ? ' is-done' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={item.done}
+                    onChange={() => handleToggleChecklistItem(checklistInvoice, itemIdx)}
+                  />
+                  <span>{item.title || item.text}</span>
+                </label>
+              ))}
+            </div>
+
+            <form className="official-invoice-checklist-form" onSubmit={(event) => handleAddChecklistItem(event, checklistInvoice)}>
+              <input
+                type="text"
+                value={newChecklistTask}
+                onChange={(event) => setNewChecklistTask(event.target.value)}
+                placeholder="افزودن کار جدید به چک‌لیست..."
+                aria-label="عنوان کار جدید در چک‌لیست"
+                required
+              />
+              <button type="submit" className="official-invoice-checklist-add">افزودن</button>
+            </form>
+
+            <div className="official-invoice-modal-actions">
+              <button type="button" className="official-invoices-cancel-button" onClick={() => setChecklistOpenId(null)}>بستن</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* پاپ‌آپ پیش‌نمایش و چاپ فاکتور */}
+      {printInvoice && (
+        <div
+          className="invoice-details-backdrop official-invoice-backdrop"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setPrintInvoice(null); }}
+        >
+          <section className="invoice-details-modal official-invoice-modal official-invoice-modal-wide" role="dialog" aria-modal="true" aria-labelledby="official-invoice-print-title" dir="rtl">
+            <div className="invoice-details-heading">
+              <div>
+                <span className="page-eyebrow">پیش‌نمایش چاپ</span>
+                <h3 id="official-invoice-print-title">فاکتور شماره #{formatPersianDigits(printInvoice.id)}</h3>
+              </div>
+              <button type="button" className="invoice-details-close" onClick={() => setPrintInvoice(null)} aria-label="بستن پیش‌نمایش چاپ">×</button>
+            </div>
+            <iframe
+              className="official-invoice-print-frame"
+              title={`پیش‌نمایش فاکتور ${formatPersianDigits(printInvoice.id)}`}
+              srcDoc={buildInvoiceHtml(printInvoice)}
+            />
+            <div className="official-invoice-modal-actions">
+              <button type="button" className="official-invoices-apply-button" onClick={() => handlePrint(printInvoice)}>چاپ فاکتور</button>
+              <button type="button" className="official-invoices-cancel-button" onClick={() => setPrintInvoice(null)}>بستن</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* پاپ‌آپ ارسال در واتساپ */}
+      {whatsAppInvoice && (
+        <div
+          className="invoice-details-backdrop official-invoice-backdrop"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setWhatsAppInvoice(null); }}
+        >
+          <section className="invoice-details-modal official-invoice-modal official-invoice-modal-narrow" role="dialog" aria-modal="true" aria-labelledby="official-invoice-whatsapp-title" dir="rtl">
+            <div className="invoice-details-heading">
+              <div>
+                <span className="page-eyebrow">ارسال در واتساپ</span>
+                <h3 id="official-invoice-whatsapp-title">{whatsAppInvoice.customer_name || 'مشتری بدون نام'}</h3>
+                <div className="official-invoice-modal-subtitle">فاکتور #{formatPersianDigits(whatsAppInvoice.id)}</div>
+              </div>
+              <button type="button" className="invoice-details-close" onClick={() => setWhatsAppInvoice(null)} aria-label="بستن ارسال واتساپ">×</button>
+            </div>
+
+            <label className="official-invoice-edit-field">
+              <span>شماره موبایل مشتری</span>
+              <input
+                type="tel"
+                dir="ltr"
+                value={whatsAppPhone}
+                onChange={(event) => setWhatsAppPhone(event.target.value)}
+                placeholder="09123456789"
+              />
+            </label>
+
+            <h4 className="invoice-details-items-title">پیش‌نمایش پیام</h4>
+            <pre className="official-invoice-message-preview">{whatsAppMessage}</pre>
+
+            <div className="official-invoice-modal-actions">
+              <button type="button" className="official-invoices-apply-button" onClick={handleSendWhatsApp}>ارسال در واتساپ</button>
+              <button type="button" className="official-invoices-cancel-button" onClick={() => setWhatsAppInvoice(null)}>انصراف</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {detailsInvoice && (() => {
         const detailsItems = [
           detailsInvoice.items_data,
@@ -845,10 +942,10 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
         const status = getStatusMeta(detailsInvoice.payment_status);
 
         return (
-          <div className="invoice-details-backdrop" onMouseDown={(event) => {
+          <div className="invoice-details-backdrop official-invoice-backdrop" onMouseDown={(event) => {
             if (event.target === event.currentTarget) setDetailsInvoice(null);
           }}>
-            <section className="invoice-details-modal" role="dialog" aria-modal="true" aria-labelledby="invoice-details-title" dir="rtl">
+            <section className="invoice-details-modal official-invoice-modal" role="dialog" aria-modal="true" aria-labelledby="invoice-details-title" dir="rtl">
               <div className="invoice-details-heading">
                 <div>
                   <span className="page-eyebrow">جزئیات کامل فاکتور</span>

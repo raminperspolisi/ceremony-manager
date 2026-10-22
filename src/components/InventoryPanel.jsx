@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { deleteRows, insertRows, updateRows } from '../offlineSync';
 import { formatDisplay } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
@@ -17,7 +17,21 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
   // استیت برای نمایش یا مخفی کردن قیمت خرید
   const [showCostPrice, setShowCostPrice] = useState(false);
-  const [displayedPriceLevel, setDisplayedPriceLevel] = useState('1');
+
+  // در حالت دسکتاپ هر سه سطح قیمت با هم نمایش داده می‌شوند
+  const [isDesktopView, setIsDesktopView] = useState(
+    () => typeof window === 'undefined' || window.matchMedia('(min-width: 601px)').matches
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 601px)');
+    const handleChange = (event) => setIsDesktopView(event.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  const displayedLevels = isDesktopView ? ['1', '2', '3'] : ['1'];
+  const tableColumnCount = 4 + displayedLevels.length + (showCostPrice ? 1 : 0);
 
   // استیت برای نگهداری شناسه آیتم‌های انتخاب‌شده
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -222,22 +236,8 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
               placeholder="🔍 جستجوی نام کالا..." 
               style={{ padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '11px', width: '180px', backgroundColor: '#fff' }}
             />
-          </div>
 
-          <div className="inventory-table-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>💡 دابل‌کلیک برای ویرایش</span>
-            <label className="inventory-price-level-control">
-              <span>نمایش نرخ</span>
-              <select
-                value={displayedPriceLevel}
-                onChange={(e) => setDisplayedPriceLevel(e.target.value)}
-                aria-label="انتخاب سطح قیمت برای نمایش"
-              >
-                <option value="1">سطح ۱</option>
-                <option value="2">سطح ۲</option>
-                <option value="3">سطح ۳</option>
-              </select>
-            </label>
+            {/* دکمه نمایش قیمت خرید، چسبیده به کادر جستجو */}
             <button 
               type="button" 
               onClick={() => setShowCostPrice(!showCostPrice)} 
@@ -245,6 +245,10 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
             >
               {showCostPrice ? "👁️ مخفی کردن قیمت خرید" : "👁️‍🗨️ نمایش قیمت خرید"}
             </button>
+          </div>
+
+          <div className="inventory-table-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>💡 دابل‌کلیک برای ویرایش</span>
           </div>
         </div>
         
@@ -256,14 +260,16 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                 <th className="inventory-col-title" style={{ padding: '8px 10px' }}>عنوان کالا / خدمت</th>
                 <th className="inventory-col-type" style={{ padding: '8px 10px' }}>نوع کالا</th>
                 {showCostPrice && <th className="inventory-col-cost" style={{ padding: '8px 10px', color: '#b91c1c' }}>قیمت خرید</th>}
-                <th className="inventory-col-price" style={{ padding: '8px 10px' }}>نرخ سطح {displayedPriceLevel}</th>
+                {displayedLevels.map((level) => (
+                  <th key={level} className="inventory-col-price" style={{ padding: '8px 10px' }}>نرخ سطح {level}</th>
+                ))}
                 <th className="inventory-col-actions" style={{ padding: '8px 10px', textAlign: 'center' }}>عملیات</th>
               </tr>
             </thead>
             <tbody>
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={showCostPrice ? "6" : "5"} style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
+                  <td colSpan={tableColumnCount} style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>
                     {items.length === 0 ? 'هیچ کالایی در انبار ثبت نشده است.' : 'نتیجه‌ای برای جستجوی شما یافت نشد.'}
                   </td>
                 </tr>
@@ -326,13 +332,20 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                         </td>
                       )}
 
-                      <td className="inventory-col-price" onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
-                        {isEditing ? (
-                          <FormattedNumberInput value={editForm[`price_level${displayedPriceLevel}`]} onValueChange={(value) => setEditForm({ ...editForm, [`price_level${displayedPriceLevel}`]: value })} emptyWhenZero style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
-                        ) : (
-                          <>{formatDisplay(item[`price_level${displayedPriceLevel}`] || 0)}<span className="inventory-currency"> ت</span></>
-                        )}
-                      </td>
+                      {displayedLevels.map((level) => (
+                        <td
+                          key={level}
+                          className="inventory-col-price"
+                          onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }}
+                          style={{ padding: '8px 10px', color: '#0369a1' }}
+                        >
+                          {isEditing ? (
+                            <FormattedNumberInput value={editForm[`price_level${level}`]} onValueChange={(value) => setEditForm({ ...editForm, [`price_level${level}`]: value })} emptyWhenZero style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
+                          ) : (
+                            <>{formatDisplay(item[`price_level${level}`] || 0)}<span className="inventory-currency"> ت</span></>
+                          )}
+                        </td>
+                      ))}
 
                       <td className="inventory-col-actions" style={{ padding: '8px 10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         {isEditing ? (
