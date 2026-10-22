@@ -82,6 +82,7 @@ export default function CalendarPanel() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [isCustomerListOpen, setIsCustomerListOpen] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [isDayModalOpen, setIsDayModalOpen] = useState(false);
 
   const emptyForm = {
     customer_id: "",
@@ -184,13 +185,13 @@ export default function CalendarPanel() {
   }, [refreshCalendarData]);
 
   // کلیک روی تقویم گرافیکی برای انتخاب تاریخ فرم
-  const handleDayClick = useCallback((dayStr) => {
+  const handleDayClick = useCallback((dayStr, hasEvents = false) => {
     if (!dayStr) return;
     const normalized = normalizeJalaliDate(dayStr);
     if (!normalized) return;
     setSelectedDay(normalized);
     setEditingId(null);
-    setShowForm(true);
+    setShowForm(!hasEvents);
     setForm((f) => ({
       ...f,
       event_date: normalized,
@@ -465,39 +466,37 @@ export default function CalendarPanel() {
             <button
               type="button"
               key={d}
-              onClick={() => handleDayClick(d)}
+              onClick={() => {
+                handleDayClick(d, dayEvents.length > 0);
+                setIsDayModalOpen(dayEvents.length > 0);
+              }}
               className={`calendar-day${isSelected ? " selected" : ""}${dayEvents.length ? " has-events" : ""}`}
               aria-label={`${Number(dayNum).toLocaleString("fa-IR")} ${JMONTHS[jMonth - 1]}، ${dayEvents.length.toLocaleString("fa-IR")} مراسم`}
             >
               <div className="calendar-day-number">{parseInt(dayNum, 10).toLocaleString("fa-IR")}</div>
-              {dayEvents.slice(0, 2).map((event) => {
-                const customer = customers.find((item) => String(item.id) === String(event.customer_id));
-                const customerName = event.customer_name || customer?.["Full name"] || "مشتری";
-                return (
-                  <span
-                    key={event.id}
-                    title={`${event.event_type || "مراسم"} - ${customerName}`}
-                    className={`calendar-event-chip${event.calendarKind === "invoice" ? " invoice" : ""}`}
-                  >
-                    {event.calendarKind === "invoice" ? "فاکتور" : event.event_type || "مراسم"}: {customerName}
-                  </span>
-                );
-              })}
-              {dayEvents.length > 2 && (
-                <span className="calendar-more-events">+{(dayEvents.length - 2).toLocaleString("fa-IR")} مورد دیگر</span>
+              {dayEvents.length > 0 && (
+                <span className="calendar-event-count">
+                  {dayEvents.length.toLocaleString("fa-IR")} رویداد
+                </span>
               )}
             </button>
           );
         })}
       </div>
-      {selectedDayEvents.length > 0 && (
-        <section className="calendar-day-details">
+      {selectedDayEvents.length > 0 && isDayModalOpen && (
+        <div className="calendar-events-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setIsDayModalOpen(false);
+        }}>
+        <section className="calendar-day-details calendar-events-modal" role="dialog" aria-modal="true" aria-labelledby="calendar-selected-day-title">
           <div className="calendar-day-details-heading">
             <div>
               <span className="calendar-eyebrow">برنامهٔ روز انتخاب‌شده</span>
-              <h3>{selectedDay.replace(/\d+/g, (digit) => Number(digit).toLocaleString("fa-IR"))} {JMONTHS[jMonth - 1]} {displayYear}</h3>
+              <h3 id="calendar-selected-day-title">{selectedDay.replace(/\d+/g, (digit) => Number(digit).toLocaleString("fa-IR"))} {JMONTHS[jMonth - 1]} {displayYear}</h3>
             </div>
-            <span className="calendar-day-count">{selectedDayEvents.length.toLocaleString("fa-IR")} مورد</span>
+            <div className="calendar-events-heading-actions">
+              <span className="calendar-day-count">{selectedDayEvents.length.toLocaleString("fa-IR")} مورد</span>
+              <button type="button" className="invoice-details-close" onClick={() => setIsDayModalOpen(false)} aria-label="بستن رویدادها">×</button>
+            </div>
           </div>
           <div className="calendar-day-event-list">
             {selectedDayEvents.map((event) => {
@@ -537,6 +536,7 @@ export default function CalendarPanel() {
             })}
           </div>
         </section>
+        </div>
       )}
       {loading && <p style={{ marginTop: 12, textAlign: "center", color: "#64748b", fontSize: 12 }}>در حال بارگذاری مراسم‌ها...</p>}
     </div>

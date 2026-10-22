@@ -532,8 +532,8 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                 items.map((item, index) => (
                   <tr key={item.id || index}>
                     <td data-label="حذف" style={{ ...win95Style.tableCell, textAlign: 'center' }}>
-                      <button 
-                        style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }} 
+                      <button
+                        className="invoice-item-remove-button"
                         onClick={() => handleRemoveItem(item.id)}>
                         حذف
                       </button>

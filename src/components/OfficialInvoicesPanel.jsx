@@ -16,6 +16,8 @@ const getStatusMeta = (status) =>
 export default function OfficialInvoicesPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkAction, setBulkAction] = useState('');
+  const [detailsInvoice, setDetailsInvoice] = useState(null);
 
   // حالت ویرایش فاکتور
   const [editingId, setEditingId] = useState(null);
@@ -68,26 +70,19 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   }
 
   const handleToggleSelect = (id) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
+    const nextIds = selectedIds.includes(id)
+      ? selectedIds.filter((item) => item !== id)
+      : [...selectedIds, id];
+    setSelectedIds(nextIds);
+    if (nextIds.length > 1 && bulkAction !== 'delete') setBulkAction('');
   };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedIds(invoices.map(inv => inv.id));
+      if (invoices.length > 1 && bulkAction !== 'delete') setBulkAction('');
     } else {
       setSelectedIds([]);
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("آیا از حذف این فاکتور رسمی مطمئن هستید؟")) return;
-    const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'eq', value: id }]);
-    if (error) {
-      alert("خطا در حذف فاکتور: " + error.message);
-    } else {
-      fetchOfficialInvoices();
     }
   };
 
@@ -100,6 +95,37 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       alert("خطا در حذف گروهی فاکتورها: " + error.message);
     } else {
       fetchOfficialInvoices();
+    }
+  };
+
+  const handleApplyBulkAction = async () => {
+    if (!bulkAction) {
+      alert('ابتدا یک عملیات را انتخاب کنید.');
+      return;
+    }
+    if (!selectedIds.length) {
+      alert('ابتدا حداقل یک فاکتور را انتخاب کنید.');
+      return;
+    }
+    if (bulkAction === 'delete') {
+      await handleDeleteSelected();
+      return;
+    }
+    if (selectedIds.length !== 1) {
+      alert('این عملیات فقط برای یک فاکتور قابل انجام است؛ فقط یک مورد را انتخاب کنید.');
+      return;
+    }
+
+    const invoice = invoices.find((item) => item.id === selectedIds[0]);
+    if (!invoice) {
+      alert('فاکتور انتخاب‌شده پیدا نشد. فهرست را تازه‌سازی کنید.');
+      return;
+    }
+    if (bulkAction === 'edit') handleStartEdit(invoice);
+    if (bulkAction === 'print') handlePrint(invoice);
+    if (bulkAction === 'whatsapp') handleWhatsAppShare(invoice);
+    if (bulkAction === 'checklist') {
+      setChecklistOpenId((currentId) => currentId === invoice.id ? null : invoice.id);
     }
   };
 
@@ -418,16 +444,41 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   // ================= رابط کاربری =================
   return (
     <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+      <div className="official-invoices-toolbar">
         <h3 style={{ margin: 0, color: '#1e293b', fontSize: '15px' }}>لیست فاکتورهای رسمی</h3>
-
-        {selectedIds.length > 0 && (
-          <button
-            onClick={handleDeleteSelected}
-            style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
-            حذف موارد انتخاب‌شده ({formatDisplay(selectedIds.length)})
-          </button>
-        )}
+        <div className="official-invoices-bulk-actions">
+          {editingId !== null ? (
+            <>
+              <button type="button" className="official-invoices-apply-button" onClick={() => handleSaveEdit(editingId)}>ذخیره ویرایش</button>
+              <button type="button" className="official-invoices-cancel-button" onClick={() => setEditingId(null)}>انصراف</button>
+            </>
+          ) : (
+            <>
+              <label className="official-invoices-action-select-label" htmlFor="official-invoices-action">عملیات</label>
+              <select
+                id="official-invoices-action"
+                value={bulkAction}
+                onChange={(event) => setBulkAction(event.target.value)}
+                aria-label="عملیات روی فاکتورهای انتخاب‌شده"
+              >
+                <option value="">انتخاب عملیات</option>
+                <option value="print" disabled={selectedIds.length > 1}>چاپ فاکتور</option>
+                <option value="whatsapp" disabled={selectedIds.length > 1}>ارسال در واتساپ</option>
+                <option value="checklist" disabled={selectedIds.length > 1}>نمایش چک‌لیست</option>
+                <option value="edit" disabled={selectedIds.length > 1}>ویرایش فاکتور</option>
+                <option value="delete">حذف فاکتور</option>
+              </select>
+              <button type="button" className="official-invoices-apply-button" onClick={handleApplyBulkAction}>
+                انجام
+              </button>
+              <span className="official-invoices-selected-count">
+                {selectedIds.length > 1
+                  ? `${formatDisplay(selectedIds.length)} انتخاب‌شده؛ این عملیات فقط برای یک فاکتور است`
+                  : `${formatDisplay(selectedIds.length)} انتخاب‌شده`}
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{ overflowX: 'auto' }}>
@@ -443,33 +494,25 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               </th>
               <th style={{ padding: '10px' }}>شماره</th>
               <th style={{ padding: '10px' }}>نام مشتری</th>
-              <th style={{ padding: '10px' }}>تاریخ سفارش</th>
               <th style={{ padding: '10px' }}>تاریخ مراسم</th>
-              <th style={{ padding: '10px' }}>آدرس مشتری</th>
               <th style={{ padding: '10px' }}>مبلغ کل (تومان)</th>
-              <th style={{ padding: '10px' }}>پرداختی (تومان)</th>
-              <th style={{ padding: '10px' }}>مانده (تومان)</th>
               <th style={{ padding: '10px', textAlign: 'center' }}>وضعیت پرداخت</th>
-              <th style={{ padding: '10px' }}>سود خالص (تومان)</th>
-              <th style={{ padding: '10px', textAlign: 'center' }}>عملیات و ابزارها</th>
+              <th style={{ padding: '10px', textAlign: 'center' }}>جزئیات</th>
             </tr>
           </thead>
           <tbody>
             {invoices.length === 0 ? (
               <tr>
-                <td colSpan="12" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>هیچ فاکتور رسمی ثبت نشده است.</td>
+                <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>هیچ فاکتور رسمی ثبت نشده است.</td>
               </tr>
             ) : (
               invoices.map((inv) => {
                 const isEditing = editingId === inv.id;
                 const isChecklistOpen = checklistOpenId === inv.id;
-                const profit = calculateInvoiceProfit(isEditing ? editableItems : inv.items_data);
                 const currentChecklist = Array.isArray(inv.checklist) ? inv.checklist : getDefaultChecklist();
                 const currentTotal = isEditing
                   ? editableItems.reduce((s, i) => s + (Number(i.qty || 1) * getActiveUnitPrice(i)), 0)
                   : Number(inv.total_price || 0);
-                const currentPaid = isEditing ? Number(paidAmount || 0) : Number(inv.paid_amount || 0);
-                const currentRemaining = calcRemaining(currentTotal, currentPaid);
                 const currentStatus = isEditing ? paymentStatus : (inv.payment_status || 'unpaid');
                 const statusMeta = getStatusMeta(currentStatus);
 
@@ -542,26 +585,15 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                               placeholder="موبایل (09...)"
                               style={{ width: '110px', padding: '4px', fontSize: '11px' }}
                             />
+                            <input type="text" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} placeholder="تاریخ سفارش" style={{ width: '110px', padding: '4px', fontSize: '11px' }} />
+                            <input type="text" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="آدرس مشتری" style={{ width: '170px', padding: '4px', fontSize: '11px' }} />
+                            <FormattedNumberInput value={paidAmount} onValueChange={(value) => setPaidAmount(value)} emptyWhenZero style={{ width: '120px', padding: '4px', fontSize: '11px' }} aria-label="مبلغ پرداختی" />
                           </div>
                         ) : (
                           <div>
                             <div>{inv.customer_name}</div>
                             {inv.customer_phone && <div style={{ fontSize: '10px', color: '#64748b' }}>{formatPersianDigits(inv.customer_phone)}</div>}
                           </div>
-                        )}
-                      </td>
-
-                      <td style={{ padding: '10px' }}>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={orderDate}
-                            onChange={(e) => setOrderDate(e.target.value)}
-                            placeholder="1405/02/10"
-                            style={{ width: '80px', padding: '4px', fontSize: '11px' }}
-                          />
-                        ) : (
-                          (inv.order_date ? formatPersianDigits(inv.order_date) : <span style={{ color: '#94a3b8' }}>ثبت نشده</span>)
                         )}
                       </td>
 
@@ -579,39 +611,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                         )}
                       </td>
 
-                      <td style={{ padding: '10px' }}>
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={customerAddress}
-                            onChange={(e) => setCustomerAddress(e.target.value)}
-                            placeholder="آدرس کامل..."
-                            style={{ width: '130px', padding: '4px', fontSize: '11px' }}
-                          />
-                        ) : (
-                          inv.customer_address || <span style={{ color: '#94a3b8' }}>ثبت نشده</span>
-                        )}
-                      </td>
-
                       <td style={{ padding: '10px', color: '#0369a1' }}>
                         {formatDisplay(currentTotal)}
-                      </td>
-
-                      <td style={{ padding: '10px', color: '#0d9488' }}>
-                        {isEditing ? (
-                          <FormattedNumberInput
-                            value={paidAmount}
-                            onValueChange={(value) => setPaidAmount(value)}
-                            emptyWhenZero
-                            style={{ width: '80px', padding: '4px', fontSize: '11px', textAlign: 'center' }}
-                          />
-                        ) : (
-                          formatDisplay(currentPaid)
-                        )}
-                      </td>
-
-                      <td style={{ padding: '10px', color: currentRemaining > 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>
-                        {formatDisplay(currentRemaining)}
                       </td>
 
                       <td style={{ padding: '10px', textAlign: 'center' }}>
@@ -639,60 +640,23 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                         )}
                       </td>
 
-                      <td style={{ padding: '10px', color: '#16a34a', fontWeight: 'bold' }}>{formatDisplay(profit)}</td>
-
                       <td className="official-invoices-actions-cell" style={{ padding: '10px', textAlign: 'center' }}>
-                        <div className="official-invoices-actions" style={{ display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
-                          {isEditing ? (
-                            <>
-                              <button
-                                onClick={() => handleSaveEdit(inv.id)}
-                                style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                                ذخیره
-                              </button>
-                              <button
-                                onClick={() => setEditingId(null)}
-                                style={{ background: '#64748b', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                                انصراف
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => handleWhatsAppShare(inv)}
-                                style={{ background: '#25D366', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>
-                                💬 واتساپ
-                              </button>
-                              <button
-                                onClick={() => setChecklistOpenId(isChecklistOpen ? null : inv.id)}
-                                style={{ background: '#8b5cf6', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                                📋 چک‌لیست
-                              </button>
-                              <button
-                                onClick={() => handleStartEdit(inv)}
-                                style={{ background: '#f59e0b', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                                ویرایش
-                              </button>
-                              <button
-                                onClick={() => handlePrint(inv)}
-                                style={{ background: '#10b981', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                                چاپ
-                              </button>
-                              <button
-                                onClick={() => handleDelete(inv.id)}
-                                style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
-                                حذف
-                              </button>
-                            </>
-                          )}
-                        </div>
+                        <button
+                          type="button"
+                          className="official-invoice-details-button"
+                          aria-label={`نمایش جزئیات فاکتور ${formatPersianDigits(inv.id)}`}
+                          title="نمایش همهٔ جزئیات فاکتور"
+                          onClick={() => setDetailsInvoice(inv)}
+                        >
+                          ◉
+                        </button>
                       </td>
                     </tr>
 
                     {/* پنل چک‌لیست مراسم */}
                     {isChecklistOpen && !isEditing && (
                       <tr style={{ background: '#faf5ff' }}>
-                        <td colSpan="12" style={{ padding: '12px 20px' }}>
+                        <td colSpan="7" style={{ padding: '12px 20px' }}>
                           <div style={{ background: '#fff', border: '1px solid #d8b4fe', padding: '12px', borderRadius: '6px' }}>
                             <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#6b21a8', marginBottom: '8px' }}>
                               ✅ چک‌لیست کارهای روز مراسم برای مشتری: {inv.customer_name} (تاریخ: {inv.ceremony_date || 'تعیین نشده'})
@@ -740,7 +704,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                     {/* پنل پیشرفته ویرایش اقلام فاکتور */}
                     {isEditing && (
                       <tr style={{ background: '#f8fafc' }}>
-                        <td colSpan="12" style={{ padding: '12px 20px' }}>
+                        <td colSpan="7" style={{ padding: '12px 20px' }}>
                           <div style={{ background: '#fff', border: '1px solid #cbd5e1', padding: '12px', borderRadius: '6px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                               <div style={{ fontWeight: 'bold', fontSize: '12px', color: '#334155' }}>مدیریت اقلام فاکتور (حفظ همزمان قیمت‌های درجه ۱، ۲ و ۳):</div>
@@ -864,6 +828,66 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
           </tbody>
         </table>
       </div>
+      {detailsInvoice && (() => {
+        const detailsItems = [
+          detailsInvoice.items_data,
+          detailsInvoice.items_json,
+          detailsInvoice.items,
+        ].find(Array.isArray) || [];
+        const total = Number(detailsInvoice.total_price || detailsInvoice.total_amount || 0);
+        const paid = Number(detailsInvoice.paid_amount || 0);
+        const status = getStatusMeta(detailsInvoice.payment_status);
+
+        return (
+          <div className="invoice-details-backdrop" onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setDetailsInvoice(null);
+          }}>
+            <section className="invoice-details-modal" role="dialog" aria-modal="true" aria-labelledby="invoice-details-title" dir="rtl">
+              <div className="invoice-details-heading">
+                <div>
+                  <span className="page-eyebrow">جزئیات کامل فاکتور</span>
+                  <h3 id="invoice-details-title">فاکتور شماره #{formatPersianDigits(detailsInvoice.id)}</h3>
+                </div>
+                <button type="button" className="invoice-details-close" onClick={() => setDetailsInvoice(null)} aria-label="بستن جزئیات">×</button>
+              </div>
+              <dl className="invoice-details-grid">
+                <div><dt>نام مشتری</dt><dd>{detailsInvoice.customer_name || 'ثبت نشده'}</dd></div>
+                <div><dt>شماره تماس</dt><dd>{detailsInvoice.customer_phone || detailsInvoice.phone || 'ثبت نشده'}</dd></div>
+                <div><dt>تاریخ سفارش</dt><dd>{detailsInvoice.order_date ? formatPersianDigits(detailsInvoice.order_date) : 'ثبت نشده'}</dd></div>
+                <div><dt>تاریخ مراسم</dt><dd>{detailsInvoice.ceremony_date ? formatPersianDigits(detailsInvoice.ceremony_date) : 'ثبت نشده'}</dd></div>
+                <div className="invoice-details-address"><dt>نشانی</dt><dd>{detailsInvoice.customer_address || 'ثبت نشده'}</dd></div>
+                <div><dt>مبلغ کل</dt><dd>{formatDisplay(total)} تومان</dd></div>
+                <div><dt>مبلغ پرداختی</dt><dd>{formatDisplay(paid)} تومان</dd></div>
+                <div><dt>مانده</dt><dd>{formatDisplay(calcRemaining(total, paid))} تومان</dd></div>
+                <div><dt>وضعیت پرداخت</dt><dd><span style={{ color: status.color }}>{status.label}</span></dd></div>
+                <div><dt>سود خالص</dt><dd>{formatDisplay(calculateInvoiceProfit(detailsItems))} تومان</dd></div>
+                <div><dt>تاریخ ثبت</dt><dd>{detailsInvoice.created_at ? new Date(detailsInvoice.created_at).toLocaleDateString('fa-IR') : 'ثبت نشده'}</dd></div>
+              </dl>
+              <h4 className="invoice-details-items-title">اقلام فاکتور</h4>
+              {detailsItems.length ? (
+                <div className="invoice-details-items-wrap">
+                  <table className="invoice-details-items">
+                    <thead><tr><th>قلم</th><th>نوع</th><th>تعداد</th><th>قیمت واحد</th><th>جمع</th></tr></thead>
+                    <tbody>{detailsItems.map((item, index) => {
+                      const quantity = Number(item.qty || item.quantity || 1);
+                      const price = getActiveUnitPrice(item);
+                      return (
+                        <tr key={`${item.id || item.title || 'item'}-${index}`}>
+                          <td>{item.title || item.item_name || item.name || 'قلم بدون نام'}</td>
+                          <td>{item.item_type === 'rent' ? 'اجاره‌ای' : 'فروشی'}</td>
+                          <td>{formatDisplay(quantity)}</td>
+                          <td>{formatDisplay(price)} تومان</td>
+                          <td>{formatDisplay(quantity * price)} تومان</td>
+                        </tr>
+                      );
+                    })}</tbody>
+                  </table>
+                </div>
+              ) : <p className="invoice-details-empty">اقلامی برای این فاکتور ثبت نشده است.</p>}
+            </section>
+          </div>
+        );
+      })()}
     </div>
   );
 }

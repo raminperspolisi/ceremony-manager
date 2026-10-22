@@ -334,31 +334,21 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
                       <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         {isEditing ? (
-                          <>
-                            <button type="button" onClick={() => handleInlineSave(item.id)} style={{ backgroundColor: '#10b981', color: '#fff', border: 'none', padding: '3px 7px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', marginLeft: '3px' }}>ذخیره</button>
-                            <button type="button" onClick={() => setEditingId(null)} style={{ backgroundColor: '#64748b', color: '#fff', border: 'none', padding: '3px 7px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>لغو</button>
-                          </>
+                          <div className="inventory-row-actions">
+                            <button type="button" className="inventory-action-button save" onClick={() => handleInlineSave(item.id)}>ذخیره</button>
+                            <button type="button" className="inventory-action-button cancel" onClick={() => setEditingId(null)}>لغو</button>
+                          </div>
                         ) : (
-                          <>
-                            <button 
-                              type="button" 
-                              onClick={() => handleSelectClick(item)} 
-                              style={{ 
-                                backgroundColor: isSelected ? '#16a34a' : '#22c55e', 
-                                color: '#fff', 
-                                border: 'none', 
-                                padding: '3px 8px', 
-                                borderRadius: '4px', 
-                                cursor: 'pointer', 
-                                fontSize: '11px', 
-                                marginLeft: '5px',
-                                fontWeight: isSelected ? 'bold' : 'normal'
-                              }}
+                          <div className="inventory-row-actions">
+                            <button
+                              type="button"
+                              className={`inventory-action-button select${isSelected ? ' selected' : ''}`}
+                              onClick={() => handleSelectClick(item)}
                             >
                               {isSelected ? '✓ انتخاب شد' : 'انتخاب'}
                             </button>
-                            <button type="button" onClick={() => handleDelete(item.id)} style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>حذف</button>
-                          </>
+                            <button type="button" className="inventory-action-button delete" onClick={() => handleDelete(item.id)}>حذف</button>
+                          </div>
                         )}
                       </td>
                     </tr>

@@ -420,11 +420,23 @@ export default function App() {
         margin: '20px auto', 
         boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
         borderRadius: '8px', 
-        overflow: 'hidden',
+        overflow: 'visible',
         backgroundColor: '#ffffff'
       }}
     >
       <header className="app-header">
+        <button
+          type="button"
+          className="mobile-menu-toggle"
+          aria-label={mobileMenuOpen ? 'بستن منو' : 'باز کردن منو'}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="main-navigation"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
         <div className="brand">
           <img src={logoUrl} alt={`لوگوی ${businessName}`} className="header-logo" />
           <div className="header-title">
@@ -441,20 +453,8 @@ export default function App() {
                   offlineStatus === 'pending' ? 'تغییرات در صف همگام‌سازی' :
                     'آفلاین؛ تغییرات ذخیره می‌شوند'}
           </span>
-          <button
-            type="button"
-            className="mobile-menu-toggle"
-            aria-label={mobileMenuOpen ? 'بستن منو' : 'باز کردن منو'}
-            aria-expanded={mobileMenuOpen}
-            aria-controls="main-navigation"
-            onClick={() => setMobileMenuOpen((open) => !open)}
-          >
-            <span />
-            <span />
-            <span />
-          </button>
           <span className="status-dot" />
-          <span>{session.user.user_metadata?.display_name || session.user.email || 'کاربر واردشده'}</span>
+          <span className="header-user-name">{session.user.user_metadata?.display_name || session.user.email || 'کاربر واردشده'}</span>
           <button type="button" className="profile-button" onClick={handleOpenProfile}>
             ویرایش پروفایل
           </button>
