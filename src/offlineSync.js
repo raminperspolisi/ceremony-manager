@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { supabase, SUPABASE_URL } from './supabaseClient';
 
 const DATABASE_NAME = 'ceremony-manager-offline';
 const DATABASE_VERSION = 1;
@@ -85,10 +85,14 @@ const updateNetworkStatus = async () => {
   try {
     const controller = new AbortController();
     timeoutId = setTimeout(() => controller.abort(), 4000);
-    await fetch('/manifest.webmanifest', { cache: 'no-store', signal: controller.signal });
+    await fetch(SUPABASE_URL, {
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
     clearTimeout(timeoutId);
     notifyStatus('online');
-  } catch (error) {
+  } catch {
     if (timeoutId) clearTimeout(timeoutId);
     notifyStatus('offline-pending');
   }
@@ -636,4 +640,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('load', () => {
     void updateNetworkStatus();
   });
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') void updateNetworkStatus();
+  }, 15000);
 }
