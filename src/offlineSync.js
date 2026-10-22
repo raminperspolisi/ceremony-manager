@@ -309,8 +309,9 @@ const saveOfflineInsert = async (userId, table, rows) => {
 
 export async function insertRows(table, rows) {
   const userId = await getUserId();
-  if (navigator.onLine) {
-    const { data, error } = await supabase.from(table).insert(rows).select('*');
+  if (!(await mustQueueBehindPendingMutations(userId))) {
+    const preparedRows = await Promise.all(rows.map((row) => rewriteReferences(userId, table, row)));
+    const { data, error } = await supabase.from(table).insert(preparedRows).select('*');
     if (!error) {
       await cacheRows(userId, table, data || []);
       return { data, error: null, offline: false };
@@ -321,6 +322,7 @@ export async function insertRows(table, rows) {
   try {
     const data = await saveOfflineInsert(userId, table, rows);
     notifyStatus('offline-pending');
+    if (navigator.onLine) void syncPendingMutations();
     return { data, error: null, offline: true };
   } catch (error) {
     return { data: null, error: { message: error.message } };
@@ -347,7 +349,7 @@ const updateCachedRows = async (userId, table, filters, updates, { pending = fal
 
 export async function updateRows(table, updates, filters) {
   const userId = await getUserId();
-  if (navigator.onLine) {
+  if (!(await mustQueueBehindPendingMutations(userId))) {
     const serverFilters = await rewriteFilters(userId, table, filters);
     const serverUpdates = await rewriteReferences(userId, table, updates);
     let query = supabase.from(table).update(serverUpdates);
@@ -367,6 +369,7 @@ export async function updateRows(table, updates, filters) {
   try {
     const changed = await updateCachedRows(userId, table, filters, updates, { pending: true });
     await enqueueMutation(userId, { type: 'update', table, updates, filters });
+    if (navigator.onLine) void syncPendingMutations();
     return { data: changed, error: null, offline: true };
   } catch (error) {
     return { data: null, error: { message: error.message } };
@@ -404,7 +407,7 @@ const purgeDeletedRows = async (userId, table, filters) => {
 
 export async function deleteRows(table, filters) {
   const userId = await getUserId();
-  if (navigator.onLine) {
+  if (!(await mustQueueBehindPendingMutations(userId))) {
     const serverFilters = await rewriteFilters(userId, table, filters);
     let query = supabase.from(table).delete();
     for (const filter of serverFilters) {
@@ -423,6 +426,7 @@ export async function deleteRows(table, filters) {
   try {
     await markDeletedRows(userId, table, filters);
     await enqueueMutation(userId, { type: 'delete', table, filters });
+    if (navigator.onLine) void syncPendingMutations();
     return { data: null, error: null, offline: true };
   } catch (error) {
     return { data: null, error: { message: error.message } };
@@ -475,6 +479,13 @@ const getPendingMutations = async (userId) => {
   return requestResult(store.index('by-user').getAll(userId));
 };
 
+async function mustQueueBehindPendingMutations(userId) {
+  if (!navigator.onLine) return true;
+  if (!(await getPendingMutations(userId)).length) return false;
+  await syncPendingMutations();
+  return (await getPendingMutations(userId)).length > 0;
+}
+
 export async function warmOfflineCache() {
   const tables = ['customers', 'ceremonies', 'events', 'inventory', 'quotations', 'invoices'];
   const failures = [];
@@ -482,6 +493,8 @@ export async function warmOfflineCache() {
     const serverRows = [];
     for (let offset = 0; ; offset += CACHE_PAGE_SIZE) {
       const result = await readTable(table, {
+        orderBy: 'id',
+        ascending: true,
         offset,
         limit: CACHE_PAGE_SIZE,
       });
@@ -543,26 +556,25 @@ export async function syncPendingMutations() {
   syncPromise = (async () => {
     try {
       const userId = await getUserId();
-      const mutations = await getPendingMutations(userId);
-      if (!mutations.length) {
-        notifyStatus('online');
-        return;
-      }
       notifyStatus('syncing');
-      for (const mutation of mutations) {
-        try {
-          await applyMutation(userId, mutation);
-          await removeMutation(mutation.seq);
-        } catch (error) {
-          if (isNetworkError(error)) {
-            notifyStatus('offline-pending');
+      while (true) {
+        const mutations = await getPendingMutations(userId);
+        if (!mutations.length) break;
+        for (const mutation of mutations) {
+          try {
+            await applyMutation(userId, mutation);
+            await removeMutation(mutation.seq);
+          } catch (error) {
+            if (isNetworkError(error)) {
+              notifyStatus('offline-pending');
+              return;
+            }
+            notifyStatus('sync-error');
+            window.dispatchEvent(new CustomEvent('offline-sync-error', {
+              detail: `همگام‌سازی ${mutation.table} ناموفق بود: ${error.message}`,
+            }));
             return;
           }
-          notifyStatus('sync-error');
-          window.dispatchEvent(new CustomEvent('offline-sync-error', {
-            detail: `همگام‌سازی ${mutation.table} ناموفق بود: ${error.message}`,
-          }));
-          return;
         }
       }
       notifyStatus('online');
@@ -578,9 +590,14 @@ export async function syncPendingMutations() {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
+  const resumeSync = () => {
+    if (!navigator.onLine || document.visibilityState === 'hidden') return;
     notifyStatus('syncing');
     syncPendingMutations();
-  });
+  };
+  window.addEventListener('online', resumeSync);
+  window.addEventListener('focus', resumeSync);
+  window.addEventListener('pageshow', resumeSync);
+  document.addEventListener('visibilitychange', resumeSync);
   window.addEventListener('offline', () => notifyStatus('offline-pending'));
 }

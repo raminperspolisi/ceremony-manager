@@ -50,6 +50,12 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       setCustomerLoadError('');
     };
     fetchCustomers();
+    const refreshData = () => {
+      fetchOfficialInvoices();
+      fetchCustomers();
+    };
+    window.addEventListener('offline-data-updated', refreshData);
+    return () => window.removeEventListener('offline-data-updated', refreshData);
   }, []);
 
   const filteredCustomers = customers.filter((customer) => {

@@ -37,6 +37,15 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   useEffect(() => { fetchCustomers(); }, []);
 
+  useEffect(() => {
+    const refreshCustomerData = () => {
+      fetchCustomers();
+      if (selectedCustomer?.id) fetchCeremonies(selectedCustomer.id);
+    };
+    window.addEventListener('offline-data-updated', refreshCustomerData);
+    return () => window.removeEventListener('offline-data-updated', refreshCustomerData);
+  }, [selectedCustomer?.id]);
+
   async function fetchCustomers() {
     try {
       const { data, error: fetchError } = await readTable('customers', { orderBy: 'created_at', ascending: false });

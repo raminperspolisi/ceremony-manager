@@ -91,6 +91,7 @@ export default function App() {
   const [visitedSections, setVisitedSections] = useState(() => new Set(['customers']));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [offlineStatus, setOfflineStatus] = useState(getOfflineSyncStatus);
+  const [offlineCacheUserId, setOfflineCacheUserId] = useState(null);
   const [offlineSyncError, setOfflineSyncError] = useState('');
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
@@ -158,13 +159,55 @@ export default function App() {
   }, [session]);
 
   const sessionUserId = session?.user?.id;
+  const offlineCacheReady = offlineCacheUserId === sessionUserId;
 
   useEffect(() => {
-    if (!sessionUserId) return;
-    warmOfflineCache().catch((error) => {
+    if (!sessionUserId) return undefined;
+    let mounted = true;
+    warmOfflineCache().then(() => {
+      if (mounted) setOfflineCacheUserId(sessionUserId);
+    }).catch((error) => {
       console.error('آماده‌سازی داده‌های آفلاین ناموفق بود:', error.message);
       setOfflineSyncError(error.message);
     });
+    return () => { mounted = false; };
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId) return undefined;
+    let lastRefreshAt = Date.now();
+    let refreshing = false;
+    const refreshFromServer = async () => {
+      if (!navigator.onLine || document.visibilityState === 'hidden' || refreshing) return;
+      if (Date.now() - lastRefreshAt < 15000) return;
+      refreshing = true;
+      lastRefreshAt = Date.now();
+      try {
+        await syncPendingMutations();
+        await warmOfflineCache();
+      } catch (error) {
+        console.error('به‌روزرسانی داده‌ها ناموفق بود:', error.message);
+        setOfflineSyncError(error.message);
+      } finally {
+        refreshing = false;
+      }
+    };
+    const refreshAfterReconnect = () => {
+      lastRefreshAt = 0;
+      refreshFromServer();
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshFromServer();
+    };
+
+    window.addEventListener('online', refreshAfterReconnect);
+    window.addEventListener('focus', refreshFromServer);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('online', refreshAfterReconnect);
+      window.removeEventListener('focus', refreshFromServer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [sessionUserId]);
 
   useEffect(() => {
@@ -447,7 +490,9 @@ export default function App() {
 
         <div className="header-status">
           <span role="status" aria-live="polite" className={`offline-status offline-status-${offlineStatus}`}>
-            {offlineStatus === 'online' ? 'آنلاین' :
+            {offlineSyncError ? 'خطا در همگام‌سازی' :
+              !offlineCacheReady ? 'در حال آماده‌سازی آفلاین…' :
+              offlineStatus === 'online' ? 'آنلاین' :
               offlineStatus === 'syncing' ? 'در حال همگام‌سازی…' :
                 offlineStatus === 'sync-error' ? 'خطا در همگام‌سازی' :
                   offlineStatus === 'pending' ? 'تغییرات در صف همگام‌سازی' :

@@ -11,6 +11,8 @@ export default function FinancialReportPanel() {
 
   useEffect(() => {
     fetchOfficialInvoicesReport();
+    window.addEventListener('offline-data-updated', fetchOfficialInvoicesReport);
+    return () => window.removeEventListener('offline-data-updated', fetchOfficialInvoicesReport);
   }, []);
 
   async function fetchOfficialInvoicesReport() {

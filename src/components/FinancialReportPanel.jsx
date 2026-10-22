@@ -22,6 +22,8 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
 
   useEffect(() => {
     fetchFinancialData();
+    window.addEventListener('offline-data-updated', fetchFinancialData);
+    return () => window.removeEventListener('offline-data-updated', fetchFinancialData);
   }, []);
 
   async function fetchFinancialData() {

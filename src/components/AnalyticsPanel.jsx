@@ -161,6 +161,8 @@ export default function AnalyticsPanel() {
 
   useEffect(() => {
     fetchAnalyticsData();
+    window.addEventListener('offline-data-updated', fetchAnalyticsData);
+    return () => window.removeEventListener('offline-data-updated', fetchAnalyticsData);
   }, [fetchAnalyticsData]);
 
   const range = useMemo(

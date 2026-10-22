@@ -82,6 +82,12 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
   useEffect(() => {
     fetchCustomers();
     fetchInvoices();
+    const refreshData = () => {
+      fetchCustomers();
+      fetchInvoices();
+    };
+    window.addEventListener('offline-data-updated', refreshData);
+    return () => window.removeEventListener('offline-data-updated', refreshData);
   }, []);
 
   async function fetchCustomers() {
