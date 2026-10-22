@@ -181,6 +181,7 @@ export default function App() {
     if (!sessionUserId) return undefined;
     let lastRefreshAt = Date.now();
     let refreshing = false;
+    let realtimeRefreshTimer;
     const refreshFromServer = async () => {
       if (!navigator.onLine || document.visibilityState === 'hidden' || refreshing) return;
       if (Date.now() - lastRefreshAt < 15000) return;
@@ -196,6 +197,23 @@ export default function App() {
         refreshing = false;
       }
     };
+    const refreshAfterRealtimeChange = () => {
+      window.clearTimeout(realtimeRefreshTimer);
+      realtimeRefreshTimer = window.setTimeout(async () => {
+        if (!navigator.onLine || document.visibilityState === 'hidden' || refreshing) return;
+        refreshing = true;
+        lastRefreshAt = Date.now();
+        try {
+          await syncPendingMutations();
+          await warmOfflineCache();
+        } catch (error) {
+          console.error('تازه‌سازی تغییرات زنده ناموفق بود:', error.message);
+          setOfflineSyncError(error.message);
+        } finally {
+          refreshing = false;
+        }
+      }, 300);
+    };
     const refreshAfterReconnect = () => {
       lastRefreshAt = 0;
       refreshFromServer();
@@ -208,11 +226,22 @@ export default function App() {
     window.addEventListener('focus', refreshFromServer);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     const refreshInterval = window.setInterval(refreshFromServer, 30000);
+    const channel = supabase.channel(`live-data-${sessionUserId}`);
+    ['customers', 'ceremonies', 'events', 'inventory', 'quotations', 'invoices'].forEach((table) => {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table }, refreshAfterRealtimeChange);
+    });
+    channel.subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.error(`اشتراک همگام‌سازی زنده ناموفق بود: ${status}`);
+      }
+    });
     return () => {
+      window.clearTimeout(realtimeRefreshTimer);
       window.clearInterval(refreshInterval);
       window.removeEventListener('online', refreshAfterReconnect);
       window.removeEventListener('focus', refreshFromServer);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
+      void supabase.removeChannel(channel);
     };
   }, [sessionUserId]);
 

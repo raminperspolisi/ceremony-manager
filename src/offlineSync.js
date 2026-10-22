@@ -1,4 +1,4 @@
-import { supabase, SUPABASE_URL } from './supabaseClient';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabaseClient';
 
 const DATABASE_NAME = 'ceremony-manager-offline';
 const DATABASE_VERSION = 1;
@@ -86,11 +86,12 @@ const updateNetworkStatus = async () => {
   try {
     const controller = new AbortController();
     timeoutId = setTimeout(() => controller.abort(), 4000);
-    await fetch(SUPABASE_URL, {
-      mode: 'no-cors',
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/health`, {
       cache: 'no-store',
       signal: controller.signal,
+      headers: { apikey: SUPABASE_ANON_KEY },
     });
+    if (!response.ok) throw new Error(`Supabase health check returned ${response.status}.`);
     clearTimeout(timeoutId);
     notifyStatus('online');
   } catch {
@@ -671,5 +672,5 @@ if (typeof window !== 'undefined') {
   });
   window.setInterval(() => {
     if (document.visibilityState === 'visible') void resumeSync();
-  }, 15000);
+  }, 5000);
 }

@@ -109,8 +109,8 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       if (ceremonyError) throw ceremonyError;
       const { error: e2 } = await deleteRows('customers', [{ column: 'id', operator: 'eq', value: id }]);
       if (e2) throw e2;
-      if (selectedCustomer?.id === id) { setSelectedCustomer(null); setCeremonies([]); }
-      fetchCustomers();
+      setCustomers((currentCustomers) => currentCustomers.filter((customer) => String(customer.id) !== String(id)));
+      if (String(selectedCustomer?.id) === String(id)) { setSelectedCustomer(null); setCeremonies([]); }
     } catch (err) { alert('خطا در حذف: ' + err.message); }
   }
 
