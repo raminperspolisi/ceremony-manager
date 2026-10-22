@@ -203,7 +203,9 @@ export default function App() {
     window.addEventListener('online', refreshAfterReconnect);
     window.addEventListener('focus', refreshFromServer);
     document.addEventListener('visibilitychange', refreshWhenVisible);
+    const refreshInterval = window.setInterval(refreshFromServer, 30000);
     return () => {
+      window.clearInterval(refreshInterval);
       window.removeEventListener('online', refreshAfterReconnect);
       window.removeEventListener('focus', refreshFromServer);
       document.removeEventListener('visibilitychange', refreshWhenVisible);

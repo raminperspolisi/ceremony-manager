@@ -607,8 +607,11 @@ export async function syncPendingMutations() {
               return;
             }
             notifyStatus('sync-error');
+            const migrationHint = /offline_sync_id|on conflict.*unique/i.test(error.message || '')
+              ? ' در Supabase باید migration supabase/migrations/20261022000000_offline_sync_ids.sql اجرا شود.'
+              : '';
             window.dispatchEvent(new CustomEvent('offline-sync-error', {
-              detail: `همگام‌سازی ${mutation.table} ناموفق بود: ${error.message}`,
+              detail: `همگام‌سازی ${mutation.table} ناموفق بود: ${error.message}${migrationHint}`,
             }));
             return;
           }
@@ -627,25 +630,32 @@ export async function syncPendingMutations() {
 }
 
 if (typeof window !== 'undefined') {
-  const resumeSync = async () => {
+  const resumeSync = async (retryPending = false) => {
     if (!navigator.onLine || document.visibilityState === 'hidden') return;
+    const previousStatus = syncStatus;
     await updateNetworkStatus();
     if (syncStatus === 'offline-pending' || syncStatus === 'offline') return;
-    notifyStatus('syncing');
-    void syncPendingMutations();
+    if ((retryPending || previousStatus === 'offline-pending') && activeUserId) {
+      try {
+        if ((await getPendingMutations(activeUserId)).length) void syncPendingMutations();
+      } catch (error) {
+        notifyStatus('sync-error');
+        window.dispatchEvent(new CustomEvent('offline-sync-error', { detail: error.message }));
+      }
+    }
   };
   window.addEventListener('online', () => {
-    void resumeSync();
+    void resumeSync(true);
   });
   window.addEventListener('focus', () => {
-    void resumeSync();
+    void resumeSync(true);
   });
   window.addEventListener('pageshow', () => {
-    void resumeSync();
+    void resumeSync(true);
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      void resumeSync();
+      void resumeSync(true);
     }
   });
   window.addEventListener('offline', () => notifyStatus('offline-pending'));
@@ -653,6 +663,6 @@ if (typeof window !== 'undefined') {
     void updateNetworkStatus();
   });
   window.setInterval(() => {
-    if (document.visibilityState === 'visible') void updateNetworkStatus();
+    if (document.visibilityState === 'visible') void resumeSync();
   }, 15000);
 }
