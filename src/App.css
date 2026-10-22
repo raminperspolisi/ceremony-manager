@@ -2519,18 +2519,47 @@ textarea:focus-visible {
 
 @media (max-width: 900px) {
   .app-header {
-    grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
-    gap: 6px;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    grid-template-rows: auto auto;
+    row-gap: 8px;
     padding: 8px 10px;
   }
 
+  .app-header .mobile-menu-toggle {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   .app-header .brand {
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+    max-width: 100%;
     gap: 6px;
+    transform: none;
+  }
+
+  .app-header .header-title {
+    min-width: 0;
+  }
+
+  .app-header .brand-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .app-header .header-status {
-    gap: 5px;
-    padding: 4px 6px;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    width: max-content;
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 5px 10px;
   }
 
   .sidebar {
