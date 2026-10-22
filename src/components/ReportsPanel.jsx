@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { readTable } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 
 export default function FinancialReportPanel() {
@@ -15,7 +15,7 @@ export default function FinancialReportPanel() {
 
   async function fetchOfficialInvoicesReport() {
     // خواندن داده‌ها فقط از فاکتورهای رسمی (جدول invoices)
-    const { data, error } = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
+    const { data, error } = await readTable('invoices', { orderBy: 'created_at', ascending: false });
     
     if (error) {
       console.error("خطا در دریافت فاکتورهای رسمی:", error.message);

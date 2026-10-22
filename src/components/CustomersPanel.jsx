@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 
@@ -39,8 +39,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   async function fetchCustomers() {
     try {
-      const { data, error: fetchError } = await supabase
-        .from('customers').select('*').order('created_at', { ascending: false });
+      const { data, error: fetchError } = await readTable('customers', { orderBy: 'created_at', ascending: false });
       if (fetchError) throw fetchError;
       if (data) setCustomers(data);
     } catch (err) {
@@ -50,9 +49,11 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   async function fetchCeremonies(customerId) {
     try {
-      const { data, error: fetchError } = await supabase
-        .from('ceremonies').select('*').eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
+      const { data, error: fetchError } = await readTable('ceremonies', {
+        filters: [{ column: 'customer_id', operator: 'eq', value: customerId }],
+        orderBy: 'created_at',
+        ascending: false,
+      });
       if (fetchError) throw fetchError;
       setCeremonies(data || []);
     } catch (err) {
@@ -75,12 +76,12 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       };
 
       if (editingId) {
-        const { error: e2 } = await supabase.from('customers').update(customerData).eq('id', editingId);
+        const { error: e2 } = await updateRows('customers', customerData, [{ column: 'id', operator: 'eq', value: editingId }]);
         if (e2) throw e2;
         alert('اطلاعات مشتری ویرایش شد');
         setEditingId(null);
       } else {
-        const { data, error: e2 } = await supabase.from('customers').insert([customerData]).select();
+        const { error: e2 } = await insertRows('customers', [customerData]);
         if (e2) throw e2;
         alert('مشتری ثبت شد');
       }
@@ -95,8 +96,9 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
     e.stopPropagation();
     if (!window.confirm('این مشتری و مراسم‌هایش حذف شوند؟')) return;
     try {
-      await supabase.from('ceremonies').delete().eq('customer_id', id);
-      const { error: e2 } = await supabase.from('customers').delete().eq('id', id);
+      const { error: ceremonyError } = await deleteRows('ceremonies', [{ column: 'customer_id', operator: 'eq', value: id }]);
+      if (ceremonyError) throw ceremonyError;
+      const { error: e2 } = await deleteRows('customers', [{ column: 'id', operator: 'eq', value: id }]);
       if (e2) throw e2;
       if (selectedCustomer?.id === id) { setSelectedCustomer(null); setCeremonies([]); }
       fetchCustomers();
@@ -159,15 +161,16 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       };
 
       if (editingCeremonyId) {
-        const { error: e2 } = await supabase.from('ceremonies').update(cerData).eq('id', editingCeremonyId);
+        const { error: e2 } = await updateRows('ceremonies', cerData, [{ column: 'id', operator: 'eq', value: editingCeremonyId }]);
         if (e2) throw e2;
       } else {
         // درج در مراسم‌ها
-        const { error: e2 } = await supabase.from('ceremonies').insert([cerData]);
+        const { error: e2 } = await insertRows('ceremonies', [cerData]);
         if (e2) throw e2;
 
         // درج هم‌زمان در جدول events تقویم
-        await supabase.from('events').insert([eventData]);
+        const { error: eventError } = await insertRows('events', [eventData]);
+        if (eventError) throw eventError;
       }
 
       setEditingCeremonyId(null); setCerDate(''); setCerGuests(''); setCerBudget(''); setCerNotes('');
@@ -188,7 +191,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   async function handleDeleteCeremony(id) {
     if (!window.confirm('این مراسم حذف شود؟')) return;
     try {
-      const { error: e2 } = await supabase.from('ceremonies').delete().eq('id', id);
+      const { error: e2 } = await deleteRows('ceremonies', [{ column: 'id', operator: 'eq', value: id }]);
       if (e2) throw e2;
       fetchCeremonies(selectedCustomer.id);
     } catch (err) { alert('خطا در حذف مراسم: ' + err.message); }

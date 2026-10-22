@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'jalali-moment';
-import { supabase } from '../supabaseClient';
+import { readTable } from '../offlineSync';
 
 const PERIODS = [
   { value: 'month', label: 'ماه جاری' },
@@ -147,7 +147,7 @@ export default function AnalyticsPanel() {
       setError('');
     }
     try {
-      const invoiceResult = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
+      const invoiceResult = await readTable('invoices', { orderBy: 'created_at', ascending: false });
       if (invoiceResult.error) throw invoiceResult.error;
       setLoadFailed(false);
       setInvoices(invoiceResult.data || []);

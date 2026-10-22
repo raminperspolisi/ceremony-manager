@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { deleteRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 
@@ -39,7 +39,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   useEffect(() => {
     fetchOfficialInvoices();
     const fetchCustomers = async () => {
-      const { data, error } = await supabase.from('customers').select('id, "Full name", phone, address');
+      const { data, error } = await readTable('customers', { columns: 'id, "Full name", phone, address' });
       if (error) {
         setCustomerLoadError(`بارگذاری فهرست مشتریان ناموفق بود: ${error.message}`);
         return;
@@ -61,7 +61,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const calcRemaining = (total, paid) => Math.max(0, Number(total || 0) - Number(paid || 0));
 
   async function fetchOfficialInvoices() {
-    const { data, error } = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
+    const { data, error } = await readTable('invoices', { orderBy: 'created_at', ascending: false });
     if (data) setInvoices(data);
     if (error) console.error("Error fetching invoices:", error.message);
     setSelectedIds([]);
@@ -83,7 +83,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
 
   const handleDelete = async (id) => {
     if (!window.confirm("آیا از حذف این فاکتور رسمی مطمئن هستید؟")) return;
-    const { error } = await supabase.from('invoices').delete().eq('id', id);
+    const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'eq', value: id }]);
     if (error) {
       alert("خطا در حذف فاکتور: " + error.message);
     } else {
@@ -95,7 +95,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     if (selectedIds.length === 0) return;
     if (!window.confirm(`آیا از حذف ${formatDisplay(selectedIds.length)} فاکتور انتخاب‌شده مطمئن هستید؟`)) return;
 
-    const { error } = await supabase.from('invoices').delete().in('id', selectedIds);
+    const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'in', value: selectedIds }]);
     if (error) {
       alert("خطا در حذف گروهی فاکتورها: " + error.message);
     } else {
@@ -153,10 +153,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       idx === itemIndex ? { ...item, done: !item.done } : item
     );
 
-    const { error } = await supabase
-      .from('invoices')
-      .update({ checklist: updatedChecklist })
-      .eq('id', inv.id);
+    const { error } = await updateRows('invoices', { checklist: updatedChecklist }, [{ column: 'id', operator: 'eq', value: inv.id }]);
 
     if (error) {
       alert("خطا در بروزرسانی چک‌لیست: " + error.message);
@@ -174,10 +171,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       ? inv.checklist
       : getDefaultChecklist();
     const updatedChecklist = [...currentChecklist, { title, done: false }];
-    const { error } = await supabase
-      .from('invoices')
-      .update({ checklist: updatedChecklist })
-      .eq('id', inv.id);
+    const { error } = await updateRows('invoices', { checklist: updatedChecklist }, [{ column: 'id', operator: 'eq', value: inv.id }]);
 
     if (error) {
       alert("خطا در افزودن کار به چک‌لیست: " + error.message);
@@ -292,9 +286,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       return sum + (q * p);
     }, 0);
 
-    const { error } = await supabase
-      .from('invoices')
-      .update({
+    const { error } = await updateRows('invoices', {
         customer_name: customerName,
         customer_phone: customerPhone,
         order_date: orderDate,
@@ -304,8 +296,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
         total_price: newTotalPrice,
         paid_amount: Number(paidAmount || 0),
         payment_status: paymentStatus
-      })
-      .eq('id', id);
+      }, [{ column: 'id', operator: 'eq', value: id }]);
 
     if (error) {
       alert("خطا در ذخیره اطلاعات: " + error.message);

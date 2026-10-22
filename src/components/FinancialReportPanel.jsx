@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { readTable, updateRows } from '../offlineSync';
 import FormattedNumberInput from './FormattedNumberInput';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fa-IR');
@@ -26,10 +26,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
 
   async function fetchFinancialData() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('invoices')
-      .select('*')
-      .order('created_at', { ascending: true });
+    const { data, error } = await readTable('invoices', { orderBy: 'created_at', ascending: true });
       
     if (data) {
       setInvoices(data);
@@ -62,13 +59,10 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
       newTotal += p * q;
     });
 
-    const { error } = await supabase
-      .from('invoices')
-      .update({ 
+    const { error } = await updateRows('invoices', {
         items_data: updatedItems,
         total_price: newTotal 
-      })
-      .eq('id', selectedInvoice.id);
+      }, [{ column: 'id', operator: 'eq', value: selectedInvoice.id }]);
 
     if (error) {
       alert("خطا در ذخیره‌سازی آیتم جدید: " + error.message);
@@ -100,13 +94,10 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
       newTotal += p * q;
     });
 
-    const { error } = await supabase
-      .from('invoices')
-      .update({ 
+    const { error } = await updateRows('invoices', {
         items_data: updatedItems,
         total_price: newTotal 
-      })
-      .eq('id', selectedInvoice.id);
+      }, [{ column: 'id', operator: 'eq', value: selectedInvoice.id }]);
 
     if (error) {
       alert("خطا در حذف آیتم: " + error.message);

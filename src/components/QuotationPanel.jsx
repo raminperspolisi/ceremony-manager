@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatDisplay, formatPersianDigits } from '../styles';
-import { supabase } from '../supabaseClient';
+import { deleteRows, insertRows, readTable } from '../offlineSync';
 import FormattedNumberInput from './FormattedNumberInput';
 
 const win95Style = {
@@ -86,10 +86,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
   async function fetchCustomers() {
     try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('Full name', { ascending: true });
+      const { data, error } = await readTable('customers', { orderBy: 'Full name', ascending: true });
       
       if (error) throw error;
       if (data) setCustomers(data);
@@ -105,9 +102,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     }
     
     try {
-      const { error } = await supabase
-        .from('customers')
-        .insert([{ 
+      const { error } = await insertRows('customers', [{
           "Full name": newCustomerName.trim(), 
           "phone": newCustomerPhone.trim() 
         }]);
@@ -129,15 +124,17 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
   async function fetchInvoices() {
     try {
-      const { data: quotations } = await supabase
-        .from('quotations')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data: quotations, error: quotationError } = await readTable('quotations', {
+        orderBy: 'created_at',
+        ascending: false,
+      });
+      if (quotationError) throw quotationError;
 
-      const { data: officialInvoices } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data: officialInvoices, error: invoiceError } = await readTable('invoices', {
+        orderBy: 'created_at',
+        ascending: false,
+      });
+      if (invoiceError) throw invoiceError;
       
       const combined = [
         ...(quotations || []).map(item => ({ ...item, type: 'quotation' })),
@@ -196,7 +193,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
         };
       });
 
-      const { error } = await supabase.from("quotations").insert([
+      const { error } = await insertRows("quotations", [
         { 
           customer_name: selectedCustomer["Full name"], 
           items_json: itemsPayload, 
@@ -307,7 +304,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     
     const itemsToSave = inv.items_json || inv.items_data || [];
 
-    const { error } = await supabase.from("invoices").insert([{ 
+    const { error } = await insertRows("invoices", [{
       customer_name: inv.customer_name, 
       total_price: inv.total_price, 
       items_data: itemsToSave, 
@@ -360,7 +357,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     if (!window.confirm(`آیا از حذف این ${inv.type === 'official' ? 'فاکتور رسمی' : 'پیش‌فاکتور'} اطمینان دارید؟`)) return;
     
     const table = inv.type === 'official' ? 'invoices' : 'quotations';
-    const { error } = await supabase.from(table).delete().eq("id", inv.id);
+    const { error } = await deleteRows(table, [{ column: 'id', operator: 'eq', value: inv.id }]);
     
     if (error) {
       alert("خطا در حذف: " + error.message);
@@ -393,11 +390,11 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
     try {
       if (quotationIdsToDelete.length > 0) {
-        const { error } = await supabase.from('quotations').delete().in('id', quotationIdsToDelete);
+        const { error } = await deleteRows('quotations', [{ column: 'id', operator: 'in', value: quotationIdsToDelete }]);
         if (error) throw error;
       }
       if (officialIdsToDelete.length > 0) {
-        const { error } = await supabase.from('invoices').delete().in('id', officialIdsToDelete);
+        const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'in', value: officialIdsToDelete }]);
         if (error) throw error;
       }
       alert("فاکتورهای انتخاب‌شده با موفقیت حذف شدند.");

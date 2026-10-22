@@ -11,6 +11,14 @@ import CalendarPanel from './components/CalendarPanel'; // 📅 تقویم مر�
 import TutorialPanel from './components/TutorialPanel';
 import ContactPanel from './components/ContactPanel';
 import { formatDisplay } from './styles';
+import {
+  getOfflineSyncStatus,
+  readTable,
+  setOfflineUser,
+  subscribeOfflineSyncStatus,
+  syncPendingMutations,
+  warmOfflineCache,
+} from './offlineSync';
 
 const DEFAULT_BUSINESS_NAME = 'تشریفات آژو';
 const DEFAULT_LOGO_URL = '/azho-logo.png';
@@ -82,6 +90,8 @@ export default function App() {
   const [activeSection, setActiveSection] = useState('customers');
   const [visitedSections, setVisitedSections] = useState(() => new Set(['customers']));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [offlineStatus, setOfflineStatus] = useState(getOfflineSyncStatus);
+  const [offlineSyncError, setOfflineSyncError] = useState('');
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const businessName = session?.user?.user_metadata?.business_name?.trim() || DEFAULT_BUSINESS_NAME;
@@ -95,6 +105,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (mounted) {
         setSession(nextSession);
+        setOfflineUser(nextSession?.user?.id);
         setAuthError('');
         setAuthReady(true);
         if (!nextSession) {
@@ -108,6 +119,7 @@ export default function App() {
       if (!mounted) return;
       if (error) setAuthError('خطا در بررسی ورود: ' + error.message);
       setSession(data?.session ?? null);
+      setOfflineUser(data?.session?.user?.id);
       setAuthReady(true);
     });
 
@@ -117,10 +129,23 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = subscribeOfflineSyncStatus(setOfflineStatus);
+    const handleSyncError = (event) => setOfflineSyncError(event.detail || 'همگام‌سازی ناموفق بود.');
+    const clearSyncError = () => setOfflineSyncError('');
+    window.addEventListener('offline-sync-error', handleSyncError);
+    window.addEventListener('online', clearSyncError);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('offline-sync-error', handleSyncError);
+      window.removeEventListener('online', clearSyncError);
+    };
+  }, []);
+
   // تابع دریافت داده‌ها
   const fetchData = async () => {
     try {
-      const { data, error } = await supabase.from('inventory').select('*');
+      const { data, error } = await readTable('inventory');
       if (error) throw error;
       setInventory(data || []);
     } catch (error) {
@@ -131,6 +156,24 @@ export default function App() {
   useEffect(() => {
     if (session) fetchData();
   }, [session]);
+
+  const sessionUserId = session?.user?.id;
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+    warmOfflineCache().catch((error) => {
+      console.error('آماده‌سازی داده‌های آفلاین ناموفق بود:', error.message);
+      setOfflineSyncError(error.message);
+    });
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    const refreshInventoryCache = () => {
+      if (sessionUserId) fetchData();
+    };
+    window.addEventListener('offline-data-updated', refreshInventoryCache);
+    return () => window.removeEventListener('offline-data-updated', refreshInventoryCache);
+  }, [sessionUserId]);
 
   useEffect(() => {
     const handleFunctionKey = (event) => {
@@ -391,6 +434,13 @@ export default function App() {
         </div>
 
         <div className="header-status">
+          <span role="status" aria-live="polite" className={`offline-status offline-status-${offlineStatus}`}>
+            {offlineStatus === 'online' ? 'آنلاین' :
+              offlineStatus === 'syncing' ? 'در حال همگام‌سازی…' :
+                offlineStatus === 'sync-error' ? 'خطا در همگام‌سازی' :
+                  offlineStatus === 'pending' ? 'تغییرات در صف همگام‌سازی' :
+                    'آفلاین؛ تغییرات ذخیره می‌شوند'}
+          </span>
           <button
             type="button"
             className="mobile-menu-toggle"
@@ -413,6 +463,14 @@ export default function App() {
           </button>
         </div>
       </header>
+      {offlineSyncError && (
+        <div role="alert" style={{ margin: '10px 20px', padding: '10px 12px', borderRadius: 8, color: '#92400e', background: '#fef3c7', fontSize: 12 }}>
+          {offlineSyncError} تغییرات محلی نگه داشته شده‌اند و با اتصال بعدی دوباره تلاش می‌شود.
+          <button type="button" onClick={() => { setOfflineSyncError(''); syncPendingMutations(); }} style={{ marginRight: 8 }}>
+            تلاش دوباره
+          </button>
+        </div>
+      )}
 
       {profileOpen && (
         <div

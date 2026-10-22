@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { deleteRows, insertRows, updateRows } from '../offlineSync';
 import { formatDisplay } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 
@@ -31,7 +31,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('inventory').insert([{
+      const { error } = await insertRows('inventory', [{
         title: title.trim(),
         item_type: itemType,
         base_cost: baseCost === '' ? 0 : parseFloat(baseCost),
@@ -60,7 +60,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
   const handleDelete = async (id) => {
     if (!window.confirm('آیا از حذف این آیتم اطمینان دارید؟')) return;
     try {
-      const { error } = await supabase.from('inventory').delete().eq('id', id);
+      const { error } = await deleteRows('inventory', [{ column: 'id', operator: 'eq', value: id }]);
       if (error) throw error;
       refresh();
     } catch (err) {
@@ -92,10 +92,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
         price_level3: editForm.price_level3 === '' ? 0 : parseFloat(editForm.price_level3)
       };
 
-      const { error } = await supabase
-        .from('inventory')
-        .update(updatedData)
-        .eq('id', id);
+      const { error } = await updateRows('inventory', updatedData, [{ column: 'id', operator: 'eq', value: id }]);
 
       if (error) throw error;
 

@@ -462,6 +462,33 @@ button {
   font-weight: 700;
 }
 
+.offline-status {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.offline-status-offline,
+.offline-status-offline-pending,
+.offline-status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.offline-status-syncing {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.offline-status-sync-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .sidebar-note {
   display: flex;
   align-items: flex-start;

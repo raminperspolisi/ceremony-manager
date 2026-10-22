@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { readTable } from '../offlineSync';
 import moment from 'jalali-moment';
 import html2canvas from 'html2canvas';
 import { formatPersianDigits } from '../styles';
@@ -205,11 +205,12 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
     try {
       setLoading(true);
       setLoadError('');
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(offset, offset + INVOICE_PAGE_SIZE - 1);
+      const { data, error } = await readTable('invoices', {
+        orderBy: 'created_at',
+        ascending: false,
+        offset,
+        limit: INVOICE_PAGE_SIZE,
+      });
 
       if (error) throw error;
       const invoices = data || [];
@@ -224,6 +225,19 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
 
   useEffect(() => {
     fetchUpcomingCeremonies();
+  }, [fetchUpcomingCeremonies]);
+
+  useEffect(() => {
+    const refreshWhenOnline = () => {
+      if (navigator.onLine) fetchUpcomingCeremonies();
+    };
+    const refreshAfterSync = () => fetchUpcomingCeremonies();
+    window.addEventListener('online', refreshWhenOnline);
+    window.addEventListener('offline-data-updated', refreshAfterSync);
+    return () => {
+      window.removeEventListener('online', refreshWhenOnline);
+      window.removeEventListener('offline-data-updated', refreshAfterSync);
+    };
   }, [fetchUpcomingCeremonies]);
 
   const prepareInvoiceImage = async (invoice) => {

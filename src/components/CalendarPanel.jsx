@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { supabase } from "../supabaseClient";
+import { insertRows, readTable, updateRows } from "../offlineSync";
 import { formatPersianDigits } from "../styles";
 import moment from "jalali-moment";
 
@@ -118,10 +118,7 @@ export default function CalendarPanel() {
     setLoading(true);
     setError("");
     try {
-      const { data, error: err } = await supabase
-        .from("events")
-        .select("*")
-        .order("event_date", { ascending: true });
+      const { data, error: err } = await readTable("events", { orderBy: "event_date", ascending: true });
       if (err) throw err;
       setEvents(data || []);
     } catch (e) {
@@ -131,16 +128,11 @@ export default function CalendarPanel() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
-
   const fetchInvoices = useCallback(async () => {
     try {
-      const { data, error: err } = await supabase
-        .from("invoices")
-        .select("*")
-        .not("ceremony_date", "is", null);
+      const { data, error: err } = await readTable("invoices", {
+        filters: [{ column: "ceremony_date", operator: "notNull" }],
+      });
       if (err) throw err;
       setInvoices(data || []);
     } catch (err) {
@@ -149,23 +141,16 @@ export default function CalendarPanel() {
   }, []);
 
   useEffect(() => {
-    fetchInvoices();
-    const invoiceSubscription = supabase
-      .channel("calendar-invoice-dates")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "invoices" },
-        fetchInvoices,
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(invoiceSubscription);
+    const refreshOnFocus = () => {
+      if (navigator.onLine) fetchInvoices();
     };
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
   }, [fetchInvoices]);
 
   const fetchCustomers = useCallback(async () => {
     try {
-      const { data, error: err } = await supabase.from("customers").select("id, \"Full name\", phone");
+      const { data, error: err } = await readTable("customers", { columns: 'id, "Full name", phone' });
       if (err) throw err;
       setCustomers(data || []);
     } catch (err) {
@@ -184,6 +169,18 @@ export default function CalendarPanel() {
 
   useEffect(() => {
     refreshCalendarData();
+  }, [refreshCalendarData]);
+
+  useEffect(() => {
+    const refreshWhenOnline = () => {
+      if (navigator.onLine) refreshCalendarData();
+    };
+    window.addEventListener("online", refreshWhenOnline);
+    window.addEventListener("offline-data-updated", refreshCalendarData);
+    return () => {
+      window.removeEventListener("online", refreshWhenOnline);
+      window.removeEventListener("offline-data-updated", refreshCalendarData);
+    };
   }, [refreshCalendarData]);
 
   // کلیک روی تقویم گرافیکی برای انتخاب تاریخ فرم
@@ -235,9 +232,9 @@ export default function CalendarPanel() {
 
       let res;
       if (editingId) {
-        res = await supabase.from("events").update(payload).eq("id", editingId).select();
+        res = await updateRows("events", payload, [{ column: "id", operator: "eq", value: editingId }]);
       } else {
-        res = await supabase.from("events").insert([payload]).select();
+        res = await insertRows("events", [payload]);
       }
       if (res.error) throw res.error;
 

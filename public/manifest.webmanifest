@@ -1,0 +1,20 @@
+{
+  "name": "مدیریت مراسم آژو",
+  "short_name": "مدیریت آژو",
+  "description": "مدیریت مشتریان، انبار، فاکتورها و مراسم‌ها",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#28645a",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
