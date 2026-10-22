@@ -3,6 +3,7 @@ import { supabase, SUPABASE_URL } from './supabaseClient';
 const DATABASE_NAME = 'ceremony-manager-offline';
 const DATABASE_VERSION = 1;
 const CACHE_PAGE_SIZE = 1000;
+const READ_TIMEOUT_MS = 8000;
 const PENDING_ID_PREFIX = 'offline:';
 
 let databasePromise;
@@ -72,7 +73,7 @@ const isNetworkError = (error) =>
   !navigator.onLine ||
   error?.name === 'TypeError' ||
   error?.name === 'AbortError' ||
-  /failed to fetch|network|offline|load failed|fetch failed|timed? ?out/i.test(error?.message || '');
+  /abort|failed to fetch|network|offline|load failed|fetch failed|timed? ?out/i.test(error?.message || '');
 
 const updateNetworkStatus = async () => {
   if (syncPromise) return;
@@ -229,7 +230,17 @@ export async function readTable(table, options = {}) {
   try {
     const userId = await getUserId();
     if (navigator.onLine) {
-      const { data, error } = await buildQuery(table, options);
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+      let result;
+      try {
+        result = await buildQuery(table, options).abortSignal(controller.signal);
+      } catch (error) {
+        result = { data: null, error };
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+      const { data, error } = result;
       if (!error) {
         await cacheRows(userId, table, data || []);
         const cachedEntries = await getCachedEntries(userId, table);
@@ -246,6 +257,7 @@ export async function readTable(table, options = {}) {
         return { data: data || [], error: null, offline: false };
       }
       if (!isNetworkError(error)) return { data: null, error };
+      notifyStatus('offline-pending');
     }
 
     let rows = await getCachedRows(userId, table);
