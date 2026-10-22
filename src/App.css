@@ -2302,11 +2302,6 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.inventory-action-button.select {
-  border-color: #22c55e;
-}
-
-.inventory-action-button.select.selected,
 .inventory-action-button.save {
   border-color: #16a34a;
 }
@@ -3108,19 +3103,67 @@ textarea:focus-visible {
     white-space: normal;
   }
 
-  .inventory-table th:first-child,
-  .inventory-table td:first-child {
-    width: 34px;
+  .inventory-table .inventory-row-actions {
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+    gap: 4px;
   }
 
-  .inventory-table th:nth-child(2),
-  .inventory-table td:nth-child(2) {
-    width: 27%;
+  .inventory-table .inventory-col-index {
+    width: 24px;
+    text-align: center;
   }
 
-  .inventory-table th:last-child,
-  .inventory-table td:last-child {
-    width: 96px;
+  .inventory-table .inventory-col-title {
+    width: 30%;
+    line-height: 1.6;
+  }
+
+  .inventory-table.has-cost-column .inventory-col-title {
+    width: 20%;
+  }
+
+  .inventory-table .inventory-col-type {
+    width: 46px;
+    text-align: center;
+  }
+
+  .inventory-table .inventory-col-type span {
+    display: inline-block;
+    padding: 2px 4px;
+    font-size: 9px !important;
+    white-space: nowrap;
+  }
+
+  .inventory-table .inventory-col-cost,
+  .inventory-table .inventory-col-price {
+    white-space: nowrap;
+  }
+
+  .inventory-table .inventory-col-cost {
+    width: 22%;
+  }
+
+  .inventory-table .inventory-col-actions {
+    width: 46px;
+  }
+
+  .inventory-table .inventory-currency {
+    display: none;
+  }
+
+  .inventory-table .inventory-col-cost input,
+  .inventory-table .inventory-col-price input {
+    width: 100% !important;
+    padding: 3px 2px !important;
+    font-size: 10px !important;
+  }
+
+  .inventory-table .inventory-col-type select {
+    width: 100% !important;
+    max-width: 46px;
+    padding: 2px 1px !important;
+    font-size: 9px !important;
   }
 
   .quotation-items-table-wrap {

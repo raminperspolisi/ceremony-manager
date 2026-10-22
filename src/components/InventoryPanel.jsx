@@ -249,15 +249,15 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
         </div>
         
         <div className="inventory-table-wrap" style={{ overflowX: 'auto' }}>
-          <table className="inventory-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
+          <table className={`inventory-table${showCostPrice ? ' has-cost-column' : ''}`} style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
             <thead>
               <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
-                <th style={{ padding: '8px 10px' }}>ردیف</th>
-                <th style={{ padding: '8px 10px' }}>عنوان کالا / خدمت</th>
-                <th style={{ padding: '8px 10px' }}>نوع کالا</th>
-                {showCostPrice && <th style={{ padding: '8px 10px', color: '#b91c1c' }}>قیمت خرید</th>}
-                <th style={{ padding: '8px 10px' }}>نرخ سطح {displayedPriceLevel}</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center' }}>عملیات</th>
+                <th className="inventory-col-index" style={{ padding: '8px 10px' }}>ردیف</th>
+                <th className="inventory-col-title" style={{ padding: '8px 10px' }}>عنوان کالا / خدمت</th>
+                <th className="inventory-col-type" style={{ padding: '8px 10px' }}>نوع کالا</th>
+                {showCostPrice && <th className="inventory-col-cost" style={{ padding: '8px 10px', color: '#b91c1c' }}>قیمت خرید</th>}
+                <th className="inventory-col-price" style={{ padding: '8px 10px' }}>نرخ سطح {displayedPriceLevel}</th>
+                <th className="inventory-col-actions" style={{ padding: '8px 10px', textAlign: 'center' }}>عملیات</th>
               </tr>
             </thead>
             <tbody>
@@ -284,9 +284,11 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                       }}
                       title="کلیک برای افزودن به فاکتور"
                     >
-                      <td style={{ padding: '8px 10px', color: '#64748b' }}>{formatDisplay(index + 1)}</td>
+                      <td className="inventory-col-index" style={{ padding: '8px 10px', color: isSelected ? '#15803d' : '#64748b', fontWeight: isSelected ? 'bold' : 'normal' }}>
+                        {isSelected ? '✓' : formatDisplay(index + 1)}
+                      </td>
                       
-                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', fontWeight: '500', color: '#1e293b' }}>
+                      <td className="inventory-col-title" onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', fontWeight: '500', color: '#1e293b' }}>
                         {isEditing ? (
                           <input type="text" value={editForm.title} onChange={(e) => setEditForm({...editForm, title: e.target.value})} style={{ width: '100%', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                         ) : (
@@ -294,7 +296,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                         )}
                       </td>
 
-                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px' }}>
+                      <td className="inventory-col-type" onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px' }}>
                         {isEditing ? (
                           <select value={editForm.item_type} onChange={(e) => setEditForm({...editForm, item_type: e.target.value})} style={{ padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }}>
                             <option value="sale">فروشی</option>
@@ -315,24 +317,24 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                       </td>
 
                       {showCostPrice && (
-                        <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#b91c1c', fontWeight: 'bold' }}>
+                        <td className="inventory-col-cost" onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#b91c1c', fontWeight: 'bold' }}>
                           {isEditing ? (
                             <FormattedNumberInput value={editForm.base_cost} onValueChange={(value) => setEditForm({...editForm, base_cost: value})} emptyWhenZero style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                           ) : (
-                            `${formatDisplay(item.base_cost || 0)} ت`
+                            <>{formatDisplay(item.base_cost || 0)}<span className="inventory-currency"> ت</span></>
                           )}
                         </td>
                       )}
 
-                      <td onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
+                      <td className="inventory-col-price" onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#0369a1' }}>
                         {isEditing ? (
                           <FormattedNumberInput value={editForm[`price_level${displayedPriceLevel}`]} onValueChange={(value) => setEditForm({ ...editForm, [`price_level${displayedPriceLevel}`]: value })} emptyWhenZero style={{ width: '90px', padding: '3px 5px', fontSize: '12px', border: '1px solid #0ea5e9', borderRadius: '3px' }} />
                         ) : (
-                          `${formatDisplay(item[`price_level${displayedPriceLevel}`] || 0)} ت`
+                          <>{formatDisplay(item[`price_level${displayedPriceLevel}`] || 0)}<span className="inventory-currency"> ت</span></>
                         )}
                       </td>
 
-                      <td style={{ padding: '8px 10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <td className="inventory-col-actions" style={{ padding: '8px 10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         {isEditing ? (
                           <div className="inventory-row-actions">
                             <button type="button" className="inventory-action-button save" onClick={() => handleInlineSave(item.id)}>ذخیره</button>
@@ -340,13 +342,6 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                           </div>
                         ) : (
                           <div className="inventory-row-actions">
-                            <button
-                              type="button"
-                              className={`inventory-action-button select${isSelected ? ' selected' : ''}`}
-                              onClick={() => handleSelectClick(item)}
-                            >
-                              {isSelected ? '✓ انتخاب شد' : 'انتخاب'}
-                            </button>
                             <button type="button" className="inventory-action-button delete" onClick={() => handleDelete(item.id)}>حذف</button>
                           </div>
                         )}
