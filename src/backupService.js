@@ -83,9 +83,11 @@ export async function restoreBackupDocument(
             'category',
             'description',
             'transaction_date',
+            'reference_number',
+            'receipt_note',
             'offline_sync_id',
           ];
-          const changed = immutableFields.some((field) => (
+          const changed = immutableFields.some((field) => Object.hasOwn(row, field) && (
             String(existingRow[field] ?? '') !== String(row[field] ?? '')
           ));
           if (changed) throw new Error(`گردش مالی با شناسهٔ ${row.id} با دفتر ثبت موجود یکسان نیست و بازنویسی نشد.`);

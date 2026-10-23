@@ -46,6 +46,8 @@ test('offline invoice receipts update local invoices and sync as one RPC with ma
     invoice_id: invoiceId,
     transaction_date: '2026-09-24',
     description: 'بیعانه',
+    reference_number: 'TRX-1042',
+    receipt_note: 'واریز کارت به کارت',
   });
 
   assert.equal(paymentResult.offline, true);
@@ -103,6 +105,8 @@ test('offline invoice receipts update local invoices and sync as one RPC with ma
 
   assert.equal(rpcTransaction.account_id, 12);
   assert.equal(rpcTransaction.invoice_id, 24);
+  assert.equal(rpcTransaction.reference_number, 'TRX-1042');
+  assert.equal(rpcTransaction.receipt_note, 'واریز کارت به کارت');
   assert.equal(requests.filter((request) => request.url.pathname.endsWith('/rpc/record_cash_transaction')).length, 1);
 
   globalThis.navigator.onLine = false;
@@ -112,6 +116,8 @@ test('offline invoice receipts update local invoices and sync as one RPC with ma
   assert.equal(syncedTransactions.data.length, 1);
   assert.equal(syncedTransactions.data[0].account_id, accountId);
   assert.equal(syncedTransactions.data[0].invoice_id, invoiceId);
+  assert.equal(syncedTransactions.data[0].reference_number, 'TRX-1042');
+  assert.equal(syncedTransactions.data[0].receipt_note, 'واریز کارت به کارت');
 });
 
 test.after(async () => {

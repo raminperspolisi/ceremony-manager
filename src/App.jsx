@@ -12,6 +12,7 @@ import TutorialPanel from './components/TutorialPanel';
 import ContactPanel from './components/ContactPanel';
 import BackupPanel from './components/BackupPanel';
 import CashbookPanel from './components/CashbookPanel';
+import DashboardPanel from './components/DashboardPanel';
 import { formatDisplay } from './styles';
 import {
   getOfflineSyncStatus,
@@ -34,6 +35,7 @@ const SECTION_BY_FUNCTION_KEY = {
   F6: 'analytics',
   F7: 'calendar',
   F8: 'reminders',
+  F9: 'dashboard',
 };
 const GLOBAL_SEARCH_TABLES = [
   { table: 'customers', section: 'customers', label: 'مشتری' },
@@ -117,9 +119,8 @@ export default function App() {
   const [profileMessage, setProfileMessage] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // پیش‌فرض را روی مشتریان می‌گذاریم چون اولین گزینه منو است
-  const [activeSection, setActiveSection] = useState('customers');
-  const [visitedSections, setVisitedSections] = useState(() => new Set(['customers']));
+  const [activeSection, setActiveSection] = useState('dashboard');
+  const [visitedSections, setVisitedSections] = useState(() => new Set(['dashboard']));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [offlineStatus, setOfflineStatus] = useState(getOfflineSyncStatus);
   const [browserOnline, setBrowserOnline] = useState(() => navigator.onLine);
@@ -821,6 +822,17 @@ export default function App() {
           </div>
 
           <nav className="section-nav" aria-label="بخش‌های برنامه">
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "dashboard" ? "active" : ""}`}
+              aria-keyshortcuts="F9"
+              onClick={() => handleSectionChange("dashboard")}
+            >
+              <span className="nav-icon">⌂</span>
+              <span className="nav-text">داشبورد</span>
+              <span className="nav-shortcut">F9</span>
+            </button>
+
             {/* 1. مشتریان */}
             <button
               type="button"
@@ -969,6 +981,8 @@ export default function App() {
               <h2>
                 {activeSection === "customers"
                   ? "مشتریان"
+                  : activeSection === "dashboard"
+                  ? "داشبورد"
                   : activeSection === "inventory"
                   ? "موجودی انبار"
                   : activeSection === "quotations"
@@ -1058,6 +1072,7 @@ export default function App() {
           </div>
 
           <div className="panel-container">
+            {activeSection === "dashboard" && <DashboardPanel onNavigate={handleSectionChange} />}
             {activeSection === "customers" && <CustomersPanel businessName={businessName} />}
             {activeSection === "inventory" && (
               <InventoryPanel 

@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { insertRows, readTable, recordCashTransaction, updateRows } from '../offlineSync';
 import FormattedNumberInput from './FormattedNumberInput';
+import { formatPersianDigits } from '../styles';
 import {
   calculateAccountBalances,
   EXPENSE_CATEGORIES,
   formatJalaliDate,
+  maskCardNumber,
+  normalizeCardNumber,
   parseJalaliDate,
+  summarizeCashTransactions,
 } from '../cashbookUtils';
 
 const ACCOUNT_TYPES = [
@@ -21,6 +25,23 @@ const TRANSACTION_TYPES = [
 
 const money = (value) => `${Math.round(Number(value) || 0).toLocaleString('fa-IR')} تومان`;
 const todayJalali = () => new Date().toLocaleDateString('fa-IR');
+const invoiceDisplayNumber = (invoice) => formatPersianDigits(
+  invoice?.invoice_number || invoice?.invoiceNumber || invoice?.id || '—',
+);
+const localIsoDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const monthStartIso = () => {
+  const now = new Date();
+  return localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+};
+const readAllRows = async (table, orderBy) => {
+  const rows = [];
+  for (let offset = 0; ; offset += 1000) {
+    const result = await readTable(table, { orderBy, ascending: false, limit: 1000, offset });
+    if (result.error) return result;
+    rows.push(...(result.data || []));
+    if ((result.data || []).length < 1000) return { data: rows, error: null };
+  }
+};
 const accountLabel = (account) => `${account.account_name} (${account.account_type === 'cash' ? 'صندوق' : 'بانک'})`;
 const newTransactionForm = () => ({
   transaction_type: 'income',
@@ -30,6 +51,8 @@ const newTransactionForm = () => ({
   invoice_id: '',
   category: EXPENSE_CATEGORIES[0],
   description: '',
+  reference_number: '',
+  receipt_note: '',
   transaction_date: todayJalali(),
 });
 
@@ -46,11 +69,16 @@ export default function CashbookPanel() {
   const [editingAccountId, setEditingAccountId] = useState(null);
   const [accountName, setAccountName] = useState('');
   const [accountType, setAccountType] = useState('cash');
+  const [bankName, setBankName] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
   const [openingDate, setOpeningDate] = useState(todayJalali);
   const [transactionForm, setTransactionForm] = useState(newTransactionForm);
   const [accountFilter, setAccountFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState(monthStartIso);
+  const [dateTo, setDateTo] = useState(() => localIsoDate(new Date()));
+  const [ledgerSearch, setLedgerSearch] = useState('');
 
   const balances = useMemo(
     () => calculateAccountBalances(accounts, transactions),
@@ -62,13 +90,25 @@ export default function CashbookPanel() {
   const bankBalance = accounts
     .filter((account) => account.account_type === 'bank')
     .reduce((sum, account) => sum + (balances.get(String(account.id)) || 0), 0);
+  const periodSummary = useMemo(
+    () => summarizeCashTransactions(transactions, dateFrom, dateTo),
+    [transactions, dateFrom, dateTo],
+  );
+  const outstandingInvoices = invoices
+    .map((invoice) => ({
+      ...invoice,
+      total: Number(invoice.total_price || invoice.total_amount || 0),
+      paid: Number(invoice.paid_amount || 0),
+    }))
+    .filter((invoice) => invoice.total > invoice.paid)
+    .sort((first, second) => (second.total - second.paid) - (first.total - first.paid));
 
   const refreshData = async () => {
     setLoading(true);
     const [accountResult, transactionResult, invoiceResult] = await Promise.all([
       readTable('financial_accounts', { orderBy: 'id', ascending: false }),
-      readTable('cash_transactions', { orderBy: 'transaction_date', ascending: false, limit: 1000 }),
-      readTable('invoices', { orderBy: 'created_at', ascending: false }),
+      readAllRows('cash_transactions', 'transaction_date'),
+      readAllRows('invoices', 'created_at'),
     ]);
     const failures = [
       accountResult.error && `حساب‌ها: ${accountResult.error.message}`,
@@ -97,6 +137,17 @@ export default function CashbookPanel() {
       || String(transaction.account_id) === accountFilter
       || String(transaction.transfer_to_account_id) === accountFilter)
     && (typeFilter === 'all' || transaction.transaction_type === typeFilter)
+    && transaction.transaction_date >= dateFrom
+    && transaction.transaction_date <= dateTo
+    && (!ledgerSearch.trim() || [
+      transaction.description,
+      transaction.category,
+      transaction.reference_number,
+      transaction.receipt_note,
+      accounts.find((account) => String(account.id) === String(transaction.account_id))?.account_name,
+      invoices.find((invoice) => String(invoice.id) === String(transaction.invoice_id))?.customer_name,
+      transaction.invoice_id,
+    ].some((value) => String(value || '').toLocaleLowerCase().includes(ledgerSearch.trim().toLocaleLowerCase())))
   ));
 
   const handleAccountSubmit = async (event) => {
@@ -110,6 +161,18 @@ export default function CashbookPanel() {
       setBusy(false);
       return;
     }
+    if (accountType === 'bank' && !bankName.trim()) {
+      setErrorMessage('نام بانک را وارد کنید.');
+      setBusy(false);
+      return;
+    }
+
+    const normalizedCardNumber = cardNumber.trim() ? normalizeCardNumber(cardNumber) : null;
+    if (cardNumber.trim() && !normalizedCardNumber) {
+      setErrorMessage('شمارهٔ کارت باید ۱۶ رقم باشد.');
+      setBusy(false);
+      return;
+    }
 
     const accountDate = editingAccountId ? null : parseJalaliDate(openingDate);
     if (!editingAccountId && !accountDate) {
@@ -119,12 +182,18 @@ export default function CashbookPanel() {
     }
 
     const result = editingAccountId
-      ? await updateRows('financial_accounts', { account_name: name }, [
+      ? await updateRows('financial_accounts', {
+        account_name: name,
+        bank_name: accountType === 'bank' ? bankName.trim() : null,
+        card_number: accountType === 'bank' ? normalizedCardNumber : null,
+      }, [
         { column: 'id', operator: 'eq', value: editingAccountId },
       ])
       : await insertRows('financial_accounts', [{
         account_name: name,
         account_type: accountType,
+        bank_name: accountType === 'bank' ? bankName.trim() : null,
+        card_number: accountType === 'bank' ? normalizedCardNumber : null,
         opening_balance: Number(openingBalance) || 0,
         opening_date: accountDate,
       }]);
@@ -138,6 +207,8 @@ export default function CashbookPanel() {
     setAccountFormOpen(false);
     setEditingAccountId(null);
     setAccountName('');
+    setBankName('');
+    setCardNumber('');
     setOpeningBalance('');
     setOpeningDate(todayJalali());
     await refreshData();
@@ -147,6 +218,8 @@ export default function CashbookPanel() {
     setEditingAccountId(account.id);
     setAccountName(account.account_name);
     setAccountType(account.account_type);
+    setBankName(account.bank_name || '');
+    setCardNumber(account.card_number || '');
     setAccountFormOpen(true);
   };
 
@@ -181,6 +254,8 @@ export default function CashbookPanel() {
       account_id: account.id,
       transaction_date: transactionDate,
       description: transactionForm.description.trim(),
+      reference_number: transactionForm.reference_number.trim(),
+      receipt_note: transactionForm.receipt_note.trim(),
       category: transactionForm.transaction_type === 'expense' ? transactionForm.category : null,
     };
     if (transactionForm.transaction_type === 'transfer') {
@@ -238,6 +313,18 @@ export default function CashbookPanel() {
   const accountOptions = accounts.map((account) => (
     <option key={account.id} value={account.id}>{accountLabel(account)}</option>
   ));
+  const prefillInvoiceReceipt = (invoice) => {
+    setTransactionForm((current) => ({
+      ...current,
+      transaction_type: 'income',
+      invoice_id: String(invoice.id),
+      amount: '',
+      account_id: current.account_id || String(accounts[0]?.id || ''),
+      transaction_date: todayJalali(),
+    }));
+    setFeedback(`برای فاکتور ${invoice.customer_name || `#${invoice.id}`} دریافت ثبت کنید.`);
+    document.getElementById('cashbook-transaction-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   return (
     <div className="cashbook-panel" dir="rtl">
@@ -254,6 +341,8 @@ export default function CashbookPanel() {
             setEditingAccountId(null);
             setAccountName('');
             setAccountType('cash');
+            setBankName('');
+            setCardNumber('');
             setOpeningBalance('');
             setOpeningDate(todayJalali());
             setAccountFormOpen((open) => !open);
@@ -268,26 +357,107 @@ export default function CashbookPanel() {
       {errorMessage && <div className="cashbook-alert cashbook-alert-error" role="alert">{errorMessage}</div>}
 
       <div className="cashbook-summary">
-        <article><span>موجودی صندوق</span><strong>{money(cashBalance)}</strong></article>
-        <article><span>موجودی بانک</span><strong>{money(bankBalance)}</strong></article>
-        <article><span>جمع موجودی</span><strong>{money(cashBalance + bankBalance)}</strong></article>
+        <article className="cashbook-summary-cash"><span>موجودی صندوق</span><strong>{money(cashBalance)}</strong><small>{accounts.filter((account) => account.account_type === 'cash').length.toLocaleString('fa-IR')} حساب نقدی</small></article>
+        <article className="cashbook-summary-bank"><span>موجودی بانک</span><strong>{money(bankBalance)}</strong><small>{accounts.filter((account) => account.account_type === 'bank').length.toLocaleString('fa-IR')} حساب بانکی</small></article>
+        <article className="cashbook-summary-total"><span>جمع موجودی</span><strong>{money(cashBalance + bankBalance)}</strong><small>مجموع همهٔ حساب‌ها</small></article>
       </div>
 
+      <section className="cashbook-period-dashboard" aria-label="خلاصهٔ مالی دوره">
+        <div className="cashbook-section-title">
+          <div>
+            <h4>خلاصهٔ عملکرد مالی</h4>
+            <span>گردش‌های ثبت‌شده در بازهٔ انتخابی</span>
+          </div>
+          <div className="cashbook-date-range">
+            <label>از تاریخ
+              <input type="date" value={dateFrom} max={dateTo} onChange={(event) => setDateFrom(event.target.value)} />
+            </label>
+            <label>تا تاریخ
+              <input type="date" value={dateTo} min={dateFrom} onChange={(event) => setDateTo(event.target.value)} />
+            </label>
+          </div>
+        </div>
+        <div className="cashbook-period-grid">
+          <article className="cashbook-period-income"><span>دریافتی دوره</span><strong>{money(periodSummary.income)}</strong></article>
+          <article className="cashbook-period-expense"><span>هزینهٔ دوره</span><strong>{money(periodSummary.expenses)}</strong></article>
+          <article className="cashbook-period-net"><span>خالص گردش دوره</span><strong>{money(periodSummary.income - periodSummary.expenses)}</strong></article>
+        </div>
+      </section>
+
+      <section className="cashbook-invoice-followup" aria-label="فاکتورهای دارای مانده">
+        <div className="cashbook-section-title">
+          <div><h4>پیگیری دریافت فاکتورها</h4><span>{outstandingInvoices.length.toLocaleString('fa-IR')} فاکتور دارای مانده</span></div>
+          <strong>جمع مانده: {money(outstandingInvoices.reduce((sum, invoice) => sum + invoice.total - invoice.paid, 0))}</strong>
+        </div>
+        {outstandingInvoices.length === 0 ? (
+          <p className="cashbook-empty">فاکتور پرداخت‌نشده یا نیمه‌پرداخت‌شده‌ای وجود ندارد.</p>
+        ) : (
+          <div className="cashbook-invoice-list">
+            {outstandingInvoices.slice(0, 8).map((invoice) => {
+              const remaining = invoice.total - invoice.paid;
+              return (
+                <article key={invoice.id} className="cashbook-invoice-row">
+                  <div>
+                    <strong>{invoice.customer_name || 'مشتری بدون نام'}</strong>
+                    <span>فاکتور #{invoiceDisplayNumber(invoice)}</span>
+                  </div>
+                  <div><small>کل فاکتور</small><strong>{money(invoice.total)}</strong></div>
+                  <div><small>پرداخت‌شده</small><strong>{money(invoice.paid)}</strong></div>
+                  <div className="cashbook-invoice-remaining"><small>مانده</small><strong>{money(remaining)}</strong></div>
+                  <button type="button" className="cashbook-primary-button" onClick={() => prefillInvoiceReceipt(invoice)}>ثبت دریافت</button>
+                </article>
+              );
+            })}
+            {outstandingInvoices.length > 8 && <p className="cashbook-sensitive-note">۸ فاکتور با بیشترین مانده نمایش داده شده‌اند.</p>}
+          </div>
+        )}
+      </section>
+
       {accountFormOpen && (
-        <form className="cashbook-form" onSubmit={handleAccountSubmit}>
-          <h4>{editingAccountId ? 'تغییر نام حساب' : 'افزودن حساب صندوق یا بانک'}</h4>
+        <form className="cashbook-form cashbook-account-form" onSubmit={handleAccountSubmit}>
+          <div className="cashbook-form-heading">
+            <span className="cashbook-form-icon">{accountType === 'cash' ? 'صندوق نقدی' : 'حساب بانکی'}</span>
+            <div>
+              <h4>{editingAccountId ? 'ویرایش اطلاعات حساب' : 'حساب تازه بسازید'}</h4>
+              <p>اطلاعات حساب را وارد کنید تا دریافت‌ها و هزینه‌ها در ماندهٔ آن ثبت شوند.</p>
+            </div>
+          </div>
           <label>
             نام حساب
-            <input value={accountName} onChange={(event) => setAccountName(event.target.value)} maxLength={80} required />
+            <input value={accountName} onChange={(event) => setAccountName(event.target.value)} maxLength={80} placeholder={accountType === 'cash' ? 'مثلاً صندوق اصلی' : 'مثلاً حساب فروش'} required />
           </label>
           {!editingAccountId && (
+            <label className="cashbook-type-field">
+              نوع حساب
+              <select value={accountType} onChange={(event) => setAccountType(event.target.value)}>
+                {ACCOUNT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+              </select>
+            </label>
+          )}
+          {accountType === 'bank' && (
             <>
               <label>
-                نوع حساب
-                <select value={accountType} onChange={(event) => setAccountType(event.target.value)}>
-                  {ACCOUNT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                </select>
+                نام بانک
+                <input value={bankName} onChange={(event) => setBankName(event.target.value)} maxLength={80} placeholder="مثلاً بانک ملت" required />
               </label>
+              <label>
+                شماره کارت
+                <input
+                  value={cardNumber}
+                  onChange={(event) => setCardNumber(event.target.value.replace(/[^\d۰-۹٠-٩ -]/g, '').slice(0, 23))}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={23}
+                  placeholder="۱۶ رقم کارت"
+                  dir="ltr"
+                  aria-describedby="cashbook-card-note"
+                />
+                <small id="cashbook-card-note" className="cashbook-sensitive-note">شماره کارت در پایگاه داده ذخیره و در این صفحه پوشیده نمایش داده می‌شود.</small>
+              </label>
+            </>
+          )}
+          {!editingAccountId && (
+            <>
               <label>
                 موجودی اولیه (تومان)
                 <FormattedNumberInput value={openingBalance} onValueChange={setOpeningBalance} allowDecimal={false} inputMode="numeric" />
@@ -300,7 +470,7 @@ export default function CashbookPanel() {
           )}
           <div className="cashbook-form-actions">
             <button type="submit" className="cashbook-primary-button" disabled={busy}>{busy ? 'در حال ذخیره…' : 'ذخیره حساب'}</button>
-            <button type="button" className="cashbook-secondary-button" onClick={() => { setAccountFormOpen(false); setEditingAccountId(null); }}>انصراف</button>
+            <button type="button" className="cashbook-secondary-button" onClick={() => { setAccountFormOpen(false); setEditingAccountId(null); setBankName(''); setCardNumber(''); }}>انصراف</button>
           </div>
         </form>
       )}
@@ -310,14 +480,15 @@ export default function CashbookPanel() {
         {!accounts.length && !loading && <p className="cashbook-empty">هنوز حسابی ثبت نشده است؛ برای شروع یک صندوق یا حساب بانکی بسازید.</p>}
         <div className="cashbook-account-grid">
           {accounts.map((account) => (
-            <article className="cashbook-account-card" key={account.id}>
+            <article className={`cashbook-account-card cashbook-account-${account.account_type}`} key={account.id}>
               <div>
-                <span>{account.account_type === 'cash' ? 'صندوق نقدی' : 'حساب بانکی'}</span>
+                <span className="cashbook-account-kind">{account.account_type === 'cash' ? 'صندوق نقدی' : account.bank_name || 'حساب بانکی'}</span>
                 <h5>{account.account_name}</h5>
               </div>
               <strong>{money(balances.get(String(account.id)) || 0)}</strong>
+              {account.account_type === 'bank' && account.card_number && <small className="cashbook-card-number">{maskCardNumber(account.card_number)}</small>}
               <small>موجودی آغازین: {money(account.opening_balance)} · از {formatJalaliDate(account.opening_date)}</small>
-              <button type="button" className="cashbook-link-button" onClick={() => startEditAccount(account)}>تغییر نام</button>
+              <button type="button" className="cashbook-link-button" onClick={() => startEditAccount(account)}>ویرایش حساب</button>
             </article>
           ))}
         </div>
@@ -328,7 +499,7 @@ export default function CashbookPanel() {
         {!accounts.length ? (
           <p className="cashbook-empty">برای ثبت گردش، ابتدا یک حساب بسازید.</p>
         ) : (
-          <form className="cashbook-form cashbook-transaction-form" onSubmit={handleTransactionSubmit}>
+          <form id="cashbook-transaction-form" className="cashbook-form cashbook-transaction-form" onSubmit={handleTransactionSubmit}>
             <label>
               نوع گردش
               <select
@@ -378,15 +549,16 @@ export default function CashbookPanel() {
             )}
             {transactionForm.transaction_type === 'income' && (
               <label>
-                اتصال به فاکتور (اختیاری)
+                دریافت بابت فاکتور (اختیاری)
                 <select value={transactionForm.invoice_id} onChange={(event) => setTransactionForm((current) => ({ ...current, invoice_id: event.target.value }))}>
-                  <option value="">دریافت متفرقه</option>
-                  {invoices.filter((invoice) => Number(invoice.total_price || 0) > Number(invoice.paid_amount || 0)).map((invoice) => (
+                  <option value="">دریافت متفرقه / بدون فاکتور</option>
+                  {invoices.filter((invoice) => Number(invoice.total_price || invoice.total_amount || 0) > Number(invoice.paid_amount || 0)).map((invoice) => (
                     <option key={invoice.id} value={invoice.id}>
-                      #{String(invoice.id).replace(/\d/g, (digit) => String.fromCharCode(Number(digit) + 1728))} · {invoice.customer_name || 'مشتری'} · مانده {money(Math.max(Number(invoice.total_price || 0) - Number(invoice.paid_amount || 0), 0))}
+                      #{invoiceDisplayNumber(invoice)} · {invoice.customer_name || 'مشتری'} · مانده {money(Math.max(Number(invoice.total_price || invoice.total_amount || 0) - Number(invoice.paid_amount || 0), 0))}
                     </option>
                   ))}
                 </select>
+                <small className="cashbook-sensitive-note">با انتخاب فاکتور، مبلغ دریافتی هم به ماندهٔ این حساب و هم به پرداختی فاکتور اضافه می‌شود.</small>
               </label>
             )}
             <label>
@@ -407,6 +579,24 @@ export default function CashbookPanel() {
                 placeholder={transactionForm.transaction_type === 'expense' ? 'شرح یا گیرندهٔ هزینه' : 'توضیح اختیاری'}
               />
             </label>
+            <label>
+              شمارهٔ پیگیری / رسید
+              <input
+                value={transactionForm.reference_number}
+                onChange={(event) => setTransactionForm((current) => ({ ...current, reference_number: event.target.value }))}
+                maxLength={80}
+                placeholder="اختیاری"
+              />
+            </label>
+            <label>
+              یادداشت رسید
+              <input
+                value={transactionForm.receipt_note}
+                onChange={(event) => setTransactionForm((current) => ({ ...current, receipt_note: event.target.value }))}
+                maxLength={240}
+                placeholder="مثلاً شماره چک یا توضیح پرداخت"
+              />
+            </label>
             <div className="cashbook-form-actions cashbook-transaction-submit">
               <button type="submit" className="cashbook-primary-button" disabled={busy}>
                 {busy ? 'در حال ثبت…' : 'ثبت گردش مالی'}
@@ -419,7 +609,15 @@ export default function CashbookPanel() {
       <section className="cashbook-ledger">
         <div className="cashbook-section-title">
           <h4>دفتر گردش حساب</h4>
-          <div className="cashbook-filters">
+          <div className="cashbook-ledger-tools">
+            <input
+              className="cashbook-ledger-search"
+              value={ledgerSearch}
+              onChange={(event) => setLedgerSearch(event.target.value)}
+              placeholder="جستجوی شرح، مشتری یا پیگیری"
+              aria-label="جستجو در دفتر گردش حساب"
+            />
+            <div className="cashbook-filters">
             <select aria-label="فیلتر حساب" value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
               <option value="all">همهٔ حساب‌ها</option>
               {accountOptions}
@@ -428,6 +626,7 @@ export default function CashbookPanel() {
               <option value="all">همهٔ گردش‌ها</option>
               {TRANSACTION_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
             </select>
+            </div>
           </div>
         </div>
         {loading ? <p className="cashbook-empty">در حال بارگذاری…</p> : visibleTransactions.length === 0 ? (
@@ -436,7 +635,7 @@ export default function CashbookPanel() {
           <div className="cashbook-table-wrap">
             <table className="cashbook-table">
               <thead>
-                <tr><th>تاریخ</th><th>نوع</th><th>حساب</th><th>دسته / مرجع</th><th>توضیحات</th><th>مبلغ</th></tr>
+                <tr><th>تاریخ</th><th>نوع</th><th>حساب</th><th>دسته / مرجع</th><th>توضیحات و رسید</th><th>مبلغ</th></tr>
               </thead>
               <tbody>
                 {visibleTransactions.map((transaction) => {
@@ -451,8 +650,11 @@ export default function CashbookPanel() {
                       <td>{transaction.transaction_type === 'transfer'
                         ? `${sourceAccount?.account_name || 'حساب'} ← ${destinationAccount?.account_name || 'حساب'}`
                         : sourceAccount?.account_name || 'حساب حذف‌شده'}</td>
-                      <td>{transaction.category || (invoice ? `فاکتور #${invoice.id}` : '—')}</td>
-                      <td>{transaction.description || '—'}</td>
+                      <td>{transaction.category || (invoice ? `فاکتور #${invoiceDisplayNumber(invoice)}` : '—')}</td>
+                      <td>
+                        {transaction.description || transaction.receipt_note || '—'}
+                        {transaction.reference_number && <small className="cashbook-ledger-reference">پیگیری: {transaction.reference_number}</small>}
+                      </td>
                       <td className={`cashbook-amount cashbook-amount-${transaction.transaction_type}`}>{money(transaction.amount)}</td>
                     </tr>
                   );

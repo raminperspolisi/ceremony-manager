@@ -2912,6 +2912,7 @@ textarea:focus-visible {
     padding-right: 6px;
     padding-left: 6px;
   }
+}
 
   .cashbook-panel {
     display: grid;
@@ -3233,6 +3234,609 @@ textarea:focus-visible {
     }
   }
 
+  .cashbook-period-dashboard,
+  .cashbook-invoice-followup {
+    display: grid;
+    gap: 13px;
+    padding: 17px;
+    border: 1px solid #e0e8ed;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: 0 7px 18px rgb(18 38 63 / 4%);
+  }
+
+  .cashbook-period-dashboard .cashbook-section-title,
+  .cashbook-invoice-followup .cashbook-section-title {
+    align-items: center;
+  }
+
+  .cashbook-section-title > div:first-child {
+    display: grid;
+    gap: 4px;
+  }
+
+  .cashbook-date-range,
+  .cashbook-date-range label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .cashbook-date-range label {
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .cashbook-date-range input,
+  .cashbook-ledger-search {
+    min-height: 39px;
+    padding: 7px 10px;
+    border: 1px solid #d9e3e9;
+    border-radius: 10px;
+    outline: none;
+    background: #fff;
+    color: #2c4055;
+    font: inherit;
+    font-size: 12px;
+  }
+
+  .cashbook-date-range input:focus,
+  .cashbook-ledger-search:focus {
+    border-color: #35a48b;
+    box-shadow: 0 0 0 3px rgb(53 164 139 / 12%);
+  }
+
+  .cashbook-period-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .cashbook-period-grid article {
+    display: grid;
+    gap: 7px;
+    padding: 13px;
+    border-radius: 12px;
+    background: #f7fafc;
+  }
+
+  .cashbook-period-grid article span,
+  .cashbook-invoice-row small {
+    color: #718096;
+    font-size: 11px;
+  }
+
+  .cashbook-period-grid article strong {
+    font-size: 16px;
+    overflow-wrap: anywhere;
+  }
+
+  .cashbook-period-income {
+    background: #effcf5 !important;
+    color: #16804f;
+  }
+
+  .cashbook-period-expense {
+    background: #fff4f2 !important;
+    color: #c34a3f;
+  }
+
+  .cashbook-period-net {
+    background: #eff6ff !important;
+    color: #2d63ae;
+  }
+
+  .cashbook-invoice-followup .cashbook-section-title > strong {
+    color: #b7791f;
+    font-size: 13px;
+  }
+
+  .cashbook-invoice-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .cashbook-invoice-row {
+    display: grid;
+    grid-template-columns: minmax(120px, 1.4fr) repeat(3, minmax(110px, 1fr)) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #edf0f3;
+    border-radius: 12px;
+    background: #fcfdfd;
+  }
+
+  .cashbook-invoice-row > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .cashbook-invoice-row > div > strong {
+    overflow-wrap: anywhere;
+    color: #32475e;
+    font-size: 12px;
+  }
+
+  .cashbook-invoice-row > div:first-child span {
+    color: #7c8a9a;
+    font-size: 10px;
+  }
+
+  .cashbook-invoice-row .cashbook-invoice-remaining strong {
+    color: #bd6b12;
+  }
+
+  .cashbook-invoice-row .cashbook-primary-button {
+    min-height: 36px;
+    padding: 6px 11px;
+    white-space: nowrap;
+  }
+
+  .cashbook-ledger-tools {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .cashbook-ledger-search {
+    width: min(270px, 100%);
+  }
+
+  .cashbook-ledger-reference {
+    display: block;
+    margin-top: 4px;
+    color: #718096;
+    font-size: 10px;
+  }
+
+  @media (max-width: 700px) {
+    .cashbook-period-dashboard,
+    .cashbook-invoice-followup {
+      padding: 13px;
+    }
+
+    .cashbook-period-dashboard .cashbook-section-title,
+    .cashbook-invoice-followup .cashbook-section-title {
+      align-items: stretch;
+    }
+
+    .cashbook-date-range {
+      width: 100%;
+    }
+
+    .cashbook-date-range label {
+      flex: 1;
+      display: grid;
+      min-width: 0;
+      gap: 4px;
+    }
+
+    .cashbook-date-range input {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .cashbook-period-grid {
+      grid-template-columns: 1fr;
+      gap: 7px;
+    }
+
+    .cashbook-period-grid article {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      padding: 10px 12px;
+    }
+
+    .cashbook-period-grid article strong {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      font-size: 13px;
+    }
+
+    .cashbook-invoice-followup .cashbook-section-title > strong {
+      font-size: 12px;
+    }
+
+    .cashbook-invoice-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .cashbook-invoice-row > div:first-child {
+      grid-column: 1 / -1;
+    }
+
+    .cashbook-invoice-row > button {
+      grid-column: 1 / -1;
+    }
+
+    .cashbook-ledger-tools,
+    .cashbook-filters {
+      width: 100%;
+    }
+
+    .cashbook-ledger-search {
+      width: 100%;
+    }
+
+    .cashbook-ledger-tools {
+      flex-direction: column;
+    }
+  }
+
+  .cashbook-panel,
+  .home-dashboard {
+    font-family: Vazirmatn, Tahoma, sans-serif;
+    letter-spacing: 0;
+    line-height: 1.9;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .cashbook-date-range input[type="date"] {
+    direction: rtl;
+    text-align: right;
+  }
+
+  .cashbook-ledger > .cashbook-section-title {
+    display: grid;
+    gap: 10px;
+  }
+
+  .cashbook-ledger-tools {
+    margin: 0;
+    justify-content: flex-start;
+  }
+
+  .cashbook-ledger-search {
+    direction: rtl;
+    text-align: right;
+  }
+
+  .cashbook-filters {
+    direction: rtl;
+    justify-content: flex-start;
+  }
+
+  .cashbook-filters select {
+    text-align: right;
+    text-align-last: right;
+  }
+
+  .home-dashboard {
+    display: grid;
+    gap: 20px;
+    color: #23374d;
+  }
+
+  .home-dashboard-welcome {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px;
+    border: 1px solid #d7e9e3;
+    border-radius: 20px;
+    background:
+      radial-gradient(ellipse at 100% 0, rgb(189 232 211 / 40%), transparent 43%),
+      linear-gradient(120deg, #f4fbf7, #fff);
+  }
+
+  .home-dashboard-eyebrow,
+  .home-dashboard-card-heading > div > span {
+    color: #25816e;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .home-dashboard-welcome h3 {
+    margin: 4px 0 3px;
+    color: #142b45;
+    font-size: 25px;
+  }
+
+  .home-dashboard-welcome p {
+    margin: 0;
+    color: #63768a;
+    font-size: 13px;
+  }
+
+  .home-dashboard-refresh,
+  .home-dashboard-card-heading > button {
+    min-height: 39px;
+    padding: 8px 13px;
+    border: 1px solid #d4e5e0;
+    border-radius: 10px;
+    background: #fff;
+    color: #176c61;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .home-dashboard-refresh:disabled {
+    opacity: 0.65;
+  }
+
+  .home-dashboard-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 13px;
+  }
+
+  .home-metric-card {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    padding: 18px;
+    border: 1px solid #e3e9ef;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: 0 8px 22px rgb(22 39 61 / 5%);
+    color: #53677d;
+    font: inherit;
+    text-align: right;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+
+  .home-metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgb(22 39 61 / 9%);
+  }
+
+  .home-metric-card > span {
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .home-metric-card > strong {
+    font-size: clamp(19px, 2.5vw, 25px);
+    overflow-wrap: anywhere;
+  }
+
+  .home-metric-card > small {
+    color: #7c8a9a;
+    font-size: 10px;
+  }
+
+  .home-metric-receivables {
+    border-color: #f1dfc6;
+    background: linear-gradient(130deg, #fff8ed, #fff 75%);
+  }
+
+  .home-metric-receivables > strong {
+    color: #bb761b;
+  }
+
+  .home-metric-events {
+    border-color: #d9e6fb;
+    background: linear-gradient(130deg, #f1f6ff, #fff 75%);
+  }
+
+  .home-metric-events > strong {
+    color: #3b6fc2;
+  }
+
+  .home-metric-customers {
+    border-color: #d4ebe2;
+    background: linear-gradient(130deg, #effbf5, #fff 75%);
+  }
+
+  .home-metric-customers > strong {
+    color: #16805f;
+  }
+
+  .home-dashboard-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .home-dashboard-card {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 13px;
+    padding: 17px;
+    border: 1px solid #e1e8ee;
+    border-radius: 17px;
+    background: #fff;
+    box-shadow: 0 7px 18px rgb(22 39 61 / 4%);
+  }
+
+  .home-dashboard-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .home-dashboard-card-heading h4,
+  .home-dashboard-shortcuts h4 {
+    margin: 2px 0 0;
+    color: #1b334b;
+    font-size: 15px;
+  }
+
+  .home-reminder-list,
+  .home-ceremony-list {
+    display: grid;
+    gap: 7px;
+  }
+
+  .home-reminder-item,
+  .home-ceremony-item {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #eef1f4;
+    border-radius: 11px;
+    background: #fcfdfd;
+    color: #33495f;
+    font: inherit;
+    text-align: right;
+  }
+
+  .home-reminder-item:hover,
+  .home-ceremony-item:hover {
+    border-color: #c9e4da;
+    background: #f7fcf9;
+  }
+
+  .home-reminder-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 9px;
+    border-radius: 50%;
+    background: #efa83d;
+    box-shadow: 0 0 0 4px #fff4df;
+  }
+
+  .home-reminder-content,
+  .home-ceremony-item > span:last-child {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: 2px;
+  }
+
+  .home-reminder-content strong,
+  .home-ceremony-item strong {
+    overflow: hidden;
+    color: #31465d;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .home-reminder-content small,
+  .home-ceremony-item small {
+    color: #7d8a99;
+    font-size: 10px;
+  }
+
+  .home-reminder-amount {
+    color: #b8751d;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .home-ceremony-date {
+    min-width: 94px;
+    padding: 7px;
+    border-radius: 9px;
+    background: #edf4ff;
+    color: #3868b4;
+    direction: rtl;
+    font-size: 10px;
+    font-weight: 800;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .home-dashboard-empty {
+    margin: 0;
+    padding: 16px 10px;
+    border: 1px dashed #d6e0e6;
+    border-radius: 11px;
+    color: #758497;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .home-dashboard-shortcuts {
+    display: grid;
+    gap: 11px;
+    padding: 16px;
+    border: 1px solid #e1e8ee;
+    border-radius: 16px;
+    background: #fbfcfd;
+  }
+
+  .home-dashboard-shortcuts > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .home-dashboard-shortcuts button {
+    min-height: 38px;
+    padding: 7px 12px;
+    border: 1px solid #dce7e9;
+    border-radius: 10px;
+    background: #fff;
+    color: #28645a;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .home-dashboard-shortcuts button:hover {
+    border-color: #9fccc0;
+    background: #f2faf6;
+  }
+
+  @media (max-width: 700px) {
+    .home-dashboard {
+      gap: 13px;
+    }
+
+    .home-dashboard-welcome {
+      align-items: flex-start;
+      padding: 16px;
+    }
+
+    .home-dashboard-welcome h3 {
+      font-size: 21px;
+    }
+
+    .home-dashboard-welcome p {
+      font-size: 11px;
+    }
+
+    .home-dashboard-metrics,
+    .home-dashboard-columns {
+      grid-template-columns: 1fr;
+      gap: 9px;
+    }
+
+    .home-metric-card {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      padding: 13px;
+    }
+
+    .home-metric-card > strong {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      font-size: 17px;
+    }
+
+    .home-metric-card > small {
+      grid-column: 1;
+    }
+
+    .home-dashboard-card {
+      padding: 13px;
+    }
+
+    .home-reminder-item {
+      flex-wrap: wrap;
+    }
+
+    .home-reminder-amount {
+      margin-inline-start: auto;
+    }
+  }
+
+@media (max-width: 360px) {
   .app-header .brand {
     gap: 4px;
   }
@@ -4535,3 +5139,832 @@ textarea:focus-visible {
     display: grid;
   }
 }
+
+.cashbook-panel {
+  display: grid;
+  gap: 20px;
+  color: #203047;
+}
+
+.cashbook-heading,
+.cashbook-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.cashbook-heading h3 {
+  margin: 0 0 7px;
+  color: #142b45;
+  font-size: clamp(21px, 3vw, 28px);
+}
+
+.cashbook-heading p:last-child {
+  max-width: 680px;
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.cashbook-panel h4 {
+  margin: 0;
+  color: #142b45;
+  font-size: 16px;
+}
+
+.cashbook-panel button {
+  font: inherit;
+}
+
+.cashbook-primary-button,
+.cashbook-secondary-button {
+  min-height: 42px;
+  padding: 9px 16px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #176c61, #208b76);
+  box-shadow: 0 5px 12px rgb(23 108 97 / 16%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.cashbook-primary-button:hover,
+.cashbook-secondary-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgb(23 108 97 / 20%);
+}
+
+.cashbook-secondary-button {
+  border-color: #d7e6e3;
+  background: #fff;
+  box-shadow: none;
+  color: #176c61;
+}
+
+.cashbook-panel button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.cashbook-alert {
+  padding: 12px 15px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.cashbook-alert-error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b42336;
+}
+
+.cashbook-alert-success {
+  border-color: #bbf0d0;
+  background: #effcf4;
+  color: #167044;
+}
+
+.cashbook-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.cashbook-summary article {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(18 38 63 / 5%);
+}
+
+.cashbook-summary article::before {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 5px;
+  background: var(--cashbook-accent);
+  content: "";
+}
+
+.cashbook-summary-cash {
+  --cashbook-accent: #0f9f75;
+  background: linear-gradient(120deg, #f0fdf7, #fff 70%) !important;
+}
+
+.cashbook-summary-bank {
+  --cashbook-accent: #3b82f6;
+  background: linear-gradient(120deg, #eff6ff, #fff 70%) !important;
+}
+
+.cashbook-summary-total {
+  --cashbook-accent: #8b5cf6;
+  background: linear-gradient(120deg, #f5f3ff, #fff 70%) !important;
+}
+
+.cashbook-summary article span {
+  color: #5d6d82;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cashbook-summary article strong {
+  color: var(--cashbook-accent);
+  font-size: clamp(18px, 2.5vw, 24px);
+  overflow-wrap: anywhere;
+}
+
+.cashbook-summary article small {
+  color: #8390a2;
+  font-size: 11px;
+}
+
+.cashbook-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid #dceae7;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #f4faf9, #fff 62%);
+  box-shadow: 0 10px 25px rgb(18 38 63 / 5%);
+}
+
+.cashbook-account-form {
+  border-color: #cfe6df;
+  background:
+    radial-gradient(ellipse at 100% 0, rgb(196 238 220 / 40%), transparent 44%),
+    linear-gradient(145deg, #f6fbf9, #fff 65%);
+}
+
+.cashbook-form-heading {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 13px;
+  padding-bottom: 4px;
+}
+
+.cashbook-form-heading h4 {
+  margin-bottom: 3px;
+}
+
+.cashbook-form-heading p {
+  margin: 0;
+  color: #708094;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.cashbook-form-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  place-items: center;
+  border-radius: 16px;
+  background: #e3f5ed;
+  color: #13745d;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.cashbook-form label {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+  color: #40536b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cashbook-form label input,
+.cashbook-form label select,
+.cashbook-filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #d8e2ea;
+  border-radius: 11px;
+  outline: none;
+  background: #fff;
+  color: #23384f;
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.cashbook-form label input:focus,
+.cashbook-form label select:focus,
+.cashbook-filters select:focus {
+  border-color: #35a48b;
+  box-shadow: 0 0 0 3px rgb(53 164 139 / 14%);
+}
+
+.cashbook-sensitive-note {
+  color: #8290a1;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.cashbook-form-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+  padding-top: 2px;
+}
+
+.cashbook-accounts,
+.cashbook-transactions,
+.cashbook-ledger {
+  display: grid;
+  gap: 13px;
+}
+
+.cashbook-section-title > span {
+  color: #7b899b;
+  font-size: 12px;
+}
+
+.cashbook-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 13px;
+}
+
+.cashbook-account-card {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid #dce8e6;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #f0fbf6, #fff 68%);
+  box-shadow: 0 7px 18px rgb(18 38 63 / 5%);
+}
+
+.cashbook-account-card::before {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 4px;
+  background: var(--cashbook-accent);
+  content: "";
+}
+
+.cashbook-account-cash {
+  --cashbook-accent: #0f9f75;
+}
+
+.cashbook-account-bank {
+  --cashbook-accent: #3b82f6;
+  background: linear-gradient(145deg, #eff6ff, #fff 68%);
+}
+
+.cashbook-account-kind {
+  color: var(--cashbook-accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.cashbook-account-card h5 {
+  margin: 4px 0 0;
+  color: #1e334a;
+  font-size: 15px;
+}
+
+.cashbook-account-card > strong {
+  color: #173c57;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.cashbook-account-card small {
+  color: #748398;
+  font-size: 10px;
+  line-height: 1.8;
+}
+
+.cashbook-card-number {
+  color: #3b5a78 !important;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
+  text-align: right;
+}
+
+.cashbook-link-button {
+  justify-self: start;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #187663;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.cashbook-empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed #c7d7d8;
+  border-radius: 13px;
+  background: #fbfdfd;
+  color: #687b8e;
+  font-size: 12px;
+  line-height: 1.8;
+  text-align: center;
+}
+
+.cashbook-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.cashbook-filters select {
+  width: auto;
+  min-width: 150px;
+}
+
+.cashbook-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e0e8ee;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.cashbook-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: right;
+}
+
+.cashbook-table th,
+.cashbook-table td {
+  padding: 12px;
+  border-bottom: 1px solid #eef2f5;
+  white-space: nowrap;
+}
+
+.cashbook-table th {
+  background: #f5f8fa;
+  color: #65758a;
+  font-weight: 800;
+}
+
+.cashbook-type-badge {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.cashbook-type-income {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.cashbook-type-expense {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.cashbook-type-transfer {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.cashbook-amount {
+  font-weight: 800;
+}
+
+.cashbook-amount-income {
+  color: #15803d;
+}
+
+.cashbook-amount-expense {
+  color: #b91c1c;
+}
+
+.cashbook-amount-transfer {
+  color: #0369a1;
+}
+
+@media (max-width: 600px) {
+  .cashbook-heading,
+  .cashbook-section-title {
+    align-items: flex-start;
+  }
+
+  .cashbook-heading {
+    flex-direction: column;
+  }
+
+  .cashbook-summary {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .cashbook-summary article {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 13px 15px;
+  }
+
+  .cashbook-summary article strong {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    font-size: 16px;
+  }
+
+  .cashbook-form {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 15px;
+  }
+
+  .cashbook-form-heading {
+    align-items: flex-start;
+  }
+
+  .cashbook-section-title {
+    flex-direction: column;
+  }
+
+  .cashbook-filters {
+    width: 100%;
+  }
+
+  .cashbook-filters select {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+  .home-dashboard {
+    gap: 22px;
+  }
+
+  .home-dashboard-welcome {
+    position: relative;
+    min-height: 154px;
+    overflow: hidden;
+    padding: 26px 30px;
+    border: 0;
+    background:
+      radial-gradient(circle at 13% 25%, rgb(255 255 255 / 13%) 0 58px, transparent 59px),
+      radial-gradient(circle at 5% 105%, rgb(236 189 91 / 16%) 0 108px, transparent 109px),
+      linear-gradient(112deg, #124e49 0%, #176d61 56%, #258a70 100%);
+    box-shadow: 0 15px 32px rgb(19 83 73 / 18%);
+    color: #fff;
+  }
+
+  .home-dashboard-welcome::after {
+    position: absolute;
+    top: -70px;
+    left: 22%;
+    width: 230px;
+    height: 230px;
+    border: 1px solid rgb(255 255 255 / 12%);
+    border-radius: 50%;
+    box-shadow: 0 0 0 24px rgb(255 255 255 / 4%), 0 0 0 50px rgb(255 255 255 / 3%);
+    content: "";
+    pointer-events: none;
+  }
+
+  .home-dashboard-welcome > div {
+    position: relative;
+    z-index: 1;
+  }
+
+  .home-dashboard-eyebrow {
+    color: #c8f0d9;
+    font-size: 12px;
+  }
+
+  .home-dashboard-welcome h3 {
+    margin-top: 7px;
+    color: #fff;
+    font-size: 29px;
+    letter-spacing: -0.5px;
+  }
+
+  .home-dashboard-welcome p {
+    color: rgb(255 255 255 / 79%);
+    font-size: 13px;
+  }
+
+  .home-dashboard-today {
+    display: inline-flex;
+    margin-top: 10px;
+    padding: 4px 10px;
+    border: 1px solid rgb(255 255 255 / 22%);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 10%);
+    color: #fff;
+    font-size: 10px;
+  }
+
+  .home-dashboard-refresh {
+    position: relative;
+    z-index: 1;
+    min-height: 42px;
+    padding-inline: 16px;
+    border-color: rgb(255 255 255 / 34%);
+    background: rgb(255 255 255 / 12%);
+    color: #fff;
+    backdrop-filter: blur(8px);
+  }
+
+  .home-dashboard-refresh:hover:not(:disabled) {
+    background: rgb(255 255 255 / 21%);
+  }
+
+  .home-dashboard-metrics {
+    gap: 15px;
+  }
+
+  .home-metric-card {
+    position: relative;
+    min-height: 142px;
+    overflow: hidden;
+    align-content: center;
+    gap: 7px;
+    padding: 21px 23px;
+    border-radius: 19px;
+    box-shadow: 0 10px 25px rgb(26 45 66 / 7%);
+  }
+
+  .home-metric-card::before {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    display: grid;
+    width: 43px;
+    height: 43px;
+    place-items: center;
+    border-radius: 14px;
+    background: var(--metric-icon-bg);
+    color: var(--metric-icon-color);
+    content: var(--metric-icon);
+    font-size: 21px;
+    font-weight: 800;
+  }
+
+  .home-metric-card::after {
+    position: absolute;
+    right: -40px;
+    bottom: -78px;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: var(--metric-glow);
+    content: "";
+  }
+
+  .home-metric-card > span,
+  .home-metric-card > strong,
+  .home-metric-card > small {
+    position: relative;
+    z-index: 1;
+  }
+
+  .home-metric-card > span {
+    color: #52677c;
+    font-size: 12px;
+  }
+
+  .home-metric-card > strong {
+    font-size: clamp(20px, 2.2vw, 27px);
+    letter-spacing: -0.3px;
+  }
+
+  .home-metric-card > small {
+    font-size: 10px;
+  }
+
+  .home-metric-receivables {
+    --metric-icon: "↗";
+    --metric-icon-bg: #ffead0;
+    --metric-icon-color: #c47a1d;
+    --metric-glow: rgb(236 177 93 / 14%);
+    border-color: #f2e2cb;
+    background: linear-gradient(135deg, #fff8ed, #fff 84%);
+  }
+
+  .home-metric-events {
+    --metric-icon: "▦";
+    --metric-icon-bg: #e1ecff;
+    --metric-icon-color: #4575c2;
+    --metric-glow: rgb(81 134 220 / 13%);
+    border-color: #dce7f8;
+    background: linear-gradient(135deg, #f1f6ff, #fff 84%);
+  }
+
+  .home-metric-customers {
+    --metric-icon: "♙";
+    --metric-icon-bg: #d9f3e7;
+    --metric-icon-color: #198261;
+    --metric-glow: rgb(53 167 122 / 13%);
+    border-color: #d8ebe3;
+    background: linear-gradient(135deg, #effbf5, #fff 84%);
+  }
+
+  .home-dashboard-columns {
+    gap: 16px;
+  }
+
+  .home-dashboard-card {
+    position: relative;
+    gap: 15px;
+    padding: 19px;
+    border-color: #e5eaf0;
+    border-radius: 19px;
+    box-shadow: 0 10px 25px rgb(26 45 66 / 5%);
+  }
+
+  .home-dashboard-card-heading {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #edf1f4;
+  }
+
+  .home-dashboard-card-heading > div {
+    position: relative;
+    padding-right: 12px;
+  }
+
+  .home-dashboard-card-heading > div::before {
+    position: absolute;
+    inset: 2px 0 2px auto;
+    width: 3px;
+    border-radius: 3px;
+    background: #2c987b;
+    content: "";
+  }
+
+  .home-dashboard-card-heading > div > span {
+    font-size: 10px;
+    letter-spacing: 0.1px;
+  }
+
+  .home-dashboard-card-heading h4,
+  .home-dashboard-shortcuts h4 {
+    margin-top: 1px;
+    font-size: 15px;
+  }
+
+  .home-dashboard-card-heading > button {
+    min-height: 34px;
+    padding: 5px 10px;
+    background: #f4faf7;
+    font-size: 10px;
+  }
+
+  .home-reminder-list,
+  .home-ceremony-list {
+    gap: 8px;
+  }
+
+  .home-reminder-item,
+  .home-ceremony-item {
+    min-height: 58px;
+    padding: 10px 11px;
+    border-color: #edf0f3;
+    border-radius: 12px;
+    transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+  }
+
+  .home-reminder-item:hover,
+  .home-ceremony-item:hover {
+    transform: translateX(-2px);
+  }
+
+  .home-reminder-content strong,
+  .home-ceremony-item strong {
+    font-size: 11px;
+  }
+
+  .home-reminder-content small,
+  .home-ceremony-item small {
+    font-size: 10px;
+  }
+
+  .home-reminder-amount {
+    padding: 5px 8px;
+    border-radius: 8px;
+    background: #fff3df;
+    color: #a96411;
+    font-size: 10px;
+  }
+
+  .home-ceremony-item {
+    gap: 12px;
+  }
+
+  .home-ceremony-date {
+    min-width: 105px;
+    padding: 8px 9px;
+    border: 1px solid #dce8fa;
+    border-radius: 10px;
+    background: #f1f6ff;
+    font-size: 10px;
+  }
+
+  .home-ceremony-info {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: 2px;
+  }
+
+  .home-dashboard-shortcuts {
+    gap: 13px;
+    padding: 18px;
+    border-color: #e3e9ef;
+    border-radius: 17px;
+    background: linear-gradient(115deg, #f8fafc, #f4faf7);
+  }
+
+  .home-dashboard-shortcuts > div {
+    gap: 9px;
+  }
+
+  .home-dashboard-shortcuts button {
+    min-height: 40px;
+    padding-inline: 14px;
+    border-color: #dce7e4;
+    border-radius: 11px;
+    box-shadow: 0 3px 9px rgb(28 64 55 / 4%);
+    transition: transform 140ms ease, box-shadow 140ms ease;
+  }
+
+  .home-dashboard-shortcuts button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 13px rgb(28 64 55 / 9%);
+  }
+
+  @media (max-width: 700px) {
+    .home-dashboard-welcome {
+      min-height: 0;
+      padding: 18px;
+      border-radius: 16px;
+    }
+
+    .home-dashboard-welcome h3 {
+      font-size: 23px;
+    }
+
+    .home-dashboard-welcome::after {
+      left: -20%;
+    }
+
+    .home-metric-card {
+      min-height: 105px;
+      padding: 14px 15px;
+    }
+
+    .home-metric-card::before {
+      top: 13px;
+      left: 13px;
+      width: 37px;
+      height: 37px;
+      border-radius: 12px;
+      font-size: 18px;
+    }
+
+    .home-dashboard-card {
+      border-radius: 15px;
+    }
+
+    .home-dashboard-shortcuts {
+      padding: 14px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .home-metric-card,
+    .home-reminder-item,
+    .home-ceremony-item,
+    .home-dashboard-shortcuts button {
+      transition: none;
+    }
+  }

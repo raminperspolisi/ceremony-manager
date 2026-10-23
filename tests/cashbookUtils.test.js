@@ -4,7 +4,10 @@ import {
   calculateAccountBalances,
   formatJalaliDate,
   getInvoicePaymentStatus,
+  maskCardNumber,
+  normalizeCardNumber,
   parseJalaliDate,
+  summarizeCashTransactions,
 } from '../src/cashbookUtils.js';
 
 test('Jalali date input is converted to an ISO date and formatted back', () => {
@@ -37,4 +40,21 @@ test('invoice payment status follows the amount already received', () => {
   assert.equal(getInvoicePaymentStatus(0, 0), 'unpaid');
   assert.equal(getInvoicePaymentStatus(40, 100), 'deposit_paid');
   assert.equal(getInvoicePaymentStatus(100, 100), 'paid');
+});
+
+test('bank card numbers normalize Persian digits and are masked for display', () => {
+  assert.equal(normalizeCardNumber('۶۱۰۴-۳۳۷۷ ۰۱۲۳ ۴۵۶۷'), '6104337701234567');
+  assert.equal(normalizeCardNumber('123456789'), null);
+  assert.equal(maskCardNumber('6104337701234567'), '•••• •••• •••• ۴۵۶۷');
+});
+
+test('cashbook period summary totals income, expenses, and transfer amounts by date', () => {
+  const summary = summarizeCashTransactions([
+    { transaction_type: 'income', amount: 100, transaction_date: '2026-10-01' },
+    { transaction_type: 'expense', amount: 25, transaction_date: '2026-10-15' },
+    { transaction_type: 'transfer', amount: 50, transaction_date: '2026-10-15' },
+    { transaction_type: 'income', amount: 500, transaction_date: '2026-11-01' },
+  ], '2026-10-01', '2026-10-31');
+
+  assert.deepEqual(summary, { income: 100, expenses: 25, transfers: 50 });
 });

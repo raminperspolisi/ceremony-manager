@@ -15,6 +15,19 @@ const toPersianDigits = (value) => String(value).replace(/\d/g, (digit) =>
   String.fromCharCode(digit.charCodeAt(0) + 1728)
 );
 
+export const normalizeCardNumber = (value) => {
+  const normalized = String(value || '')
+    .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
+    .replace(/[٠-٩]/g, (digit) => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit))
+    .replace(/[\s-]/g, '');
+  return /^\d{16}$/.test(normalized) ? normalized : null;
+};
+
+export const maskCardNumber = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length === 16 ? `•••• •••• •••• ${toPersianDigits(digits.slice(-4))}` : '';
+};
+
 export const parseJalaliDate = (value) => {
   const normalized = String(value || '')
     .trim()
@@ -56,6 +69,14 @@ export const calculateAccountBalances = (accounts, transactions) => {
   }
   return balances;
 };
+
+export const summarizeCashTransactions = (transactions, fromDate, toDate) => transactions.reduce((summary, transaction) => {
+  if (transaction.transaction_date < fromDate || transaction.transaction_date > toDate) return summary;
+  if (transaction.transaction_type === 'income') summary.income += Number(transaction.amount || 0);
+  if (transaction.transaction_type === 'expense') summary.expenses += Number(transaction.amount || 0);
+  if (transaction.transaction_type === 'transfer') summary.transfers += Number(transaction.amount || 0);
+  return summary;
+}, { income: 0, expenses: 0, transfers: 0 });
 
 export const getInvoicePaymentStatus = (paidAmount, totalAmount) => {
   if (Number(paidAmount) <= 0) return 'unpaid';
