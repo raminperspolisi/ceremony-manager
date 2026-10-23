@@ -255,16 +255,8 @@ export default function App() {
 
   useEffect(() => {
     const handleFunctionKey = (event) => {
-      const section = SECTION_BY_FUNCTION_KEY[event.key];
+      const section = SECTION_BY_FUNCTION_KEY[event.code] || SECTION_BY_FUNCTION_KEY[event.key];
       if (!session || !section || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || profileOpen) return;
-
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')
-      ) {
-        return;
-      }
 
       event.preventDefault();
       setActiveSection(section);
@@ -272,8 +264,8 @@ export default function App() {
       setMobileMenuOpen(false);
     };
 
-    window.addEventListener('keydown', handleFunctionKey);
-    return () => window.removeEventListener('keydown', handleFunctionKey);
+    window.addEventListener('keydown', handleFunctionKey, true);
+    return () => window.removeEventListener('keydown', handleFunctionKey, true);
   }, [profileOpen, session]);
 
   useEffect(() => {
