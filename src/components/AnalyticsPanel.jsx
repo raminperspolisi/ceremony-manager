@@ -165,6 +165,12 @@ export default function AnalyticsPanel() {
     return () => window.removeEventListener('offline-data-updated', fetchAnalyticsData);
   }, [fetchAnalyticsData]);
 
+  useEffect(() => {
+    const handleAppEscape = () => setExpandedInvoiceId(null);
+    window.addEventListener('app-escape', handleAppEscape);
+    return () => window.removeEventListener('app-escape', handleAppEscape);
+  }, []);
+
   const range = useMemo(
     () => getPeriodBounds(period, customFrom, customTo),
     [period, customFrom, customTo],

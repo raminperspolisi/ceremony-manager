@@ -1,4 +1,4 @@
-import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabaseClient';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabaseClient.js';
 
 const DATABASE_NAME = 'ceremony-manager-offline';
 const DATABASE_VERSION = 1;
@@ -111,9 +111,34 @@ const localizeRows = async (userId, table, rows) => {
     mappings.filter((mapping) => mapping.table === table)
       .map((mapping) => [String(mapping.serverId), mapping.localId]),
   );
+  const quotationLocalIdByServerId = new Map(
+    mappings.filter((mapping) => mapping.table === 'quotations')
+      .map((mapping) => [String(mapping.serverId), mapping.localId]),
+  );
+  const accountLocalIdByServerId = new Map(
+    mappings.filter((mapping) => mapping.table === 'financial_accounts')
+      .map((mapping) => [String(mapping.serverId), mapping.localId]),
+  );
+  const invoiceLocalIdByServerId = new Map(
+    mappings.filter((mapping) => mapping.table === 'invoices')
+      .map((mapping) => [String(mapping.serverId), mapping.localId]),
+  );
   return rows.map((row) => {
     const localId = localIdByServerId.get(String(row.id));
-    return localId === undefined ? row : { ...row, id: localId };
+    let localizedRow = localId === undefined ? row : { ...row, id: localId };
+    if (table === 'invoices' && row.quotation_id !== undefined && row.quotation_id !== null) {
+      const localQuotationId = quotationLocalIdByServerId.get(String(row.quotation_id));
+      if (localQuotationId !== undefined) localizedRow = { ...localizedRow, quotation_id: localQuotationId };
+    }
+    if (table === 'cash_transactions') {
+      const localAccountId = accountLocalIdByServerId.get(String(row.account_id));
+      const localDestinationId = accountLocalIdByServerId.get(String(row.transfer_to_account_id));
+      const localInvoiceId = invoiceLocalIdByServerId.get(String(row.invoice_id));
+      if (localAccountId !== undefined) localizedRow = { ...localizedRow, account_id: localAccountId };
+      if (localDestinationId !== undefined) localizedRow = { ...localizedRow, transfer_to_account_id: localDestinationId };
+      if (localInvoiceId !== undefined) localizedRow = { ...localizedRow, invoice_id: localInvoiceId };
+    }
+    return localizedRow;
   });
 };
 
@@ -281,13 +306,19 @@ const resolveServerId = async (userId, table, id) => {
 const rewriteReferences = async (userId, table, value) => {
   const rewritten = { ...value };
   for (const [key, id] of Object.entries(rewritten)) {
-    if (key === 'id' || key.endsWith('_id')) rewritten[key] = await resolveServerId(userId, tableForReference(key, table), id);
+    if (key === 'id' || key.endsWith('_id')) {
+      const serverId = await resolveServerId(userId, tableForReference(key, table), id);
+      rewritten[key] = key === 'quotation_id' ? String(serverId) : serverId;
+    }
   }
   return rewritten;
 };
 
 const tableForReference = (key, fallback) => {
   if (key === 'customer_id') return 'customers';
+  if (key === 'quotation_id') return 'quotations';
+  if (key === 'account_id' || key === 'transfer_to_account_id') return 'financial_accounts';
+  if (key === 'invoice_id') return 'invoices';
   return fallback;
 };
 
@@ -362,6 +393,76 @@ export async function insertRows(table, rows) {
     notifyStatus(navigator.onLine ? 'pending' : 'offline-pending');
     if (navigator.onLine) void syncPendingMutations();
     return { data, error: null, offline: true };
+  } catch (error) {
+    return { data: null, error: { message: error.message } };
+  }
+}
+
+const getInvoiceCacheRow = async (userId, invoiceId) => {
+  const { store } = await getStore('records');
+  return requestResult(store.get(makeCacheKey(userId, 'invoices', invoiceId)));
+};
+
+const applyCashTransactionResult = async (userId, localRow, result) => {
+  if (!result?.transaction) throw new Error('پاسخ ثبت گردش مالی از سرور معتبر نیست.');
+  if (localRow && isPendingId(localRow.id)) {
+    await reconcileInsertedRow(userId, 'cash_transactions', localRow, result.transaction);
+  } else {
+    await cacheRows(userId, 'cash_transactions', [result.transaction]);
+  }
+  if (result.invoice) {
+    const invoice = (await localizeRows(userId, 'invoices', [result.invoice]))[0];
+    const { id, ...updates } = invoice;
+    const changed = await updateCachedRows(userId, 'invoices', [{ column: 'id', operator: 'eq', value: id }], updates);
+    if (!changed.length) await cacheRows(userId, 'invoices', [result.invoice]);
+  }
+  window.dispatchEvent(new Event('offline-data-updated'));
+};
+
+export async function recordCashTransaction(transaction) {
+  const userId = await getUserId();
+  const row = {
+    ...transaction,
+    offline_sync_id: transaction.offline_sync_id || crypto.randomUUID(),
+  };
+
+  if (!(await mustQueueBehindPendingMutations(userId))) {
+    const serverRow = await rewriteReferences(userId, 'cash_transactions', row);
+    const { data, error } = await supabase.rpc('record_cash_transaction', { p_transaction: serverRow });
+    if (!error) {
+      await applyCashTransactionResult(userId, null, data);
+      return { data, error: null, offline: false };
+    }
+    if (!isNetworkError(error)) return { data: null, error };
+  }
+
+  try {
+    const localRow = { ...row, id: row.id ?? makePendingId() };
+    if (localRow.invoice_id !== undefined && localRow.invoice_id !== null) {
+      const cachedInvoice = await getInvoiceCacheRow(userId, localRow.invoice_id);
+      if (!cachedInvoice || cachedInvoice.deleted) {
+        throw new Error('برای ثبت دریافت آفلاین، ابتدا فاکتور را در همین دستگاه بارگیری کنید.');
+      }
+      const invoice = cachedInvoice.value;
+      const paidAmount = Number(invoice.paid_amount || 0) + Number(localRow.amount);
+      const totalAmount = Number(invoice.total_price || invoice.total_amount || 0);
+      if (paidAmount > totalAmount) throw new Error('مبلغ دریافت از مانده فاکتور بیشتر است.');
+      await updateCachedRows(
+        userId,
+        'invoices',
+        [{ column: 'id', operator: 'eq', value: localRow.invoice_id }],
+        {
+          paid_amount: paidAmount,
+          payment_status: paidAmount >= totalAmount ? 'paid' : 'deposit_paid',
+        },
+        { pending: true },
+      );
+    }
+    await putLocalRows(userId, 'cash_transactions', [localRow], { pending: true });
+    await enqueueMutation(userId, { type: 'cash-transaction', table: 'cash_transactions', row: localRow });
+    window.dispatchEvent(new Event('offline-data-updated'));
+    if (navigator.onLine) void syncPendingMutations();
+    return { data: localRow, error: null, offline: true };
   } catch (error) {
     return { data: null, error: { message: error.message } };
   }
@@ -495,6 +596,7 @@ const reconcileInsertedRow = async (userId, table, localRow, serverRow) => {
     transaction.onerror = () => reject(transaction.error || new Error('ذخیرهٔ شناسهٔ همگام‌شده ناموفق بود.'));
   });
 
+  const localizedServerRow = (await localizeRows(userId, table, [serverRow]))[0];
   const { store: recordStore, transaction: recordTransaction } = await getStore('records', 'readwrite');
   const recordKey = makeCacheKey(userId, table, localId);
   const entry = await requestResult(recordStore.get(recordKey));
@@ -503,12 +605,21 @@ const reconcileInsertedRow = async (userId, table, localRow, serverRow) => {
       ...entry,
       serverId: serverRow.id,
       pending: false,
-      value: { ...entry.value, ...serverRow, id: localId },
+      value: { ...entry.value, ...localizedServerRow, id: localId },
     });
   }
   await new Promise((resolve, reject) => {
     recordTransaction.oncomplete = resolve;
     recordTransaction.onerror = () => reject(recordTransaction.error || new Error('به‌روزرسانی رکورد همگام‌شده ناموفق بود.'));
+  });
+};
+
+const discardLocalInsertedRow = async (userId, table, localRow) => {
+  const { store, transaction } = await getStore('records', 'readwrite');
+  store.delete(makeCacheKey(userId, table, localRow.id));
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error('پاک‌کردن فاکتور تکراری از حافظهٔ محلی ناموفق بود.'));
   });
 };
 
@@ -525,7 +636,16 @@ async function mustQueueBehindPendingMutations(userId) {
 }
 
 export async function warmOfflineCache() {
-  const tables = ['customers', 'ceremonies', 'events', 'inventory', 'quotations', 'invoices'];
+  const tables = [
+    'customers',
+    'ceremonies',
+    'events',
+    'inventory',
+    'quotations',
+    'invoices',
+    'financial_accounts',
+    'cash_transactions',
+  ];
   const failures = [];
   await Promise.all(tables.map(async (table) => {
     const serverRows = [];
@@ -553,6 +673,14 @@ export async function warmOfflineCache() {
 }
 
 const applyMutation = async (userId, mutation) => {
+  if (mutation.type === 'cash-transaction') {
+    const row = await rewriteReferences(userId, mutation.table, mutation.row);
+    const { data, error } = await supabase.rpc('record_cash_transaction', { p_transaction: row });
+    if (error) throw error;
+    await applyCashTransactionResult(userId, mutation.row, data);
+    return;
+  }
+
   if (mutation.type === 'insert') {
     const row = await rewriteReferences(userId, mutation.table, mutation.row);
     const localId = row.id;
@@ -562,7 +690,24 @@ const applyMutation = async (userId, mutation) => {
       .from(mutation.table)
       .upsert([row], { onConflict: 'offline_sync_id' })
       .select('*');
-    if (error) throw error;
+    if (error) {
+      if (mutation.table === 'invoices' && mutation.row.quotation_id && error.code === '23505') {
+        const { data: existingInvoice, error: lookupError } = await supabase
+          .from('invoices')
+          .select('*')
+          .eq('quotation_id', String(row.quotation_id))
+          .maybeSingle();
+        if (!lookupError && existingInvoice) {
+          if (isPendingId(localId)) {
+            await discardLocalInsertedRow(userId, mutation.table, { id: localId });
+          } else {
+            await putLocalRows(userId, mutation.table, [existingInvoice]);
+          }
+          return;
+        }
+      }
+      throw error;
+    }
     if (data?.[0] && isPendingId(localId)) {
       await reconcileInsertedRow(userId, mutation.table, { ...mutation.row, id: localId }, data[0]);
     } else if (data?.[0]) {
@@ -608,9 +753,13 @@ export async function syncPendingMutations() {
               return;
             }
             notifyStatus('sync-error');
-            const migrationHint = /offline_sync_id|on conflict.*unique/i.test(error.message || '')
-              ? ' در Supabase باید migration supabase/migrations/20261022000000_offline_sync_ids.sql اجرا شود.'
-              : '';
+            const migrationHint = /record_cash_transaction|cash_transactions|financial_accounts/i.test(error.message || '')
+              ? ' برای فعال‌شدن صندوق و بانک، migration supabase/migrations/20261023200000_cashbook_accounts_and_transactions.sql را در Supabase اجرا کنید.'
+              : /quotation_id/i.test(error.message || '')
+                ? ' برای جلوگیری از صدور تکراری، migration supabase/migrations/20261023190000_link_quotations_to_invoices.sql را در Supabase اجرا کنید.'
+              : /offline_sync_id|on conflict.*unique/i.test(error.message || '')
+                ? ' در Supabase باید migration supabase/migrations/20261022000000_offline_sync_ids.sql اجرا شود.'
+                : '';
             window.dispatchEvent(new CustomEvent('offline-sync-error', {
               detail: `همگام‌سازی ${mutation.table} ناموفق بود: ${error.message}${migrationHint}`,
             }));

@@ -47,6 +47,26 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
     return () => window.removeEventListener('offline-data-updated', refreshCustomerData);
   }, [selectedCustomer?.id]);
 
+  useEffect(() => {
+    const handleAppEscape = () => {
+      if (isSearching) {
+        setIsSearching(false);
+        return;
+      }
+      if (editingCeremonyId !== null) {
+        setEditingCeremonyId(null);
+        setCerDate('');
+        setCerGuests('');
+        setCerBudget('');
+        setCerNotes('');
+        return;
+      }
+      if (editingId !== null) handleCancelEdit();
+    };
+    window.addEventListener('app-escape', handleAppEscape);
+    return () => window.removeEventListener('app-escape', handleAppEscape);
+  }, [editingCeremonyId, editingId, isSearching]);
+
   async function fetchCustomers() {
     try {
       const { data, error: fetchError } = await readTable('customers', { orderBy: 'created_at', ascending: false });

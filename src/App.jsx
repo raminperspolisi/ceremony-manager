@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from './supabaseClient';
 import InventoryPanel from './components/InventoryPanel';
 import QuotationPanel from './components/QuotationPanel';
@@ -10,6 +10,8 @@ import RemindersPanel from './components/RemindersPanel'; // 🔔 یادآوری
 import CalendarPanel from './components/CalendarPanel'; // 📅 تقویم مراسم‌ها
 import TutorialPanel from './components/TutorialPanel';
 import ContactPanel from './components/ContactPanel';
+import BackupPanel from './components/BackupPanel';
+import CashbookPanel from './components/CashbookPanel';
 import { formatDisplay } from './styles';
 import {
   getOfflineSyncStatus,
@@ -33,6 +35,35 @@ const SECTION_BY_FUNCTION_KEY = {
   F7: 'calendar',
   F8: 'reminders',
 };
+const GLOBAL_SEARCH_TABLES = [
+  { table: 'customers', section: 'customers', label: 'مشتری' },
+  { table: 'inventory', section: 'inventory', label: 'کالا' },
+  { table: 'quotations', section: 'quotations', label: 'پیش‌فاکتور' },
+  { table: 'invoices', section: 'official', label: 'فاکتور رسمی' },
+];
+
+const normalizeSearchText = (value) => String(value ?? '')
+  .toLocaleLowerCase('fa-IR')
+  .replace(/[يى]/g, 'ی')
+  .replace(/ك/g, 'ک')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+async function readAllTableRows(table) {
+  const pageSize = 1000;
+  const rows = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const result = await readTable(table, {
+      orderBy: 'id',
+      ascending: false,
+      limit: pageSize,
+      offset,
+    });
+    if (result.error) return result;
+    rows.push(...(result.data || []));
+    if ((result.data || []).length < pageSize) return { data: rows, error: null };
+  }
+}
 
 function resizeLogoToWebp(file) {
   return new Promise((resolve, reject) => {
@@ -94,6 +125,13 @@ export default function App() {
   const [browserOnline, setBrowserOnline] = useState(() => navigator.onLine);
   const [offlineCacheUserId, setOfflineCacheUserId] = useState(null);
   const [offlineSyncError, setOfflineSyncError] = useState('');
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [globalSearchResults, setGlobalSearchResults] = useState([]);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
+  const [globalSearchError, setGlobalSearchError] = useState('');
+  const [globalSearchRevision, setGlobalSearchRevision] = useState(0);
+  const globalSearchCache = useRef(null);
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const businessName = session?.user?.user_metadata?.business_name?.trim() || DEFAULT_BUSINESS_NAME;
@@ -166,6 +204,76 @@ export default function App() {
   const offlineCacheReady = offlineCacheUserId === sessionUserId;
 
   useEffect(() => {
+    const refreshSearchCache = () => {
+      globalSearchCache.current = null;
+      setGlobalSearchRevision((revision) => revision + 1);
+    };
+    window.addEventListener('offline-data-updated', refreshSearchCache);
+    return () => window.removeEventListener('offline-data-updated', refreshSearchCache);
+  }, []);
+
+  useEffect(() => {
+    const query = normalizeSearchText(globalSearch);
+    if (!sessionUserId || query.length < 2) return undefined;
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        let rows = globalSearchCache.current?.userId === sessionUserId
+          ? globalSearchCache.current.rows
+          : null;
+        let searchError = '';
+        if (!rows) {
+          const tables = await Promise.all(GLOBAL_SEARCH_TABLES.map(async ({ table, label }) => {
+            const { data, error } = await readAllTableRows(table);
+            return {
+              table,
+              label,
+              data: data || [],
+              error: error ? `${label}: ${error.message}` : '',
+            };
+          }));
+          rows = tables.flatMap(({ table, data }) => data.map((row) => ({ table, row })));
+          searchError = tables.map((result) => result.error).filter(Boolean).join('؛ ');
+          if (!cancelled && !searchError) globalSearchCache.current = { userId: sessionUserId, rows };
+        }
+        const matches = rows.flatMap(({ table, row }) => {
+            const { section, label } = GLOBAL_SEARCH_TABLES.find((source) => source.table === table);
+            const items = row.items_data || row.items_json || [];
+            const values = [
+              row.id,
+              row['Full name'],
+              row.customer_name,
+              row.phone,
+              row.address,
+              row.customer_phone,
+              ...(Array.isArray(items) ? items.map((item) => item.title || item.item_name || item.name) : []),
+            ];
+            if (!values.some((value) => normalizeSearchText(value).includes(query))) return [];
+            const name = row['Full name'] || row.customer_name || row.title || `شمارهٔ ${formatDisplay(row.id)}`;
+            const detail = row.phone || row.customer_phone || (row.total_price ? `${formatDisplay(row.total_price)} تومان` : '');
+            return [{ id: `${table}-${row.id}`, section, label, name, detail }];
+          });
+        if (cancelled) return;
+        setGlobalSearchResults(matches.slice(0, 15));
+        setGlobalSearchError(searchError);
+      } catch (error) {
+        if (!cancelled) {
+          setGlobalSearchResults([]);
+          setGlobalSearchError(`جستجو ناموفق بود: ${error.message}`);
+        }
+      } finally {
+        if (!cancelled) setGlobalSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [globalSearch, globalSearchRevision, sessionUserId]);
+
+  useEffect(() => {
     if (!sessionUserId) return undefined;
     let mounted = true;
     warmOfflineCache().then(() => {
@@ -227,7 +335,16 @@ export default function App() {
     document.addEventListener('visibilitychange', refreshWhenVisible);
     const refreshInterval = window.setInterval(refreshFromServer, 30000);
     const channel = supabase.channel(`live-data-${sessionUserId}`);
-    ['customers', 'ceremonies', 'events', 'inventory', 'quotations', 'invoices'].forEach((table) => {
+    [
+      'customers',
+      'ceremonies',
+      'events',
+      'inventory',
+      'quotations',
+      'invoices',
+      'financial_accounts',
+      'cash_transactions',
+    ].forEach((table) => {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, refreshAfterRealtimeChange);
     });
     channel.subscribe((status) => {
@@ -269,13 +386,25 @@ export default function App() {
   }, [profileOpen, session]);
 
   useEffect(() => {
-    if (!mobileMenuOpen) return undefined;
     const handleEscape = (event) => {
-      if (event.key === 'Escape') setMobileMenuOpen(false);
+      if (event.key !== 'Escape') return;
+      if (profileOpen) {
+        if (!profileLoading) setProfileOpen(false);
+        return;
+      }
+      if (mobileMenuOpen) {
+        setMobileMenuOpen(false);
+        return;
+      }
+      if (globalSearchOpen) {
+        setGlobalSearchOpen(false);
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('app-escape', { detail: activeSection }));
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [mobileMenuOpen]);
+  }, [activeSection, globalSearchOpen, mobileMenuOpen, profileLoading, profileOpen]);
 
   const handleSectionChange = (section) => {
     setActiveSection(section);
@@ -527,13 +656,6 @@ export default function App() {
                     'آنلاین'}
           </span>
           <span className="status-dot" />
-          <span className="header-user-name">{session.user.user_metadata?.display_name || session.user.email || 'کاربر واردشده'}</span>
-          <button type="button" className="profile-button" onClick={handleOpenProfile}>
-            ویرایش پروفایل
-          </button>
-          <button type="button" onClick={handleSignOut} style={{ padding: '4px 10px', border: '1px solid #dbe5e2', background: '#fff', color: '#1e5048' }}>
-            خروج
-          </button>
         </div>
       </header>
       {offlineSyncError && (
@@ -670,6 +792,34 @@ export default function App() {
         <aside className={`sidebar ${mobileMenuOpen ? 'mobile-menu-open' : ''}`} id="main-navigation">
           <p className="sidebar-label">منوی اصلی</p>
 
+          <div className="sidebar-account" aria-label="حساب کاربری">
+            <span className="sidebar-account-name">
+              {session.user.user_metadata?.display_name || session.user.email || 'کاربر واردشده'}
+            </span>
+            <div className="sidebar-account-actions">
+              <button
+                type="button"
+                className="profile-button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleOpenProfile();
+                }}
+              >
+                ویرایش پروفایل
+              </button>
+              <button
+                type="button"
+                className="sidebar-signout-button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleSignOut();
+                }}
+              >
+                خروج
+              </button>
+            </div>
+          </div>
+
           <nav className="section-nav" aria-label="بخش‌های برنامه">
             {/* 1. مشتریان */}
             <button
@@ -719,6 +869,24 @@ export default function App() {
               <span className="nav-icon">📜</span>
               <span className="nav-text">فاکتور رسمی</span>
               <span className="nav-shortcut">F4</span>
+            </button>
+
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "backup" ? "active" : ""}`}
+              onClick={() => handleSectionChange("backup")}
+            >
+              <span className="nav-icon">⬇</span>
+              <span className="nav-text">پشتیبان‌گیری</span>
+            </button>
+
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "cashbook" ? "active" : ""}`}
+              onClick={() => handleSectionChange("cashbook")}
+            >
+              <span className="nav-icon">💰</span>
+              <span className="nav-text">صندوق و بانک</span>
             </button>
 
             {/* 5. گزارش مالی */}
@@ -817,15 +985,76 @@ export default function App() {
                   ? "یادآوری مراسم و پیگیری تسویه"
                   : activeSection === "tutorial"
                   ? "آموزش نرم‌افزار"
+                  : activeSection === "backup"
+                  ? "پشتیبان‌گیری و بازیابی"
+                  : activeSection === "cashbook"
+                  ? "صندوق و بانک"
                   : "ارتباط با ما"}
               </h2>
             </div>
 
-            {activeSection === "inventory" && (
-              <button type="button" className="refresh-button" onClick={fetchData}>
-                ↻ تازه‌سازی
-              </button>
-            )}
+            <div className="page-heading-actions">
+              <div
+                className="global-search"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setGlobalSearchOpen(false);
+                }}
+              >
+                <label htmlFor="global-search-input">جستجوی یکپارچه</label>
+                <input
+                  id="global-search-input"
+                  type="search"
+                  value={globalSearch}
+                  onFocus={() => setGlobalSearchOpen(true)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setGlobalSearch(value);
+                    setGlobalSearchOpen(true);
+                    setGlobalSearchError('');
+                    if (normalizeSearchText(value).length >= 2) {
+                      setGlobalSearchLoading(true);
+                    } else {
+                      setGlobalSearchLoading(false);
+                      setGlobalSearchResults([]);
+                    }
+                  }}
+                  placeholder="نام، تلفن، کالا یا شماره فاکتور"
+                  aria-controls="global-search-results"
+                  aria-expanded={globalSearchOpen && normalizeSearchText(globalSearch).length >= 2}
+                  autoComplete="off"
+                />
+                {globalSearchOpen && normalizeSearchText(globalSearch).length >= 2 && (
+                  <div id="global-search-results" className="global-search-results" role="listbox" aria-label="نتایج جستجو">
+                    {globalSearchLoading && <p role="status">در حال جستجو…</p>}
+                    {!globalSearchLoading && globalSearchResults.length === 0 && !globalSearchError && (
+                      <p>موردی پیدا نشد.</p>
+                    )}
+                    {globalSearchError && <p className="global-search-error" role="alert">{globalSearchError}</p>}
+                    {globalSearchResults.map((result) => (
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected="false"
+                        key={result.id}
+                        onClick={() => {
+                          handleSectionChange(result.section);
+                          setGlobalSearch('');
+                          setGlobalSearchOpen(false);
+                        }}
+                      >
+                        <span>{result.name}</span>
+                        <small>{result.label}{result.detail ? ` · ${result.detail}` : ''}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {activeSection === "inventory" && (
+                <button type="button" className="refresh-button" onClick={fetchData}>
+                  ↻ تازه‌سازی
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="panel-container">
@@ -840,16 +1069,18 @@ export default function App() {
             )}
             {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} businessName={businessName} logoUrl={logoUrl} />}
             {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} />}
+            {activeSection === "backup" && <BackupPanel userId={sessionUserId} />}
+            {activeSection === "cashbook" && <CashbookPanel />}
             {activeSection === "reports" && <FinancialReportPanel businessName={businessName} logoUrl={logoUrl} />}
             {activeSection === "analytics" && <AnalyticsPanel />}
             {visitedSections.has("calendar") && (
               <div style={{ display: activeSection === "calendar" ? "block" : "none" }}>
-                <CalendarPanel />
+                <CalendarPanel active={activeSection === "calendar"} />
               </div>
             )}
             {visitedSections.has("reminders") && (
               <div style={{ display: activeSection === "reminders" ? "block" : "none" }}>
-                <RemindersPanel businessName={businessName} logoUrl={logoUrl} />
+                <RemindersPanel businessName={businessName} logoUrl={logoUrl} active={activeSection === "reminders"} />
               </div>
             )}
             {activeSection === "tutorial" && <TutorialPanel />}

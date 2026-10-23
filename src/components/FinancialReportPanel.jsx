@@ -26,6 +26,12 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     return () => window.removeEventListener('offline-data-updated', fetchFinancialData);
   }, []);
 
+  useEffect(() => {
+    const handleAppEscape = () => setSelectedInvoice(null);
+    window.addEventListener('app-escape', handleAppEscape);
+    return () => window.removeEventListener('app-escape', handleAppEscape);
+  }, []);
+
   async function fetchFinancialData() {
     setLoading(true);
     const { data, error } = await readTable('invoices', { orderBy: 'created_at', ascending: true });

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import { deleteRows, insertRows, readTable } from '../offlineSync';
 import FormattedNumberInput from './FormattedNumberInput';
+import { convertQuotationToInvoice, deleteSelectedDocuments } from '../quotationInvoice';
 
 const win95Style = {
   window: { 
@@ -78,6 +79,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
   const [quotationDate, setQuotationDate] = useState(new Date().toLocaleDateString('fa-IR'));
   const [savedInvoices, setSavedInvoices] = useState([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
+  const [convertingQuotationId, setConvertingQuotationId] = useState(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -89,6 +91,22 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     window.addEventListener('offline-data-updated', refreshData);
     return () => window.removeEventListener('offline-data-updated', refreshData);
   }, []);
+
+  useEffect(() => {
+    const handleAppEscape = () => {
+      if (isSearching) {
+        setIsSearching(false);
+        return;
+      }
+      if (showAddCustomerForm) {
+        setShowAddCustomerForm(false);
+        setNewCustomerName('');
+        setNewCustomerPhone('');
+      }
+    };
+    window.addEventListener('app-escape', handleAppEscape);
+    return () => window.removeEventListener('app-escape', handleAppEscape);
+  }, [isSearching, showAddCustomerForm]);
 
   async function fetchCustomers() {
     try {
@@ -300,29 +318,42 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
   const handleConvertToInvoice = async (e, inv) => {
     e.stopPropagation();
-    if (inv.type === 'official') { 
-      alert("این فاکتور قبلاً به فاکتور رسمی تبدیل شده است."); 
+    if (inv.type === 'official') {
+      alert('این فاکتور قبلاً رسمی است.');
       return; 
     }
-    
+
+    const existingInvoice = savedInvoices.find((invoice) =>
+      invoice.type === 'official' && String(invoice.quotation_id) === String(inv.id),
+    );
+    if (existingInvoice) {
+      alert(`این پیش‌فاکتور قبلاً به فاکتور رسمی شمارهٔ ${formatPersianDigits(existingInvoice.id)} تبدیل شده است.`);
+      return;
+    }
+
     const confirmConversion = window.confirm(`آیا مطمئن هستید که می‌خواهید پیش‌فاکتور «${inv.customer_name}» را به فاکتور رسمی تبدیل کنید؟`);
     if (!confirmConversion) return;
-    
-    const itemsToSave = inv.items_json || inv.items_data || [];
 
-    const { error } = await insertRows("invoices", [{
-      customer_name: inv.customer_name, 
-      total_price: inv.total_price, 
-      items_data: itemsToSave, 
-      is_official: true 
-    }]);
-
-    if (error) {
-      alert("خطا در صدور فاکتور رسمی: " + error.message);
-    } else {
-      alert("فاکتور رسمی با موفقیت صادر شد و در گزارش مالی قرار گرفت.");
-      fetchInvoices();
+    setConvertingQuotationId(String(inv.id));
+    try {
+      const result = await convertQuotationToInvoice(inv, { readTable, insertRows });
+      if (result.alreadyConverted) {
+        alert(`این پیش‌فاکتور قبلاً به فاکتور رسمی شمارهٔ ${formatPersianDigits(result.invoice.id)} تبدیل شده است.`);
+      } else {
+        alert('فاکتور رسمی با موفقیت صادر شد و در گزارش مالی قرار گرفت.');
+      }
+      await fetchInvoices();
+    } catch (error) {
+      const detail = error.code === '23505'
+        ? 'این پیش‌فاکتور قبلاً از دستگاه دیگری به فاکتور رسمی تبدیل شده است؛ فهرست را تازه‌سازی کنید.'
+        : /quotation_id.*(column|schema)/i.test(error.message || '')
+          ? 'ارتباط پیش‌فاکتور و فاکتور نیاز به migration supabase/migrations/20261023190000_link_quotations_to_invoices.sql دارد.'
+        : error.message;
+      alert(`خطا در صدور فاکتور رسمی: ${detail}`);
+    } finally {
+      setConvertingQuotationId(null);
     }
+
   };
 
   const handleQuantityChange = (itemId, value) => {
@@ -373,26 +404,17 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     
     if (!window.confirm(`آیا از حذف ${formatDisplay(selectedInvoiceIds.length)} فاکتور انتخاب‌شده اطمینان دارید؟`)) return;
 
-    const quotationIdsToDelete = savedInvoices
-      .filter((invoice) => selectedInvoiceIds.includes(`${invoice.type}-${invoice.id}`) && invoice.type === 'quotation')
-      .map((invoice) => invoice.id);
-    const officialIdsToDelete = savedInvoices
-      .filter((invoice) => selectedInvoiceIds.includes(`${invoice.type}-${invoice.id}`) && invoice.type === 'official')
-      .map((invoice) => invoice.id);
-
     try {
-      if (quotationIdsToDelete.length > 0) {
-        const { error } = await deleteRows('quotations', [{ column: 'id', operator: 'in', value: quotationIdsToDelete }]);
-        if (error) throw error;
-      }
-      if (officialIdsToDelete.length > 0) {
-        const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'in', value: officialIdsToDelete }]);
-        if (error) throw error;
-      }
+      await deleteSelectedDocuments(selectedInvoiceIds, savedInvoices, { deleteRows });
       alert("فاکتورهای انتخاب‌شده با موفقیت حذف شدند.");
       fetchInvoices();
     } catch (err) {
-      alert("خطا در حذف دسته‌ای: " + err.message);
+      if (err.partial) {
+        alert(`بخشی از حذف انجام شد اما عملیات کامل نشد: ${err.message} فهرست را تازه‌سازی و موارد باقی‌مانده را بررسی کنید.`);
+        fetchInvoices();
+      } else {
+        alert("خطا در حذف دسته‌ای: " + err.message);
+      }
     }
   };
 
@@ -629,15 +651,28 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                   </span>
                 </div>
 
-                {inv.type !== 'official' && (
-                  <div className="recent-invoice-actions">
-                    <button
-                      style={{ backgroundColor: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
-                      onClick={(e) => handleConvertToInvoice(e, inv)}>
-                      صدور رسمی
-                    </button>
-                  </div>
-                )}
+                {inv.type !== 'official' && (() => {
+                  const linkedInvoice = savedInvoices.find((invoice) =>
+                    invoice.type === 'official' && String(invoice.quotation_id) === String(inv.id),
+                  );
+                  return (
+                    <div className="recent-invoice-actions">
+                      {linkedInvoice ? (
+                        <span role="status" style={{ color: '#15803d', fontSize: '11px', fontWeight: 'bold' }}>
+                          صادرشده · #{formatPersianDigits(linkedInvoice.id)}
+                        </span>
+                      ) : (
+                        <button
+                          style={{ backgroundColor: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: convertingQuotationId === String(inv.id) ? 'wait' : 'pointer', fontSize: '11px' }}
+                          onClick={(e) => handleConvertToInvoice(e, inv)}
+                          disabled={convertingQuotationId === String(inv.id)}
+                        >
+                          {convertingQuotationId === String(inv.id) ? 'در حال صدور…' : 'صدور رسمی'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
 
               </div>
             ))

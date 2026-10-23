@@ -16,9 +16,15 @@ BEGIN
     'events',
     'inventory',
     'quotations',
-    'invoices'
+    'invoices',
+    'financial_accounts',
+    'cash_transactions'
   ]
   LOOP
+    IF to_regclass(format('public.%I', target_table)) IS NULL THEN
+      CONTINUE;
+    END IF;
+
     IF NOT EXISTS (
       SELECT 1
       FROM pg_publication_tables

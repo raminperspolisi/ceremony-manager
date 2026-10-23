@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { deleteRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
+import { updateOfficialInvoice } from '../quotationInvoice';
+import { getInvoicePaymentStatus } from '../cashbookUtils';
 
 // مقادیر مجاز وضعیت پرداخت
 const PAYMENT_STATUSES = [
@@ -32,7 +34,6 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const [customerLoadError, setCustomerLoadError] = useState('');
   const [editableItems, setEditableItems] = useState([]);
   const [paidAmount, setPaidAmount] = useState('');
-  const [paymentStatus, setPaymentStatus] = useState('unpaid');
 
   // حالت نمایش چک‌لیست برای هر فاکتور
   const [checklistOpenId, setChecklistOpenId] = useState(null);
@@ -62,6 +63,34 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     window.addEventListener('offline-data-updated', refreshData);
     return () => window.removeEventListener('offline-data-updated', refreshData);
   }, []);
+
+  useEffect(() => {
+    const handleAppEscape = () => {
+      if (isCustomerListOpen) {
+        setIsCustomerListOpen(false);
+        return;
+      }
+      if (editingId !== null) {
+        handleCancelEdit();
+        return;
+      }
+      if (checklistOpenId !== null) {
+        setChecklistOpenId(null);
+        return;
+      }
+      if (printInvoice) {
+        setPrintInvoice(null);
+        return;
+      }
+      if (whatsAppInvoice) {
+        setWhatsAppInvoice(null);
+        return;
+      }
+      if (detailsInvoice) setDetailsInvoice(null);
+    };
+    window.addEventListener('app-escape', handleAppEscape);
+    return () => window.removeEventListener('app-escape', handleAppEscape);
+  }, [checklistOpenId, detailsInvoice, editingId, isCustomerListOpen, printInvoice, whatsAppInvoice]);
 
   const filteredCustomers = customers.filter((customer) => {
     const query = customerSearch.trim().toLocaleLowerCase('fa-IR');
@@ -272,7 +301,6 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     setCeremonyDate(inv.ceremony_date || '');
     setCustomerAddress(inv.customer_address || '');
     setPaidAmount(inv.paid_amount || '');
-    setPaymentStatus(inv.payment_status || 'unpaid');
 
     const normalizedItems = (inv.items_data || []).map(item => {
       const lvl = String(item.price_level || '1');
@@ -340,8 +368,13 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       const p = getActiveUnitPrice(item);
       return sum + (q * p);
     }, 0);
+    if (newTotalPrice < Number(paidAmount || 0)) {
+      alert('مبلغ کل فاکتور نمی‌تواند از مبلغی که تاکنون در صندوق یا بانک دریافت شده کمتر باشد.');
+      return;
+    }
 
-    const { error } = await updateRows('invoices', {
+    try {
+      await updateOfficialInvoice(id, {
         customer_name: customerName,
         customer_phone: customerPhone,
         order_date: orderDate,
@@ -349,16 +382,13 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
         customer_address: customerAddress,
         items_data: normalizedItems,
         total_price: newTotalPrice,
-        paid_amount: Number(paidAmount || 0),
-        payment_status: paymentStatus
-      }, [{ column: 'id', operator: 'eq', value: id }]);
-
-    if (error) {
-      alert("خطا در ذخیره اطلاعات: " + error.message);
-    } else {
+        payment_status: getInvoicePaymentStatus(paidAmount, newTotalPrice),
+      }, { updateRows });
       setEditingId(null);
       setIsCustomerListOpen(false);
       fetchOfficialInvoices();
+    } catch (error) {
+      alert("خطا در ذخیره اطلاعات: " + error.message);
     }
   };
 
@@ -576,6 +606,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                       <div>
                         <div>{inv.customer_name}</div>
                         {inv.customer_phone && <div style={{ fontSize: '10px', color: '#64748b' }}>{formatPersianDigits(inv.customer_phone)}</div>}
+                        {inv.quotation_id && (
+                          <div style={{ fontSize: '10px', color: '#15803d' }}>
+                            صادرشده از پیش‌فاکتور #{formatPersianDigits(inv.quotation_id)}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td style={{ padding: '10px' }}>
@@ -634,7 +669,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
             </div>
 
             <div className="official-invoice-edit-grid">
-              <label className="official-invoice-edit-field official-invoice-edit-field-wide">
+              <label className="official-invoice-edit-field">
                 <span>نام مشتری</span>
                 <input
                   type="text"
@@ -785,11 +820,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               </div>
               <div>
                 <strong style={{ color: '#0d9488' }}>مبلغ پرداختی (بیعانه):</strong>{' '}
-                <FormattedNumberInput
-                  value={paidAmount}
-                  onValueChange={(value) => setPaidAmount(value)}
-                  style={{ width: '110px', padding: '5px', fontSize: '12px', textAlign: 'center' }}
-                /> تومان
+                <span style={{ color: '#0d9488', fontWeight: 'bold' }}>{formatDisplay(paidAmount)} تومان</span>
+                <small style={{ display: 'block', color: '#64748b', marginTop: 4 }}>برای ثبت دریافت و انتخاب حساب، از بخش «صندوق و بانک» استفاده کنید.</small>
               </div>
               <div>
                 <strong style={{ color: '#dc2626' }}>مانده بدهی:</strong>{' '}
@@ -797,14 +829,9 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               </div>
               <div>
                 <strong style={{ color: '#334155' }}>وضعیت تسویه:</strong>{' '}
-                <select
-                  value={paymentStatus}
-                  onChange={(e) => setPaymentStatus(e.target.value)}
-                  style={{ padding: '5px', fontSize: '12px', borderRadius: '6px' }}>
-                  {PAYMENT_STATUSES.map(s => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
+                <span style={{ color: getStatusMeta(getInvoicePaymentStatus(paidAmount, editableTotal)).color, fontWeight: 'bold' }}>
+                  {getStatusMeta(getInvoicePaymentStatus(paidAmount, editableTotal)).label}
+                </span>
               </div>
             </div>
 
@@ -965,6 +992,9 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                 <div><dt>وضعیت پرداخت</dt><dd><span style={{ color: status.color }}>{status.label}</span></dd></div>
                 <div><dt>سود خالص</dt><dd>{formatDisplay(calculateInvoiceProfit(detailsItems))} تومان</dd></div>
                 <div><dt>تاریخ ثبت</dt><dd>{detailsInvoice.created_at ? new Date(detailsInvoice.created_at).toLocaleDateString('fa-IR') : 'ثبت نشده'}</dd></div>
+                {detailsInvoice.quotation_id && (
+                  <div><dt>پیش‌فاکتور مبنا</dt><dd>شمارهٔ #{formatPersianDigits(detailsInvoice.quotation_id)}</dd></div>
+                )}
               </dl>
               <h4 className="invoice-details-items-title">اقلام فاکتور</h4>
               {detailsItems.length ? (
