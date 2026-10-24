@@ -1410,9 +1410,10 @@ textarea:focus-visible {
   padding: 22px;
   border: 1px solid var(--app-border);
   border-radius: 16px;
-  background: #f8fafc;
+  background: linear-gradient(145deg, #f8fbfa 0%, #f1f6f5 100%);
   color: var(--app-text);
   font-family: "Vazirmatn", Tahoma, sans-serif;
+  box-shadow: 0 12px 32px rgb(27 72 63 / 7%);
 }
 
 .calendar-page-heading {
@@ -1472,8 +1473,8 @@ textarea:focus-visible {
   padding: 18px;
   border: 1px solid var(--app-border);
   border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 4px 16px rgb(15 23 42 / 4%);
+  background: linear-gradient(145deg, #fff 30%, #fbfdfc 100%);
+  box-shadow: 0 5px 18px rgb(15 23 42 / 5%);
 }
 
 .calendar-form-grid {
@@ -1513,6 +1514,12 @@ textarea:focus-visible {
 .calendar-input:focus {
   border-color: var(--app-primary);
   box-shadow: 0 0 0 3px rgb(40 100 90 / 12%);
+}
+
+.calendar-field-type .calendar-input {
+  width: min(100%, 240px);
+  min-height: 38px;
+  padding: 7px 10px;
 }
 
 .calendar-date-input {
@@ -1562,19 +1569,32 @@ textarea:focus-visible {
 }
 
 .calendar-save-button {
-  min-height: 44px;
-  padding: 10px 18px;
+  justify-self: start;
+  min-height: 36px;
+  margin-top: 2px;
+  padding: 7px 15px;
   border: 0;
-  border-radius: 9px;
-  background: var(--app-primary);
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--app-primary), var(--app-primary-dark));
   color: #fff;
   cursor: pointer;
   font: inherit;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 3px 8px rgb(40 100 90 / 18%);
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
 }
 
 .calendar-save-button:hover {
   background: var(--app-primary-dark);
+  box-shadow: 0 5px 12px rgb(40 100 90 / 22%);
+  transform: translateY(-1px);
+}
+
+.calendar-save-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
 }
 
 .calendar-month-nav {
@@ -1584,10 +1604,11 @@ textarea:focus-visible {
   gap: 12px;
   max-width: 420px;
   margin: 0 auto;
-  padding: 8px;
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: #fff;
+  padding: 8px 10px;
+  border: 1px solid #dce9e5;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #fff, #f2f8f6);
+  box-shadow: 0 4px 14px rgb(27 72 63 / 6%);
 }
 
 .calendar-month-nav span {
@@ -1599,24 +1620,35 @@ textarea:focus-visible {
 .calendar-month-nav button {
   min-width: 42px;
   min-height: 38px;
-  border: 1px solid #dbe5e8;
-  border-radius: 8px;
-  background: #f8fafc;
+  border: 1px solid #d6e5e0;
+  border-radius: 9px;
+  background: #fff;
   color: var(--app-primary-dark);
   font-size: 18px;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.calendar-month-nav button:hover {
+  background: var(--app-primary-light);
+  transform: translateY(-1px);
 }
 
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 7px;
+  padding: 12px;
+  border: 1px solid #e0eae7;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 78%);
+  box-shadow: 0 6px 20px rgb(27 72 63 / 5%);
 }
 
 .calendar-weekday {
   padding: 9px 3px;
   border-radius: 8px;
-  background: #e8efed;
-  color: #475569;
+  background: #eff5f3;
+  color: var(--app-primary-dark);
   font-size: 11px;
   font-weight: 800;
   text-align: center;
@@ -1629,18 +1661,24 @@ textarea:focus-visible {
   align-content: start;
   gap: 4px;
   padding: 7px;
-  border: 1px solid #e0e7e9;
-  border-radius: 10px;
+  border: 1px solid #e2eae8;
+  border-radius: 11px;
   background: #fff;
   color: #334155;
   text-align: right;
   cursor: pointer;
-  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease, transform 150ms ease;
 }
 
 .calendar-day:hover {
-  border-color: #8db8ab;
-  box-shadow: 0 3px 10px rgb(15 23 42 / 7%);
+  border-color: #83b3a5;
+  box-shadow: 0 5px 13px rgb(15 23 42 / 9%);
+  transform: translateY(-1px);
+}
+
+.calendar-day.today:not(.selected) {
+  border-color: #6c9f90;
+  background: #f2f8f5;
 }
 
 .calendar-day.has-events {
@@ -1652,6 +1690,10 @@ textarea:focus-visible {
   border: 2px solid var(--app-primary);
   background: #eaf5f1;
   box-shadow: 0 0 0 3px rgb(40 100 90 / 10%);
+}
+
+.calendar-day.today .calendar-day-number {
+  color: var(--app-primary-dark);
 }
 
 .calendar-day-number {
@@ -2599,27 +2641,37 @@ textarea:focus-visible {
 }
 
 .calendar-day {
-  border: 1px solid transparent;
-  background: transparent;
+  border: 1px solid #e2eae8;
+  background: #fff;
 }
 
 .calendar-day.has-events {
-  border-color: #a7d8b5;
-  background: #f0f8f1;
+  border-color: #b8d9ce;
+  background: #f4fbf8;
 }
 
 .calendar-day.has-events:hover,
 .calendar-day.has-events.selected {
-  border-color: #57956a;
-  background: #e2f1e5;
+  border-color: var(--app-primary);
+  background: #eaf5f1;
+}
+
+.calendar-day.today:not(.selected) {
+  border-color: #6c9f90;
+  background: #f2f8f5;
+}
+
+.calendar-day.selected {
+  border: 2px solid var(--app-primary);
+  background: #eaf5f1;
 }
 
 .calendar-event-count {
   align-self: center;
   padding: 3px 6px;
   border-radius: 999px;
-  background: #d7eadb;
-  color: #28643a;
+  background: #dceee8;
+  color: var(--app-primary-dark);
   font-size: 10px;
   font-weight: 700;
 }
@@ -5968,3 +6020,168 @@ textarea:focus-visible {
       transition: none;
     }
   }
+
+.customer-referral-fields {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.customer-referral-mode-field {
+  width: 150px;
+  flex: 0 0 150px;
+}
+
+.customer-referral-value-field {
+  width: min(100%, 280px);
+  flex: 0 1 280px;
+}
+
+.panel-container .customer-referral-input,
+.panel-container .customer-referral-mode {
+  width: 100%;
+  min-height: 34px !important;
+  padding: 5px 8px !important;
+  font-size: 11px !important;
+}
+
+.customer-list-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.customer-list-identity {
+  gap: 6px;
+}
+
+.customer-list-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.customer-list-row-actions button {
+  min-width: 30px;
+  padding: 3px 6px !important;
+}
+
+.recent-invoice-info {
+  gap: 4px;
+}
+
+.recent-invoice-customer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.recent-invoice-customer .recent-invoice-date {
+  margin-inline-start: 2px;
+}
+
+.official-invoices-toolbar {
+  justify-content: flex-start;
+}
+
+.official-invoices-title-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.app-header .global-search {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  width: min(100%, 390px);
+}
+
+@media (min-width: 901px) {
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 390px) minmax(0, 1fr);
+  }
+
+  .app-header .mobile-menu-toggle {
+    position: absolute;
+    left: 24px;
+    grid-column: auto;
+  }
+
+  .app-header .brand {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .app-header .global-search {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .app-header .header-status {
+    grid-column: 3;
+    justify-self: end;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-header {
+    grid-template-rows: auto auto auto;
+  }
+
+  .app-header .global-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: min(100%, 440px);
+    justify-self: center;
+  }
+
+  .app-header .header-status {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    grid-template-rows: auto auto auto;
+  }
+
+  .app-header .global-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+
+  .app-header .header-status {
+    grid-row: 3;
+  }
+
+  .customer-list-identity {
+    gap: 4px;
+  }
+
+  .customer-list-row-actions button {
+    min-width: 28px;
+    padding-inline: 4px !important;
+  }
+
+  .customer-referral-mode-field {
+    width: 130px;
+    flex-basis: 130px;
+  }
+
+  .customer-referral-value-field {
+    flex-basis: min(100%, 250px);
+  }
+
+  .official-invoices-title-actions {
+    align-items: flex-start;
+    gap: 7px;
+  }
+}

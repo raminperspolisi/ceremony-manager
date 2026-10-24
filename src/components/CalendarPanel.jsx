@@ -321,7 +321,7 @@ export default function CalendarPanel() {
       {/* فرم ثبت رویداد */}
       <form onSubmit={handleSave} className="calendar-form">
         <div className="calendar-form-grid">
-          <div className="calendar-field">
+          <div className="calendar-field calendar-field-type">
             <label>نام مشتری</label>
             <div style={{ position: "relative" }}>
               <input
@@ -377,7 +377,7 @@ export default function CalendarPanel() {
               )}
             </div>
           </div>
-          <div className="calendar-field">
+          <div className="calendar-field calendar-field-type">
             <label>نوع مراسم</label>
             <select
               className="calendar-input"
@@ -393,7 +393,7 @@ export default function CalendarPanel() {
         </div>
 
         <div className="calendar-form-grid">
-          <div className="calendar-field">
+          <div className="calendar-field calendar-field-date">
             <label>تاریخ مراسم</label>
             <input
               className="calendar-input calendar-date-input"
@@ -405,6 +405,13 @@ export default function CalendarPanel() {
               aria-label="تاریخ مراسم به شمسی"
             />
             <small>تاریخ شمسی را وارد کنید یا یک روز را از تقویم انتخاب کنید.</small>
+            <button
+              type="submit"
+              disabled={saving}
+              className="calendar-save-button"
+            >
+              {saving ? "در حال ثبت..." : "ثبت رویداد"}
+            </button>
           </div>
           <div className="calendar-field">
             <label>توضیح (اختیاری)</label>
@@ -418,13 +425,6 @@ export default function CalendarPanel() {
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={saving}
-          className="calendar-save-button"
-        >
-          {saving ? "در حال ثبت..." : "ثبت رویداد"}
-        </button>
       </form>
 
       {/* ناوبری ماه تقویم */}
@@ -461,6 +461,7 @@ export default function CalendarPanel() {
           if (!d) return <div key={`empty-${idx}`} />;
           const dayNum = d.split("/")[2];
           const isSelected = selectedDay === d;
+          const isToday = jYear === todayJ.jYear() && jMonth === todayJ.jMonth() + 1 && Number(dayNum) === todayJ.jDate();
           const dayEvents = eventsByJalaliDate[d] || [];
           return (
             <button
@@ -470,8 +471,9 @@ export default function CalendarPanel() {
                 handleDayClick(d, dayEvents.length > 0);
                 setIsDayModalOpen(dayEvents.length > 0);
               }}
-              className={`calendar-day${isSelected ? " selected" : ""}${dayEvents.length ? " has-events" : ""}`}
+              className={`calendar-day${isSelected ? " selected" : ""}${isToday ? " today" : ""}${dayEvents.length ? " has-events" : ""}`}
               aria-label={`${Number(dayNum).toLocaleString("fa-IR")} ${JMONTHS[jMonth - 1]}، ${dayEvents.length.toLocaleString("fa-IR")} مراسم`}
+              aria-current={isToday ? "date" : undefined}
             >
               <div className="calendar-day-number">{parseInt(dayNum, 10).toLocaleString("fa-IR")}</div>
               {dayEvents.length > 0 && (

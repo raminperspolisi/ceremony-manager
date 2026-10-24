@@ -645,6 +645,62 @@ export default function App() {
           </div>
         </div>
 
+        <div
+          className="global-search"
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setGlobalSearchOpen(false);
+          }}
+        >
+          <label htmlFor="global-search-input">جستجوی یکپارچه</label>
+          <input
+            id="global-search-input"
+            type="search"
+            value={globalSearch}
+            onFocus={() => setGlobalSearchOpen(true)}
+            onChange={(event) => {
+              const value = event.target.value;
+              setGlobalSearch(value);
+              setGlobalSearchOpen(true);
+              setGlobalSearchError('');
+              if (normalizeSearchText(value).length >= 2) {
+                setGlobalSearchLoading(true);
+              } else {
+                setGlobalSearchLoading(false);
+                setGlobalSearchResults([]);
+              }
+            }}
+            placeholder="نام، تلفن، کالا یا شماره فاکتور"
+            aria-controls="global-search-results"
+            aria-expanded={globalSearchOpen && normalizeSearchText(globalSearch).length >= 2}
+            autoComplete="off"
+          />
+          {globalSearchOpen && normalizeSearchText(globalSearch).length >= 2 && (
+            <div id="global-search-results" className="global-search-results" role="listbox" aria-label="نتایج جستجو">
+              {globalSearchLoading && <p role="status">در حال جستجو…</p>}
+              {!globalSearchLoading && globalSearchResults.length === 0 && !globalSearchError && (
+                <p>موردی پیدا نشد.</p>
+              )}
+              {globalSearchError && <p className="global-search-error" role="alert">{globalSearchError}</p>}
+              {globalSearchResults.map((result) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  key={result.id}
+                  onClick={() => {
+                    handleSectionChange(result.section);
+                    setGlobalSearch('');
+                    setGlobalSearchOpen(false);
+                  }}
+                >
+                  <span>{result.name}</span>
+                  <small>{result.label}{result.detail ? ` · ${result.detail}` : ''}</small>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="header-status">
           <span role="status" aria-live="polite" className={`offline-status offline-status-${offlineStatus}`}>
             {offlineSyncError ? 'خطا در همگام‌سازی' :
@@ -1008,61 +1064,6 @@ export default function App() {
             </div>
 
             <div className="page-heading-actions">
-              <div
-                className="global-search"
-                onBlur={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget)) setGlobalSearchOpen(false);
-                }}
-              >
-                <label htmlFor="global-search-input">جستجوی یکپارچه</label>
-                <input
-                  id="global-search-input"
-                  type="search"
-                  value={globalSearch}
-                  onFocus={() => setGlobalSearchOpen(true)}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setGlobalSearch(value);
-                    setGlobalSearchOpen(true);
-                    setGlobalSearchError('');
-                    if (normalizeSearchText(value).length >= 2) {
-                      setGlobalSearchLoading(true);
-                    } else {
-                      setGlobalSearchLoading(false);
-                      setGlobalSearchResults([]);
-                    }
-                  }}
-                  placeholder="نام، تلفن، کالا یا شماره فاکتور"
-                  aria-controls="global-search-results"
-                  aria-expanded={globalSearchOpen && normalizeSearchText(globalSearch).length >= 2}
-                  autoComplete="off"
-                />
-                {globalSearchOpen && normalizeSearchText(globalSearch).length >= 2 && (
-                  <div id="global-search-results" className="global-search-results" role="listbox" aria-label="نتایج جستجو">
-                    {globalSearchLoading && <p role="status">در حال جستجو…</p>}
-                    {!globalSearchLoading && globalSearchResults.length === 0 && !globalSearchError && (
-                      <p>موردی پیدا نشد.</p>
-                    )}
-                    {globalSearchError && <p className="global-search-error" role="alert">{globalSearchError}</p>}
-                    {globalSearchResults.map((result) => (
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected="false"
-                        key={result.id}
-                        onClick={() => {
-                          handleSectionChange(result.section);
-                          setGlobalSearch('');
-                          setGlobalSearchOpen(false);
-                        }}
-                      >
-                        <span>{result.name}</span>
-                        <small>{result.label}{result.detail ? ` · ${result.detail}` : ''}</small>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
               {activeSection === "inventory" && (
                 <button type="button" className="refresh-button" onClick={fetchData}>
                   ↻ تازه‌سازی

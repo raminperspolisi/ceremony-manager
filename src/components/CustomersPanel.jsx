@@ -276,7 +276,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   const styles = {
     container: { padding: '8px', direction: 'rtl', fontFamily: "'Vazirmatn', Tahoma, sans-serif", maxWidth: '900px', margin: '0 auto', boxSizing: 'border-box' },
-    headerTitle: { textAlign: 'center', color: '#78350f', fontSize: '15px', fontWeight: '700', marginBottom: '8px' },
+    headerTitle: { textAlign: 'center', color: 'var(--app-primary)', fontSize: '15px', fontWeight: '700', marginBottom: '8px' },
     cardBox: { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', marginBottom: '10px' },
     sectionTitle: { fontSize: '12px', color: '#1e293b', marginBottom: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', fontWeight: '600' },
     formGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '6px', alignItems: 'center', marginBottom: '6px' },
@@ -321,35 +321,42 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
         </div>
 
         {/* بخش انتخاب معرف */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '6px', alignItems: 'center', marginTop: '6px' }}>
-          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            <span style={{ fontSize: '11px', color: '#475569', whiteSpace: 'nowrap', fontWeight: '600' }}>معرف:</span>
-            <button type="button" style={{ ...styles.btnSmall, background: introducerMode === 'list' ? '#78350f' : '#cbd5e1', fontSize: '10px' }} onClick={() => setIntroducerMode('list')}>لیست</button>
-            <button type="button" style={{ ...styles.btnSmall, background: introducerMode === 'manual' ? '#78350f' : '#cbd5e1', fontSize: '10px' }} onClick={() => setIntroducerMode('manual')}>دستی</button>
+        <div className="customer-referral-fields">
+          <div className="accounting-field customer-referral-mode-field">
+            <label htmlFor="customer-referral-mode">معرف</label>
+            <select
+              id="customer-referral-mode"
+              className="customer-referral-mode"
+              value={introducerMode}
+              onChange={(event) => setIntroducerMode(event.target.value)}
+            >
+              <option value="list">انتخاب از فهرست</option>
+              <option value="manual">ورود دستی</option>
+            </select>
           </div>
 
-          <div className="accounting-field" style={{ gridColumn: 'span 3' }}>
+          <div className="accounting-field customer-referral-value-field">
             {introducerMode === 'list' ? (
               <>
                 <label htmlFor="customer-referral">انتخاب معرف</label>
-                <select id="customer-referral" style={styles.input} value={selectedIntroducer} onChange={e => setSelectedIntroducer(e.target.value)}>
-                <option value="">-- انتخاب معرف از بین مشتریان --</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c["Full name"]}>{c["Full name"]} ({formatPersianDigits(c.phone)})</option>
-                ))}
+                <select id="customer-referral" className="customer-referral-input" value={selectedIntroducer} onChange={e => setSelectedIntroducer(e.target.value)}>
+                  <option value="">-- انتخاب معرف --</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c["Full name"]}>{c["Full name"]} ({formatPersianDigits(c.phone)})</option>
+                  ))}
                 </select>
               </>
             ) : (
               <>
                 <label htmlFor="customer-manual-referral">نام معرف</label>
-                <input id="customer-manual-referral" style={styles.input} placeholder="نام معرف را وارد کنید" value={manualIntroducer} onChange={e => setManualIntroducer(e.target.value)} />
+                <input id="customer-manual-referral" className="customer-referral-input" placeholder="نام معرف را وارد کنید" value={manualIntroducer} onChange={e => setManualIntroducer(e.target.value)} />
               </>
             )}
           </div>
         </div>
 
         <div style={{ marginTop: '8px' }}>
-          <button style={{ ...styles.btn, backgroundColor: editingId ? '#d97706' : '#78350f' }} onClick={handleSaveCustomer}>
+          <button style={{ ...styles.btn, backgroundColor: editingId ? '#d97706' : 'var(--app-primary)' }} onClick={handleSaveCustomer}>
             {editingId ? '💾 ذخیره تغییرات مشتری' : 'ثبت مشتری'}
           </button>
           {editingId && (
@@ -393,23 +400,25 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
         <div className="customer-list-toolbar">
           <div className="customer-list-heading">
             <h3 style={{ ...styles.sectionTitle, margin: 0, borderBottom: 0, paddingBottom: 0 }}>📋 لیست مشتریان ({formatDisplay(customers.length)})</h3>
-            <label className="customer-select-all">
-              <input
-                type="checkbox"
-                checked={customers.length > 0 && selectedCustomerIds.size === customers.length}
-                onChange={(event) => setSelectedCustomerIds(event.target.checked ? new Set(customers.map((customer) => customer.id)) : new Set())}
-                aria-label="انتخاب همه مشتریان"
-              />
-              انتخاب همه
-            </label>
+            <div className="customer-list-selection-actions">
+              <label className="customer-select-all">
+                <input
+                  type="checkbox"
+                  checked={customers.length > 0 && selectedCustomerIds.size === customers.length}
+                  onChange={(event) => setSelectedCustomerIds(event.target.checked ? new Set(customers.map((customer) => customer.id)) : new Set())}
+                  aria-label="انتخاب همه مشتریان"
+                />
+                انتخاب همه
+              </label>
+              {selectedCustomerIds.size > 0 && (
+                <button type="button" className="customer-bulk-delete" onClick={handleDeleteSelectedCustomers}>
+                  حذف انتخاب‌شده‌ها ({formatDisplay(selectedCustomerIds.size)})
+                </button>
+              )}
+            </div>
           </div>
           <div className="customer-list-actions">
             <span>دابل‌کلیک روی نام مشتری برای ویرایش</span>
-            {selectedCustomerIds.size > 0 && (
-              <button type="button" className="customer-bulk-delete" onClick={handleDeleteSelectedCustomers}>
-                حذف انتخاب‌شده‌ها ({formatDisplay(selectedCustomerIds.size)})
-              </button>
-            )}
           </div>
         </div>
         {customers.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '8px', fontSize: '12px' }}>هنوز مشتری‌ای ثبت نشده است.</p>}
@@ -428,14 +437,14 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
                   onDoubleClick={(event) => event.stopPropagation()}
                   aria-label={`انتخاب مشتری ${c['Full name'] || ''}`}
                 />
+                <div className="customer-list-row-actions">
+                  <button type="button" style={{ ...styles.btnSmall, background: 'var(--app-primary)' }} onClick={(e) => { e.stopPropagation(); handleCustomerSelect(c); }}>مراسم‌ها</button>
+                  <button type="button" aria-label={`حذف مشتری ${c['Full name'] || ''}`} title="حذف مشتری" style={{ ...styles.btnSmall, background: 'transparent', color: '#dc2626' }} onClick={(e) => handleDeleteCustomer(c.id, e)}>🗑️</button>
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '12px', fontWeight: '600' }}>{c["Full name"]}</div>
                   <div style={{ fontSize: '11px', color: '#64748b' }}>📞 {formatPersianDigits(c.phone)}{c.referral ? ` | 👤 معرف: ${c.referral}` : ''}</div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <button style={{ ...styles.btnSmall, background: '#78350f' }} onClick={(e) => { e.stopPropagation(); handleCustomerSelect(c); }}>مراسم‌ها</button>
-                <button style={{ ...styles.btnSmall, background: '#ef4444' }} onClick={(e) => handleDeleteCustomer(c.id, e)}>🗑️</button>
               </div>
             </li>
           ))}

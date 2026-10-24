@@ -526,31 +526,33 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   return (
     <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
       <div className="official-invoices-toolbar">
-        <h3 style={{ margin: 0, color: '#1e293b', fontSize: '15px' }}>لیست فاکتورهای رسمی</h3>
-        <div className="official-invoices-bulk-actions">
-          <label className="official-invoices-action-select-label" htmlFor="official-invoices-action">عملیات</label>
-          <select
-            id="official-invoices-action"
-            value={bulkAction}
-            onChange={(event) => setBulkAction(event.target.value)}
-            aria-label="عملیات روی فاکتورهای انتخاب‌شده"
-          >
-            <option value="">انتخاب عملیات</option>
-            <option value="print" disabled={selectedIds.length > 1}>چاپ فاکتور</option>
-            <option value="whatsapp" disabled={selectedIds.length > 1}>ارسال در واتساپ</option>
-            <option value="checklist" disabled={selectedIds.length > 1}>نمایش چک‌لیست</option>
-            <option value="edit" disabled={selectedIds.length > 1}>ویرایش فاکتور</option>
-            <option value="delete">حذف فاکتور</option>
-          </select>
-          <button type="button" className="official-invoices-apply-button" onClick={handleApplyBulkAction}>
-            انجام
-          </button>
-          <span className="official-invoices-hint">💡 دابل‌کلیک روی ردیف = انجام همین عملیات</span>
-          <span className="official-invoices-selected-count">
-            {selectedIds.length > 1
-              ? `${formatDisplay(selectedIds.length)} انتخاب‌شده؛ این عملیات فقط برای یک فاکتور است`
-              : `${formatDisplay(selectedIds.length)} انتخاب‌شده`}
-          </span>
+        <div className="official-invoices-title-actions">
+          <h3 style={{ margin: 0, color: '#1e293b', fontSize: '15px' }}>لیست فاکتورهای رسمی</h3>
+          <div className="official-invoices-bulk-actions">
+            <label className="official-invoices-action-select-label" htmlFor="official-invoices-action">عملیات</label>
+            <select
+              id="official-invoices-action"
+              value={bulkAction}
+              onChange={(event) => setBulkAction(event.target.value)}
+              aria-label="عملیات روی فاکتورهای انتخاب‌شده"
+            >
+              <option value="">انتخاب عملیات</option>
+              <option value="print" disabled={selectedIds.length > 1}>چاپ فاکتور</option>
+              <option value="whatsapp" disabled={selectedIds.length > 1}>ارسال در واتساپ</option>
+              <option value="checklist" disabled={selectedIds.length > 1}>نمایش چک‌لیست</option>
+              <option value="edit" disabled={selectedIds.length > 1}>ویرایش فاکتور</option>
+              <option value="delete">حذف فاکتور</option>
+            </select>
+            <button type="button" className="official-invoices-apply-button" onClick={handleApplyBulkAction}>
+              انجام
+            </button>
+            <span className="official-invoices-hint">💡 دابل‌کلیک روی ردیف = انجام همین عملیات</span>
+            <span className="official-invoices-selected-count">
+              {selectedIds.length > 1
+                ? `${formatDisplay(selectedIds.length)} انتخاب‌شده؛ این عملیات فقط برای یک فاکتور است`
+                : `${formatDisplay(selectedIds.length)} انتخاب‌شده`}
+            </span>
+          </div>
         </div>
       </div>
 

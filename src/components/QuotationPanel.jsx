@@ -6,7 +6,7 @@ import { convertQuotationToInvoice, deleteSelectedDocuments } from '../quotation
 
 const win95Style = {
   window: { 
-    fontFamily: 'Tahoma, sans-serif', 
+    fontFamily: 'var(--font-main)',
     direction: 'rtl', 
     backgroundColor: '#f8fafc',
     padding: '15px', 
@@ -645,34 +645,33 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                     ) : (
                       <span style={{ color: '#0284c7', marginRight: '6px', fontWeight: 'bold' }}>[پیش‌فاکتور]</span>
                     )}
+                    <span className="recent-invoice-date">
+                      ({inv.created_at ? new Date(inv.created_at).toLocaleDateString('fa-IR') : '—'})
+                    </span>
                   </span>
-                  <span className="recent-invoice-date">
-                    ({inv.created_at ? new Date(inv.created_at).toLocaleDateString('fa-IR') : '—'})
-                  </span>
+                  {inv.type !== 'official' && (() => {
+                    const linkedInvoice = savedInvoices.find((invoice) =>
+                      invoice.type === 'official' && String(invoice.quotation_id) === String(inv.id),
+                    );
+                    return (
+                      <div className="recent-invoice-actions">
+                        {linkedInvoice ? (
+                          <span role="status" style={{ color: '#15803d', fontSize: '11px', fontWeight: 'bold' }}>
+                            صادرشده · #{formatPersianDigits(linkedInvoice.id)}
+                          </span>
+                        ) : (
+                          <button
+                            style={{ backgroundColor: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: convertingQuotationId === String(inv.id) ? 'wait' : 'pointer', fontSize: '11px' }}
+                            onClick={(e) => handleConvertToInvoice(e, inv)}
+                            disabled={convertingQuotationId === String(inv.id)}
+                          >
+                            {convertingQuotationId === String(inv.id) ? 'در حال صدور…' : 'صدور رسمی'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
-
-                {inv.type !== 'official' && (() => {
-                  const linkedInvoice = savedInvoices.find((invoice) =>
-                    invoice.type === 'official' && String(invoice.quotation_id) === String(inv.id),
-                  );
-                  return (
-                    <div className="recent-invoice-actions">
-                      {linkedInvoice ? (
-                        <span role="status" style={{ color: '#15803d', fontSize: '11px', fontWeight: 'bold' }}>
-                          صادرشده · #{formatPersianDigits(linkedInvoice.id)}
-                        </span>
-                      ) : (
-                        <button
-                          style={{ backgroundColor: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: convertingQuotationId === String(inv.id) ? 'wait' : 'pointer', fontSize: '11px' }}
-                          onClick={(e) => handleConvertToInvoice(e, inv)}
-                          disabled={convertingQuotationId === String(inv.id)}
-                        >
-                          {convertingQuotationId === String(inv.id) ? 'در حال صدور…' : 'صدور رسمی'}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
 
               </div>
             ))
