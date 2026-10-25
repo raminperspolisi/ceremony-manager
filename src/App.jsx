@@ -13,6 +13,7 @@ import ContactPanel from './components/ContactPanel';
 import BackupPanel from './components/BackupPanel';
 import CashbookPanel from './components/CashbookPanel';
 import DashboardPanel from './components/DashboardPanel';
+import BotOrdersPanel from './components/BotOrdersPanel';
 import { formatDisplay } from './styles';
 import {
   getOfflineSyncStatus,
@@ -914,6 +915,15 @@ export default function App() {
               <span className="nav-shortcut">F2</span>
             </button>
 
+            <button
+              type="button"
+              className={`nav-button ${activeSection === "bot-orders" ? "active" : ""}`}
+              onClick={() => handleSectionChange("bot-orders")}
+            >
+              <span className="nav-icon">🛍</span>
+              <span className="nav-text">سفارش‌های ربات</span>
+            </button>
+
             {/* 3. پیش‌فاکتور */}
             <button
               type="button"
@@ -1041,6 +1051,8 @@ export default function App() {
                   ? "داشبورد"
                   : activeSection === "inventory"
                   ? "موجودی انبار"
+                  : activeSection === "bot-orders"
+                  ? "سفارش‌های ربات"
                   : activeSection === "quotations"
                   ? "پیش‌فاکتور"
                   : activeSection === "official"
@@ -1083,6 +1095,7 @@ export default function App() {
                 onItemUpdated={handleItemUpdated} 
               />
             )}
+            {activeSection === "bot-orders" && <BotOrdersPanel />}
             {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} businessName={businessName} logoUrl={logoUrl} />}
             {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} />}
             {activeSection === "backup" && <BackupPanel userId={sessionUserId} />}

@@ -1,6 +1,7 @@
 ALTER TABLE public.financial_accounts
   ADD COLUMN IF NOT EXISTS bank_name text,
-  ADD COLUMN IF NOT EXISTS card_number text;
+  ADD COLUMN IF NOT EXISTS card_number text,
+  ADD COLUMN IF NOT EXISTS holder_name text;
 
 DO $$
 BEGIN

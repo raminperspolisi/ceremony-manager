@@ -70,6 +70,7 @@ export default function CashbookPanel() {
   const [accountName, setAccountName] = useState('');
   const [accountType, setAccountType] = useState('cash');
   const [bankName, setBankName] = useState('');
+  const [holderName, setHolderName] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [openingBalance, setOpeningBalance] = useState('');
   const [openingDate, setOpeningDate] = useState(todayJalali);
@@ -185,6 +186,7 @@ export default function CashbookPanel() {
       ? await updateRows('financial_accounts', {
         account_name: name,
         bank_name: accountType === 'bank' ? bankName.trim() : null,
+        holder_name: accountType === 'bank' ? holderName.trim() || null : null,
         card_number: accountType === 'bank' ? normalizedCardNumber : null,
       }, [
         { column: 'id', operator: 'eq', value: editingAccountId },
@@ -193,6 +195,7 @@ export default function CashbookPanel() {
         account_name: name,
         account_type: accountType,
         bank_name: accountType === 'bank' ? bankName.trim() : null,
+        holder_name: accountType === 'bank' ? holderName.trim() || null : null,
         card_number: accountType === 'bank' ? normalizedCardNumber : null,
         opening_balance: Number(openingBalance) || 0,
         opening_date: accountDate,
@@ -208,6 +211,7 @@ export default function CashbookPanel() {
     setEditingAccountId(null);
     setAccountName('');
     setBankName('');
+    setHolderName('');
     setCardNumber('');
     setOpeningBalance('');
     setOpeningDate(todayJalali());
@@ -219,6 +223,7 @@ export default function CashbookPanel() {
     setAccountName(account.account_name);
     setAccountType(account.account_type);
     setBankName(account.bank_name || '');
+    setHolderName(account.holder_name || '');
     setCardNumber(account.card_number || '');
     setAccountFormOpen(true);
   };
@@ -342,6 +347,7 @@ export default function CashbookPanel() {
             setAccountName('');
             setAccountType('cash');
             setBankName('');
+            setHolderName('');
             setCardNumber('');
             setOpeningBalance('');
             setOpeningDate(todayJalali());
@@ -441,6 +447,11 @@ export default function CashbookPanel() {
                 <input value={bankName} onChange={(event) => setBankName(event.target.value)} maxLength={80} placeholder="مثلاً بانک ملت" required />
               </label>
               <label>
+                نام صاحب حساب
+                <input value={holderName} onChange={(event) => setHolderName(event.target.value)} maxLength={120} placeholder="نام صاحب کارت" />
+                <small className="cashbook-sensitive-note">برای نمایش اطلاعات واریز به مشتریان بات استفاده می‌شود.</small>
+              </label>
+              <label>
                 شماره کارت
                 <input
                   value={cardNumber}
@@ -470,7 +481,7 @@ export default function CashbookPanel() {
           )}
           <div className="cashbook-form-actions">
             <button type="submit" className="cashbook-primary-button" disabled={busy}>{busy ? 'در حال ذخیره…' : 'ذخیره حساب'}</button>
-            <button type="button" className="cashbook-secondary-button" onClick={() => { setAccountFormOpen(false); setEditingAccountId(null); setBankName(''); setCardNumber(''); }}>انصراف</button>
+            <button type="button" className="cashbook-secondary-button" onClick={() => { setAccountFormOpen(false); setEditingAccountId(null); setBankName(''); setHolderName(''); setCardNumber(''); }}>انصراف</button>
           </div>
         </form>
       )}

@@ -5190,6 +5190,10 @@ textarea:focus-visible {
   .backup-panel-actions {
     display: grid;
   }
+
+  .bot-order-quote {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .cashbook-panel {
@@ -6183,5 +6187,271 @@ textarea:focus-visible {
   .official-invoices-title-actions {
     align-items: flex-start;
     gap: 7px;
+  }
+}
+
+.bot-orders-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  color: #0f172a;
+}
+
+.bot-orders-toolbar,
+.bot-orders-controls,
+.bot-order-card-header,
+.bot-order-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bot-orders-toolbar h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.bot-orders-toolbar p,
+.bot-order-customer small,
+.bot-order-card-header time {
+  display: block;
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.bot-orders-controls {
+  flex-wrap: wrap;
+}
+
+.bot-orders-controls label,
+.bot-order-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.bot-orders-controls select,
+.bot-orders-controls button,
+.bot-order-status select {
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+}
+
+.bot-orders-controls button {
+  cursor: pointer;
+}
+
+.bot-orders-controls button:disabled,
+.bot-order-status select:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.bot-orders-list {
+  display: grid;
+  gap: 12px;
+}
+
+.bot-order-card,
+.bot-orders-empty {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.bot-order-card-header > div {
+  min-width: 0;
+}
+
+.bot-order-card-header strong {
+  font-size: 14px;
+}
+
+.bot-order-customer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 12px;
+}
+
+.bot-order-customer > span {
+  color: #0369a1;
+  font-size: 12px;
+}
+
+.bot-order-customer small {
+  margin: 0;
+}
+
+.bot-order-items {
+  display: grid;
+  gap: 8px;
+  margin: 13px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bot-order-items li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bot-order-items li > div {
+  min-width: 0;
+}
+
+.bot-order-items li strong,
+.bot-order-items li > span {
+  font-size: 12px;
+}
+
+.bot-order-items li > span {
+  flex: 0 0 auto;
+  color: #475569;
+}
+
+.bot-order-item-prices {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 3px;
+  color: #475569;
+  font-size: 11px;
+}
+
+.bot-order-items p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.bot-order-total {
+  padding-top: 9px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.bot-order-quote {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bot-order-quote label {
+  display: grid;
+  gap: 5px;
+  color: #475569;
+  font-size: 12px;
+}
+
+.bot-order-quote input,
+.bot-order-quote button {
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  font: inherit;
+}
+
+.bot-order-quote input {
+  min-width: 0;
+  color: #0f172a;
+}
+
+.bot-order-quote button {
+  background: #0f766e;
+  color: #fff;
+  cursor: pointer;
+}
+
+.bot-order-quote button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.bot-order-quote small {
+  grid-column: 1 / -1;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.bot-order-status.status-pending select {
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.bot-order-status.status-processing select {
+  border-color: #38bdf8;
+  color: #075985;
+}
+
+.bot-order-status.status-completed select {
+  border-color: #34d399;
+  color: #047857;
+}
+
+.bot-order-status.status-cancelled select {
+  border-color: #f87171;
+  color: #b91c1c;
+}
+
+.bot-orders-message,
+.bot-orders-empty {
+  padding: 11px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.bot-orders-message.error {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.bot-orders-message.success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.bot-orders-empty {
+  color: #475569;
+  background: #f8fafc;
+}
+
+@media (max-width: 640px) {
+  .bot-orders-panel {
+    padding: 10px;
+  }
+
+  .bot-orders-toolbar,
+  .bot-order-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .bot-orders-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .bot-order-items li {
+    flex-direction: column;
+    gap: 4px;
   }
 }
