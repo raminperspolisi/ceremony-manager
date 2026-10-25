@@ -13,6 +13,8 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").strip()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
+ORDER_APPROVAL_SECRET = os.getenv("TELEGRAM_ORDER_APPROVAL_SECRET", "").strip()
+PAYMENT_BASE_URL = os.getenv("PAYMENT_BASE_URL", "").strip()
 
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 SUPABASE_HEADERS = {
@@ -23,6 +25,7 @@ SUPABASE_HEADERS = {
 PRODUCTS_PER_PAGE = 8
 MAX_CART_QUANTITY = 99
 carts = {}
+awaiting_receipts = {}
 
 
 def telegram_request(method, payload):
@@ -54,11 +57,24 @@ def telegram_error_description(response):
     return description[:240] or None
 
 
-def send_message(chat_id, text, reply_markup=None):
+def send_message(chat_id, text, reply_markup=None, parse_mode=None):
     payload = {"chat_id": chat_id, "text": f"\u200f{text}"}
     if reply_markup:
         payload["reply_markup"] = reply_markup
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
     return telegram_request("sendMessage", payload)
+
+
+def edit_message_text(chat_id, message_id, text, reply_markup=None):
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": f"\u200f{text}",
+    }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    return telegram_request("editMessageText", payload)
 
 
 def answer_callback(callback_query_id, text=None):
@@ -66,6 +82,17 @@ def answer_callback(callback_query_id, text=None):
     if text:
         payload["text"] = text[:180]
     telegram_request("answerCallbackQuery", payload)
+
+
+def forward_message(chat_id, from_chat_id, message_id, caption=None):
+    payload = {
+        "chat_id": chat_id,
+        "from_chat_id": from_chat_id,
+        "message_id": message_id,
+    }
+    if caption:
+        payload["caption"] = caption[:1024]
+    return telegram_request("copyMessage", payload)
 
 
 def get_products():
@@ -103,6 +130,26 @@ def create_order(customer, username, telegram_user_id, items):
     return result
 
 
+def process_bot_order_action(order_id, action):
+    if not ORDER_APPROVAL_SECRET:
+        raise RuntimeError("TELEGRAM_ORDER_APPROVAL_SECRET is not configured.")
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/process_bot_order_action",
+        json={
+            "p_order_id": int(order_id),
+            "p_action": action,
+            "p_approval_secret": ORDER_APPROVAL_SECRET,
+        },
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if not isinstance(result, dict) or result.get("id") is None:
+        raise ValueError("Invalid order action response.")
+    return result
+
+
 def price_level_lines(product):
     levels = (
         ("price_level1", "قیمت سطح ۱"),
@@ -117,13 +164,13 @@ def price_level_lines(product):
 
 def order_admin_message(order, customer, username, telegram_user_id):
     lines = [
-        f"🛎 سفارش جدید ربات #{order['id']}",
+        f"🛎 پیش‌فاکتور سفارش #{order['id']}",
         f"مشتری: {customer}",
         f"شناسه تلگرام: {telegram_user_id}",
     ]
     if username:
         lines.append(f"نام کاربری: @{username}")
-    lines.append("")
+    lines.extend(["", "──────────────", "📋 اقلام سفارش"])
 
     order_items = order.get("items")
     if not isinstance(order_items, list):
@@ -132,20 +179,44 @@ def order_admin_message(order, customer, username, telegram_user_id):
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or "کالای بدون عنوان").strip()
-        lines.append(f"• {title} × {item.get('quantity', 1)}")
-        lines.extend(price_level_lines(item))
-        lines.append("")
+        quantity = item.get("quantity", 1)
+        unit_price = item.get("unit_price", item.get("price_level1"))
+        lines.append(f"• {title} × {persian_digits(quantity)}")
+        lines.append(f"  قیمت واحد: {format_price(unit_price)}")
     if order.get("total_price") is None:
-        lines.append("حداقل یک کالا قیمت سطح ۱ ندارد؛ مدیر باید مبلغ را تعیین کند.")
+        lines.extend([
+            "",
+            "💵 جمع کل: نامشخص",
+            "برای تأیید، ابتدا مبلغ نهایی را در پنل سفارش‌ها ثبت کنید.",
+        ])
     else:
-        lines.append(
-            f"جمع سفارش بر اساس قیمت سطح ۱: {format_price(order['total_price'])}"
-        )
-    lines.append("واریز را پس از بررسی گردش حساب تأیید کنید؛ موجودی انبار تغییر نمی‌کند.")
+        lines.extend([
+            "",
+            f"💵 جمع کل: {format_price(order['total_price'])}",
+        ])
+    lines.extend(["", "وضعیت: در انتظار بررسی مدیر"])
     message = "\n".join(lines)
     if len(message) > 3900:
-        message = message[:3880].rsplit("\n", 1)[0] + "\n…\nجزئیات کامل در پنل سفارش‌های ربات"
+        message = (
+            message[:3880].rsplit("\n", 1)[0]
+            + "\n…\nجزئیات کامل در پنل سفارش‌های ربات"
+        )
     return message
+
+
+def admin_order_keyboard(order_id):
+    return {
+        "inline_keyboard": [[
+            {
+                "text": "✅ تایید سفارش",
+                "callback_data": f"order:approve:{order_id}",
+            },
+            {
+                "text": "❌ رد سفارش",
+                "callback_data": f"order:reject:{order_id}",
+            },
+        ]]
+    }
 
 
 def notify_admin_order(order, customer, username, telegram_user_id):
@@ -153,6 +224,7 @@ def notify_admin_order(order, customer, username, telegram_user_id):
         send_message(
             TELEGRAM_ADMIN_CHAT_ID,
             order_admin_message(order, customer, username, telegram_user_id),
+            admin_order_keyboard(order["id"]),
         )
     except requests.HTTPError as error:
         status = error.response.status_code if error.response is not None else "unknown"
@@ -212,44 +284,47 @@ def product_button_label(product):
 
 
 def customer_order_message(order):
-    order_id = order["id"]
+    order_id = persian_digits(order["id"])
     total_price = order.get("total_price")
-    if total_price is None:
-        return (
-            f"درخواست شما با شمارهٔ #{order_id} ثبت شد. حداقل یک کالا قیمت سطح ۱ ندارد؛ "
-            "فعلاً مبلغی واریز نکنید. مدیر مبلغ نهایی را اعلام می‌کند."
-        )
+    total_line = (
+        f"\n💵 مبلغ فعلی: {format_price(total_price)}"
+        if total_price is not None
+        else "\n💵 مبلغ نهایی پس از بررسی مدیر اعلام می‌شود."
+    )
+    return (
+        f"درخواست خرید شما با شمارهٔ #{order_id} ثبت شد و در انتظار بررسی مدیر است."
+        f"{total_line}\n"
+        "لطفاً تا زمان تأیید سفارش، وجهی واریز نکنید."
+    )
 
-    payment = order.get("payment_info")
-    if not isinstance(payment, dict):
-        return (
-            f"درخواست شما با شمارهٔ #{order_id} ثبت شد و مبلغ آن "
-            f"{format_price(total_price)} است، اما اطلاعات کارت مقصد کامل نیست. "
-            "فعلاً واریز نکنید و برای دریافت راهنمایی با مدیر هماهنگ کنید."
-        )
 
-    card_number = str(payment.get("card_number") or "").strip()
-    holder_name = str(payment.get("holder_name") or "").strip()
-    if not card_number or not holder_name:
-        return (
-            f"درخواست شما با شمارهٔ #{order_id} ثبت شد و مبلغ آن "
-            f"{format_price(total_price)} است، اما اطلاعات کارت مقصد کامل نیست. "
-            "فعلاً واریز نکنید و برای دریافت راهنمایی با مدیر هماهنگ کنید."
-        )
+def payment_instruction_message(order):
+    if order.get("total_price") is None:
+        raise ValueError("Approved order has no payable amount.")
 
     lines = [
-        f"درخواست شما با شمارهٔ #{order_id} ثبت شد.",
-        f"مبلغ قابل پرداخت (بر اساس قیمت سطح ۱): {format_price(total_price)}",
+        f"✨ سفارش شما با موفقیت تایید شد. (#{persian_digits(order['id'])})",
+        f"💵 مبلغ قابل پرداخت: {format_price(order['total_price'])}",
+        "",
+        "برای پرداخت آنلاین، دکمهٔ زیر را انتخاب کنید.",
+        "پس از پرداخت می‌توانید رسید را برای مدیر ارسال کنید.",
     ]
-    bank_name = str(payment.get("bank_name") or "").strip()
-    if bank_name:
-        lines.append(f"بانک: {bank_name}")
-    lines.extend([
-        f"شماره کارت مقصد: {card_number}",
-        f"به نام: {holder_name}",
-        "لطفاً شماره سفارش را نگه دارید. واریز پس از بررسی مدیر تأیید می‌شود.",
-    ])
     return "\n".join(lines)
+
+
+def validate_payment_url(value):
+    try:
+        payment_url = urlsplit(value)
+        valid_url = (
+            payment_url.scheme == "https"
+            and bool(payment_url.hostname)
+            and payment_url.username is None
+            and payment_url.password is None
+        )
+    except ValueError:
+        valid_url = False
+    if not valid_url:
+        raise ValueError("PAYMENT_BASE_URL must be a valid HTTPS URL.")
 
 
 def main_menu():
@@ -558,18 +633,248 @@ def submit_order(chat_id, user, products):
         if admin_notified
         else "سفارش ذخیره شد، اما اعلان تلگرامی مدیر ارسال نشد؛ لطفاً با مدیر تماس بگیرید."
     )
-    if order.get("total_price") is not None and not isinstance(
-        order.get("payment_info"), dict
-    ):
-        print(
-            f"Order #{order['id']} has no complete bank account details; "
-            "payment instructions were withheld."
-        )
     send_message(
         chat_id,
         f"{customer_order_message(order)}\n{notification_status}",
         main_menu(),
     )
+
+
+def is_admin_callback(callback):
+    message = callback.get("message") or {}
+    chat = message.get("chat") or {}
+    user = callback.get("from") or {}
+    try:
+        configured_admin_id = int(TELEGRAM_ADMIN_CHAT_ID)
+        return (
+            chat.get("type") == "private"
+            and int(chat.get("id")) == configured_admin_id
+            and int(user.get("id")) == configured_admin_id
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def handle_admin_order_action(callback, action, order_id):
+    message = callback["message"]
+    chat_id = message["chat"]["id"]
+    message_id = message["message_id"]
+    if not is_admin_callback(callback):
+        answer_callback(callback["id"], "این دکمه فقط برای مدیر سفارش است.")
+        return
+
+    if action == "approve":
+        try:
+            validate_payment_url(PAYMENT_BASE_URL)
+        except ValueError as error:
+            print(f"Online payment URL configuration invalid ({error}).")
+            answer_callback(callback["id"], "لینک پرداخت آنلاین تنظیم نشده است.")
+            send_message(
+                chat_id,
+                "لینک پرداخت آنلاین معتبر نیست؛ مقدار HTTPS متغیر "
+                "PAYMENT_BASE_URL را در تنظیمات هاست بررسی کنید. "
+                "سفارش هنوز تغییر وضعیت نداده است.",
+            )
+            return
+
+    try:
+        result = process_bot_order_action(order_id, action)
+    except requests.HTTPError as error:
+        status = error.response.status_code if error.response is not None else "unknown"
+        print(
+            f"Admin order action failed (HTTP status: {status}); "
+            "response details omitted."
+        )
+        send_message(
+            chat_id,
+            "عملیات سفارش در پایگاه داده انجام نشد. تنظیمات و migration تأیید را بررسی کنید.",
+        )
+        return
+    except (requests.RequestException, ValueError, RuntimeError) as error:
+        print(f"Admin order action failed ({type(error).__name__}); details omitted.")
+        send_message(chat_id, "ارتباط با پایگاه داده ناموفق بود؛ عملیات سفارش انجام نشد.")
+        return
+
+    if not result.get("changed"):
+        status = result.get("status")
+        status_text = {
+            "approved": "این سفارش قبلاً تأیید شده است.",
+            "rejected": "این سفارش قبلاً رد شده است.",
+        }.get(status, "این سفارش دیگر در انتظار بررسی نیست.")
+        answer_callback(callback["id"], status_text)
+        return
+
+    order_id = result["id"]
+    customer_id = result.get("telegram_user_id")
+    if action == "reject":
+        answer_callback(callback["id"], "سفارش رد شد.")
+        try:
+            edit_message_text(
+                chat_id,
+                message_id,
+                f"❌ سفارش #{persian_digits(order_id)} رد شد.",
+                {"inline_keyboard": []},
+            )
+        except (requests.RequestException, RuntimeError) as error:
+            print(
+                f"Rejected order admin message edit failed "
+                f"({type(error).__name__})."
+            )
+        try:
+            send_message(
+                customer_id,
+                f"درخواست خرید شما با شمارهٔ #{persian_digits(order_id)} "
+                "توسط مدیر تأیید نشد.",
+                main_menu(),
+            )
+        except (requests.RequestException, RuntimeError) as error:
+            print(
+                f"Rejected order customer notification failed "
+                f"({type(error).__name__})."
+            )
+            send_message(
+                chat_id,
+                "سفارش در سامانه رد شد، اما پیام رد به مشتری ارسال نشد.",
+            )
+        return
+
+    answer_callback(callback["id"], "سفارش تأیید شد.")
+    try:
+        edit_message_text(
+            chat_id,
+            message_id,
+            f"✅ سفارش #{persian_digits(order_id)} تایید شد.",
+            {"inline_keyboard": []},
+        )
+    except (requests.RequestException, RuntimeError) as error:
+        print(
+            f"Approved order admin message edit failed "
+            f"({type(error).__name__})."
+        )
+    try:
+        send_message(
+            customer_id,
+            payment_instruction_message(result),
+            {
+                "inline_keyboard": [
+                    [{
+                        "text": "💳 پرداخت آنلاین سفارش (کلیک کنید)",
+                        "url": PAYMENT_BASE_URL,
+                    }],
+                    [{
+                        "text": "📤 ارسال رسید و فیش پرداخت",
+                        "callback_data": f"order:receipt:{order_id}",
+                    }],
+                ]
+            },
+        )
+    except (requests.RequestException, RuntimeError, ValueError) as error:
+        print(
+            f"Approved order payment notification failed "
+            f"({type(error).__name__})."
+        )
+        edit_message_text(
+            chat_id,
+            message_id,
+            f"✅ سفارش #{persian_digits(order_id)} تایید شد.\n"
+            "⚠️ ارسال پیام پرداخت به مشتری ناموفق بود؛ لطفاً دستی پیگیری کنید.",
+            {"inline_keyboard": []},
+        )
+
+
+def handle_receipt_request(callback, order_id):
+    message = callback.get("message") or {}
+    chat = message.get("chat") or {}
+    user = callback.get("from") or {}
+    user_id = str(user.get("id") or "")
+    if chat.get("type") != "private" or str(chat.get("id")) != user_id:
+        answer_callback(callback["id"], "برای ارسال رسید، ربات را در گفت‌وگوی خصوصی باز کنید.")
+        return
+
+    try:
+        order = process_bot_order_action(order_id, "receipt")
+    except (requests.RequestException, ValueError, RuntimeError) as error:
+        print(f"Receipt order lookup failed ({type(error).__name__}); details omitted.")
+        answer_callback(callback["id"], "دریافت سفارش ناموفق بود؛ کمی بعد دوباره تلاش کنید.")
+        return
+
+    if str(order.get("telegram_user_id")) != user_id:
+        answer_callback(callback["id"], "این سفارش به حساب تلگرام شما تعلق ندارد.")
+        return
+    if order.get("status") != "approved":
+        answer_callback(callback["id"], "رسید فقط برای سفارش تأییدشده پذیرفته می‌شود.")
+        return
+
+    awaiting_receipts[user_id] = str(order_id)
+    answer_callback(callback["id"], "رسید را به‌صورت عکس یا فایل ارسال کنید.")
+    send_message(
+        chat["id"],
+        f"📤 لطفاً تصویر یا فایل رسید پرداخت سفارش "
+        f"#{persian_digits(order_id)} را ارسال کنید.",
+        {"inline_keyboard": [[{
+            "text": "انصراف",
+            "callback_data": "receipt:cancel",
+        }]]},
+    )
+
+
+def handle_receipt_message(message):
+    user = message.get("from") or {}
+    user_id = str(user.get("id") or "")
+    order_id = awaiting_receipts.get(user_id)
+    if not order_id:
+        return False
+    chat_id = message.get("chat", {}).get("id")
+    if not message.get("photo") and not message.get("document"):
+        send_message(chat_id, "لطفاً رسید را به‌صورت عکس یا فایل ارسال کنید.")
+        return True
+
+    try:
+        forward_message(
+            TELEGRAM_ADMIN_CHAT_ID,
+            chat_id,
+            message["message_id"],
+            caption=(
+                f"رسید سفارش #{persian_digits(order_id)} | "
+                f"شناسه تلگرام مشتری: {user_id}"
+            ),
+        )
+    except (requests.RequestException, RuntimeError) as error:
+        print(
+            f"Payment receipt delivery failed ({type(error).__name__}); "
+            "receipt remains pending for retry."
+        )
+        send_message(chat_id, "ارسال رسید ناموفق بود؛ لطفاً کمی بعد دوباره ارسال کنید.")
+        return True
+
+    awaiting_receipts.pop(user_id, None)
+    customer_name = " ".join(
+        filter(None, [user.get("first_name"), user.get("last_name")])
+    ) or "مشتری تلگرام"
+    username_line = (
+        f"\nنام کاربری: @{user['username']}"
+        if user.get("username")
+        else ""
+    )
+    try:
+        send_message(
+            TELEGRAM_ADMIN_CHAT_ID,
+            f"📥 رسید پرداخت سفارش #{persian_digits(order_id)}\n"
+            f"مشتری: {customer_name}\n"
+            f"شناسه تلگرام: {user_id}{username_line}",
+        )
+    except (requests.RequestException, RuntimeError) as error:
+        print(
+            f"Receipt context notification failed ({type(error).__name__}); "
+            "receipt copy was delivered to admin."
+        )
+    send_message(
+        chat_id,
+        f"رسید سفارش #{persian_digits(order_id)} برای مدیر ارسال شد. "
+        "تأیید واریز پس از بررسی حساب انجام می‌شود.",
+        main_menu(),
+    )
+    return True
 
 
 def handle_callback(callback):
@@ -578,6 +883,34 @@ def handle_callback(callback):
     message = callback.get("message")
     user = callback.get("from") or {}
     if not message or not user.get("id"):
+        if callback_data.startswith("order:"):
+            parts = callback_data.split(":")
+            if len(parts) == 3 and parts[1] in {"approve", "reject"}:
+                try:
+                    order_id = int(parts[2])
+                    if order_id <= 0:
+                        raise ValueError
+                except ValueError:
+                    answer_callback(callback_id, "شناسهٔ سفارش معتبر نیست.")
+                    return
+                handle_admin_order_action(callback, parts[1], order_id)
+                return
+            if len(parts) == 3 and parts[1] == "receipt":
+                try:
+                    order_id = int(parts[2])
+                    if order_id <= 0:
+                        raise ValueError
+                except ValueError:
+                    answer_callback(callback_id, "شناسهٔ سفارش معتبر نیست.")
+                    return
+                handle_receipt_request(callback, order_id)
+                return
+        if callback_data == "receipt:cancel":
+            awaiting_receipts.pop(user_id, None)
+            answer_callback(callback_id, "ارسال رسید لغو شد.")
+            send_message(chat_id, "ارسال رسید لغو شد.", main_menu())
+            return
+
         answer_callback(callback_id)
         return
 
@@ -700,6 +1033,7 @@ def validate_settings():
     required = {
         "TELEGRAM_BOT_TOKEN": TELEGRAM_TOKEN,
         "TELEGRAM_ADMIN_CHAT_ID": TELEGRAM_ADMIN_CHAT_ID,
+        "TELEGRAM_ORDER_APPROVAL_SECRET": ORDER_APPROVAL_SECRET,
         "SUPABASE_URL": SUPABASE_URL,
         "SUPABASE_ANON_KEY": SUPABASE_KEY,
     }
@@ -757,7 +1091,11 @@ def main():
                     continue
 
                 message = update.get("message")
-                if not message or not message.get("text"):
+                if not message:
+                    continue
+                if handle_receipt_message(message):
+                    continue
+                if not message.get("text"):
                     continue
                 chat_id = message["chat"]["id"]
                 text = message["text"].strip()

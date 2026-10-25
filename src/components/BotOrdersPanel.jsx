@@ -3,6 +3,8 @@ import { readTable, updateRows } from '../offlineSync';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'جدید' },
+  { value: 'approved', label: 'تأییدشده؛ منتظر پرداخت' },
+  { value: 'rejected', label: 'ردشده' },
   { value: 'processing', label: 'در حال پیگیری' },
   { value: 'completed', label: 'انجام‌شده' },
   { value: 'cancelled', label: 'لغوشده' },

@@ -8,6 +8,7 @@ def main():
     required = (
         "TELEGRAM_BOT_TOKEN",
         "TELEGRAM_ADMIN_CHAT_ID",
+        "TELEGRAM_ORDER_APPROVAL_SECRET",
         "SUPABASE_URL",
         "SUPABASE_ANON_KEY",
     )
