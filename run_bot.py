@@ -55,7 +55,7 @@ def telegram_error_description(response):
 
 
 def send_message(chat_id, text, reply_markup=None):
-    payload = {"chat_id": chat_id, "text": text}
+    payload = {"chat_id": chat_id, "text": f"\u200f{text}"}
     if reply_markup:
         payload["reply_markup"] = reply_markup
     return telegram_request("sendMessage", payload)
@@ -192,6 +192,25 @@ def format_price(value):
         return "توافقی / نامشخص"
 
 
+def persian_digits(value):
+    return str(value).translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+
+
+def product_button_label(product):
+    name = str(product.get("title") or "بدون عنوان").strip()
+    if len(name) > 20:
+        name = name[:19].rstrip() + "…"
+    price = product.get("price_level1")
+    if price is None:
+        short_price = "توافقی"
+    else:
+        try:
+            short_price = f"{int(float(price)):,} ت"
+        except (TypeError, ValueError, OverflowError):
+            short_price = "توافقی"
+    return f"💍 {name} | 💵 {persian_digits(short_price)}"
+
+
 def customer_order_message(order):
     order_id = order["id"]
     total_price = order.get("total_price")
@@ -282,17 +301,24 @@ def send_categories(chat_id, products):
     available = {product_group(product) for product in products}
     groups = [group for group in ("sale", "rent") if group in available]
     if not groups:
-        send_message(chat_id, "فعلاً محصولی در انبار برای نمایش نیست.", main_menu())
+        send_message(
+            chat_id,
+            "💍 خدمات و محصولات تشریفات\n──────────────\nفعلاً موردی برای نمایش نیست.",
+            main_menu(),
+        )
         return
 
-    keyboard = [
-        [{"text": group_label(group), "callback_data": f"category:{group}"}]
+    keyboard = [[
+        {
+            "text": f"✨ {group_label(group)}",
+            "callback_data": f"category:{group}",
+        }
         for group in groups
-    ]
+    ]]
     keyboard.append([{"text": "🔙 منوی اصلی", "callback_data": "home"}])
     send_message(
         chat_id,
-        "دستهٔ موردنظر را انتخاب کنید:",
+        "💍 دسته‌بندی خدمات و محصولات\n──────────────\nدستهٔ موردنظر را انتخاب کنید:",
         {"inline_keyboard": keyboard},
     )
 
@@ -300,8 +326,20 @@ def send_categories(chat_id, products):
 def send_products(chat_id, user_id, products, group=None, page=0):
     if group:
         products = [item for item in products if product_group(item) == group]
+    group_key = group or "all"
+    products = [
+        item for item in products
+        if str(item.get("id", "")).strip()
+        and len(
+            f"detail:{str(item.get('id')).strip()}:{group_key}:{page}".encode("utf-8")
+        ) <= 64
+    ]
     if not products:
-        send_message(chat_id, "در این دسته محصولی برای نمایش نیست.", main_menu())
+        send_message(
+            chat_id,
+            "📋 فهرست خدمات\n──────────────\nدر این دسته موردی برای نمایش نیست.",
+            main_menu(),
+        )
         return
 
     page_count = (len(products) + PRODUCTS_PER_PAGE - 1) // PRODUCTS_PER_PAGE
@@ -313,26 +351,23 @@ def send_products(chat_id, user_id, products, group=None, page=0):
         else "محصولات موجود برای سفارش:"
     )
     keyboard = []
-    listing = [title, ""]
+    listing = [
+        f"💍 {title}",
+        "──────────────",
+        "برای مشاهدهٔ قیمت‌ها و جزئیات، یک گزینه را انتخاب کنید.",
+    ]
+    product_buttons = []
     for product in page_products:
         product_id = str(product.get("id", "")).strip()
-        if not product_id or len(f"add:{product_id}".encode("utf-8")) > 64:
-            continue
-        name = str(product.get("title") or "بدون عنوان").strip()
-        button_name = name if len(name) <= 35 else name[:32] + "…"
-        display_name = name if len(name) <= 120 else name[:117] + "…"
-        description = str(product.get("description") or "").strip()
-        if len(description) > 250:
-            description = description[:247] + "…"
-        product_lines = [f"• {display_name}", *price_level_lines(product)]
-        if description:
-            product_lines.append(f"توضیحات: {description}")
-        keyboard.append([{
-            "text": f"➕ افزودن {button_name}",
-            "callback_data": f"add:{product_id}",
-        }])
-        listing.extend(product_lines)
-        listing.append("")
+        product_buttons.append({
+            "text": product_button_label(product),
+            "callback_data": f"detail:{product_id}:{group_key}:{page}",
+        })
+
+    keyboard.extend(
+        product_buttons[index:index + 2]
+        for index in range(0, len(product_buttons), 2)
+    )
 
     paging = []
     if page > 0:
@@ -349,29 +384,64 @@ def send_products(chat_id, user_id, products, group=None, page=0):
         keyboard.append(paging)
     if page_count > 1:
         keyboard.append([{
-            "text": f"صفحهٔ {page + 1} از {page_count}",
+            "text": f"صفحهٔ {persian_digits(page + 1)} از {persian_digits(page_count)}",
             "callback_data": "noop",
         }])
     if carts.get(str(user_id)):
         keyboard.append([{"text": "🛒 مشاهدهٔ سبد خرید", "callback_data": "cart"}])
     keyboard.extend([
         [{"text": "📂 دسته‌ها", "callback_data": "categories"}],
-        [{"text": "🔙 منوی اصلی", "callback_data": "home"}],
+        [{"text": "🔙 بازگشت به منوی اصلی", "callback_data": "home"}],
     ])
     send_message(chat_id, "\n".join(listing), {"inline_keyboard": keyboard})
+
+
+def send_product_details(chat_id, product, group, page):
+    product_id = str(product.get("id", "")).strip()
+    title = str(product.get("title") or "بدون عنوان").strip()
+    description = str(product.get("description") or "").strip()
+    if len(description) > 1200:
+        description = description[:1197].rstrip() + "…"
+
+    lines = [
+        f"💍 {title}",
+        "──────────────",
+        f"🏷️ نوع: {group_label(product_group(product))}",
+        "💵 قیمت‌ها:",
+        *price_level_lines(product),
+    ]
+    if description:
+        lines.extend(["", f"✨ توضیحات: {description}"])
+
+    keyboard = [
+        [{
+            "text": "➕ افزودن به سبد خرید",
+            "callback_data": f"add:{product_id}:{group}:{page}",
+        }],
+        [{
+            "text": "🔙 بازگشت به فهرست",
+            "callback_data": f"products:{group}:{page}",
+        }],
+        [{"text": "🔙 بازگشت به منوی اصلی", "callback_data": "home"}],
+    ]
+    send_message(chat_id, "\n".join(lines), {"inline_keyboard": keyboard})
 
 
 def send_cart(chat_id, user_id, products):
     user_cart = carts.get(str(user_id), {})
     if not user_cart:
-        send_message(chat_id, "سبد خرید شما خالی است.", main_menu())
+        send_message(
+            chat_id,
+            "🛒 سبد خرید شما خالی است.\n──────────────\nبرای شروع، خدمات موردنظرتان را انتخاب کنید.",
+            main_menu(),
+        )
         return
 
     products_by_id = {str(item.get("id")): item for item in products}
-    lines = ["سبد خرید شما:"]
+    lines = ["🛒 سبد خرید شما", "──────────────"]
     keyboard = []
 
-    for product_id, quantity in user_cart.items():
+    for index, (product_id, quantity) in enumerate(user_cart.items()):
         product = products_by_id.get(product_id)
         if not product:
             lines.append(f"شناسهٔ {product_id}: این محصول دیگر در فهرست نیست.")
@@ -382,20 +452,22 @@ def send_cart(chat_id, user_id, products):
             continue
 
         title = str(product.get("title") or "بدون عنوان")
-        lines.append(f"• {title} × {quantity}")
+        lines.append(f"💍 {title} × {persian_digits(quantity)}")
         lines.extend(price_level_lines(product))
+        if index + 1 < len(user_cart):
+            lines.append("──────────────")
         keyboard.append([{
             "text": f"➖ {title[:32]}",
             "callback_data": f"remove:{product_id}",
         }])
 
-    lines.append("\nمبلغ پرداخت بر اساس قیمت سطح ۱ محاسبه می‌شود.")
+    lines.append("\n💵 مبلغ نهایی بر اساس قیمت سطح ۱ محاسبه می‌شود.")
     lines.append("اگر قیمت سطح ۱ کالایی ثبت نشده باشد، مدیر مبلغ را جداگانه اعلام می‌کند.")
     lines.append("موجودی انبار با ثبت سفارش تغییر نمی‌کند.")
     keyboard.extend([
-        [{"text": "✅ ارسال درخواست خرید", "callback_data": "checkout"}],
+        [{"text": "🛒 ثبت سفارش نهایی", "callback_data": "checkout"}],
         [{"text": "🛍 ادامهٔ انتخاب", "callback_data": "new_order"}],
-        [{"text": "🔙 منوی اصلی", "callback_data": "home"}],
+        [{"text": "🔙 بازگشت به منوی اصلی", "callback_data": "home"}],
     ])
     send_message(chat_id, "\n".join(lines), {"inline_keyboard": keyboard})
 
@@ -514,7 +586,13 @@ def handle_callback(callback):
     answer_callback(callback_id)
 
     if callback_data in {"home", "back_home"}:
-        send_message(chat_id, "فروشگاه و سفارش‌ها:", main_menu())
+        send_message(
+            chat_id,
+            "💍 به فروشگاه تشریفات آژو خوش آمدید.\n"
+            "──────────────\n"
+            "برای دیدن خدمات، قیمت‌ها و ثبت سفارش یکی از گزینه‌ها را انتخاب کنید.",
+            main_menu(),
+        )
         return
     if callback_data == "noop":
         return
@@ -536,6 +614,30 @@ def handle_callback(callback):
             send_message(chat_id, "دستهٔ انتخاب‌شده معتبر نیست.", main_menu())
         else:
             send_products(chat_id, user_id, products, group=group)
+    elif callback_data.startswith("detail:"):
+        try:
+            _, product_id, group, page_text = callback_data.split(":", 3)
+            page = int(page_text)
+            if page < 0 or group not in {"all", "sale", "rent"}:
+                raise ValueError
+        except ValueError:
+            send_message(chat_id, "گزینهٔ انتخاب‌شده معتبر نیست.", main_menu())
+            return
+        product = next(
+            (item for item in products if str(item.get("id")) == product_id),
+            None,
+        )
+        if product is None:
+            send_message(
+                chat_id,
+                "این خدمت دیگر در فهرست موجود نیست. لطفاً فهرست را تازه کنید.",
+                {"inline_keyboard": [[{
+                    "text": "🔙 بازگشت به فهرست",
+                    "callback_data": f"products:{group}:{page}",
+                }]]},
+            )
+            return
+        send_product_details(chat_id, product, group, page)
     elif callback_data.startswith("products:"):
         try:
             _, group, page_text = callback_data.split(":", 2)
@@ -553,7 +655,8 @@ def handle_callback(callback):
                 page=page,
             )
     elif callback_data.startswith("add:"):
-        product_id = callback_data.partition(":")[2]
+        parts = callback_data.split(":")
+        product_id = parts[1] if len(parts) > 1 else ""
         if not any(str(item.get("id")) == product_id for item in products):
             send_message(chat_id, "این محصول دیگر در فهرست موجود نیست.", main_menu())
             return
@@ -562,7 +665,20 @@ def handle_callback(callback):
             user_cart.get(product_id, 0) + 1,
             MAX_CART_QUANTITY,
         )
-        send_products(chat_id, user_id, products)
+        group = parts[2] if len(parts) > 2 else "all"
+        try:
+            page = int(parts[3]) if len(parts) > 3 else 0
+            if page < 0 or group not in {"all", "sale", "rent"}:
+                raise ValueError
+        except ValueError:
+            group, page = "all", 0
+        send_products(
+            chat_id,
+            user_id,
+            products,
+            group=None if group == "all" else group,
+            page=page,
+        )
     elif callback_data.startswith("remove:"):
         product_id = callback_data.partition(":")[2]
         user_cart = carts.get(user_id, {})
@@ -648,7 +764,9 @@ def main():
                 if text.startswith("/start"):
                     send_message(
                         chat_id,
-                        "سلام! به فروشگاه تشریفات آژو خوش آمدید.",
+                        "💍 به فروشگاه تشریفات آژو خوش آمدید.\n"
+                        "──────────────\n"
+                        "برای دیدن خدمات، قیمت‌ها و ثبت سفارش یکی از گزینه‌ها را انتخاب کنید.",
                         main_menu(),
                     )
                 elif text.startswith("/cancel"):
