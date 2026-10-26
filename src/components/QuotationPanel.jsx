@@ -93,12 +93,14 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
   }, []);
 
   useEffect(() => {
-    const handleAppEscape = () => {
+    const handleAppEscape = (event) => {
       if (isSearching) {
+        event.preventDefault();
         setIsSearching(false);
         return;
       }
       if (showAddCustomerForm) {
+        event.preventDefault();
         setShowAddCustomerForm(false);
         setNewCustomerName('');
         setNewCustomerPhone('');

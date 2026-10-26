@@ -11,7 +11,7 @@ const PERIODS = [
 ];
 
 const toISODate = (value) => {
-  if (!value) return '';
+  if (value === null || value === undefined || value === '') return '';
   const text = String(value).trim()
     .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
     .replace(/[٠-٩]/g, (digit) => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
@@ -52,7 +52,7 @@ const isRentItem = (item) => ['rent', 'اجاره', 'اجاره‌ای'].include
 
 const formatMoney = (value) => `${Math.round(value || 0).toLocaleString('fa-IR')} تومان`;
 const formatDate = (value) => value ? moment(value).locale('fa').format('jYYYY/jMM/jDD') : '—';
-const normalizeSearch = (value) => String(value || '')
+const normalizeSearch = (value) => String(value ?? '')
   .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
   .replace(/[٠-٩]/g, (digit) => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit))
   .trim()
@@ -166,10 +166,14 @@ export default function AnalyticsPanel() {
   }, [fetchAnalyticsData]);
 
   useEffect(() => {
-    const handleAppEscape = () => setExpandedInvoiceId(null);
+    const handleAppEscape = (event) => {
+      if (expandedInvoiceId === null) return;
+      event.preventDefault();
+      setExpandedInvoiceId(null);
+    };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
-  }, []);
+  }, [expandedInvoiceId]);
 
   const range = useMemo(
     () => getPeriodBounds(period, customFrom, customTo),

@@ -5,6 +5,7 @@ from run_bot import (
     admin_order_keyboard,
     awaiting_receipts,
     customer_order_message,
+    handle_callback,
     handle_admin_order_action,
     handle_receipt_message,
     handle_receipt_request,
@@ -37,7 +38,7 @@ class BotOrderWorkflowTests(unittest.TestCase):
         self.assertIn("مبلغ نهایی پس از بررسی مدیر اعلام می‌شود", message)
         self.assertIn("واریز نکنید", message)
 
-    def test_approved_payment_message_includes_order_and_amount_without_card(self):
+    def test_approved_payment_message_includes_card_and_manual_review_notice(self):
         message = payment_instruction_message({
             "id": 44,
             "total_price": 125000,
@@ -50,8 +51,14 @@ class BotOrderWorkflowTests(unittest.TestCase):
 
         self.assertIn("✨ سفارش شما با موفقیت تایید شد.", message)
         self.assertIn("💵 مبلغ قابل پرداخت: 125,000 تومان", message)
-        self.assertIn("برای پرداخت آنلاین", message)
-        self.assertNotIn("6037", message)
+        self.assertIn("شماره کارت: ۶۰۳۷ ۱۲۳۴ ۱۲۳۴ ۵۶۷۸", message)
+        self.assertIn("به نام: <نام صاحب حساب>", message)
+        self.assertIn("بانک: بانک & نمونه", message)
+        self.assertIn("نیازمند بررسی مدیر", message)
+
+    def test_payment_message_requires_valid_bank_details(self):
+        with self.assertRaisesRegex(ValueError, "valid bank card number"):
+            payment_instruction_message({"id": 44, "total_price": 125000})
 
     def test_admin_invoice_includes_order_customer_items_and_total(self):
         message = order_admin_message(
@@ -83,6 +90,28 @@ class BotOrderWorkflowTests(unittest.TestCase):
         self.assertEqual(buttons[1]["text"], "❌ رد سفارش")
         self.assertEqual(buttons[1]["callback_data"], "order:reject:46")
 
+    def test_admin_order_callback_routes_to_action_handler(self):
+        callback = {
+            "id": "callback-admin",
+            "data": "order:approve:42",
+            "message": {"chat": {"id": 1234, "type": "private"}},
+            "from": {"id": 1234},
+        }
+
+        with (
+            patch("run_bot.handle_admin_order_action") as action,
+            patch("run_bot.answer_callback") as answer,
+        ):
+            handle_callback(callback)
+
+        action.assert_called_once_with(
+            callback,
+            "approve",
+            42,
+            callback_answered=True,
+        )
+        answer.assert_called_once_with("callback-admin", "در حال بررسی سفارش...")
+
     def test_approval_callback_requires_admin_private_chat(self):
         callback = {
             "message": {
@@ -92,13 +121,16 @@ class BotOrderWorkflowTests(unittest.TestCase):
         }
         with patch("run_bot.TELEGRAM_ADMIN_CHAT_ID", "1234"):
             self.assertTrue(is_admin_callback(callback))
+            callback["from"]["id"] = "1234"
+            callback["message"]["chat"]["id"] = "1234"
+            self.assertTrue(is_admin_callback(callback))
             callback["from"]["id"] = 5678
             self.assertFalse(is_admin_callback(callback))
             callback["from"]["id"] = 1234
             callback["message"]["chat"]["type"] = "group"
             self.assertFalse(is_admin_callback(callback))
 
-    def test_admin_approval_sends_payment_link_and_receipt_buttons(self):
+    def test_admin_approval_sends_card_details_and_receipt_button(self):
         callback = {
             "id": "callback-1",
             "message": {
@@ -121,7 +153,6 @@ class BotOrderWorkflowTests(unittest.TestCase):
 
         with (
             patch("run_bot.TELEGRAM_ADMIN_CHAT_ID", "1234"),
-            patch("run_bot.PAYMENT_BASE_URL", "https://pay.example/checkout"),
             patch("run_bot.process_bot_order_action", return_value=approved_order) as rpc,
             patch("run_bot.answer_callback") as answer,
             patch("run_bot.edit_message_text") as edit,
@@ -134,43 +165,57 @@ class BotOrderWorkflowTests(unittest.TestCase):
         self.assertIn("تایید شد", edit.call_args.args[2])
         self.assertEqual(send.call_args.args[0], "9001")
         self.assertIn("125,000 تومان", send.call_args.args[1])
+        self.assertIn("۶۰۳۷ ۱۲۳۴ ۱۲۳۴ ۵۶۷۸", send.call_args.args[1])
+        self.assertIn("نیازمند بررسی مدیر", send.call_args.args[1])
         self.assertEqual(
             send.call_args.args[2]["inline_keyboard"][0][0],
             {
-                "text": "💳 پرداخت آنلاین سفارش (کلیک کنید)",
-                "url": "https://pay.example/checkout",
+                "text": "📤 ارسال رسید و فیش پرداخت",
+                "callback_data": "order:receipt:42",
             },
         )
-        self.assertEqual(
-            send.call_args.args[2]["inline_keyboard"][1][0]["callback_data"],
-            "order:receipt:42",
-        )
+        self.assertEqual(len(send.call_args.args[2]["inline_keyboard"]), 1)
 
-    def test_approval_without_valid_payment_url_does_not_update_order(self):
+    def test_card_details_delivery_failure_logs_telegram_error(self):
         callback = {
-            "id": "callback-no-url",
+            "id": "callback-send-failed",
             "message": {
                 "chat": {"id": 1234, "type": "private"},
                 "message_id": 77,
             },
             "from": {"id": 1234},
         }
+        approved_order = {
+            "id": 42,
+            "telegram_user_id": "9001",
+            "total_price": 125000,
+            "changed": True,
+            "payment_info": {
+                "card_number": "6037123412345678",
+                "holder_name": "نام صاحب حساب",
+                "bank_name": "بانک نمونه",
+            },
+        }
 
         with (
             patch("run_bot.TELEGRAM_ADMIN_CHAT_ID", "1234"),
-            patch("run_bot.PAYMENT_BASE_URL", "http://not-secure.example"),
-            patch("run_bot.process_bot_order_action") as rpc,
-            patch("run_bot.answer_callback") as answer,
-            patch("run_bot.send_message") as send,
+            patch("run_bot.process_bot_order_action", return_value=approved_order),
+            patch("run_bot.answer_callback"),
+            patch("run_bot.edit_message_text"),
+            patch(
+                "run_bot.send_message",
+                side_effect=RuntimeError(
+                    "Telegram API method sendMessage failed: bot was blocked"
+                ),
+            ),
+            patch("builtins.print") as log,
         ):
             handle_admin_order_action(callback, "approve", 42)
 
-        rpc.assert_not_called()
-        answer.assert_called_once_with(
-            "callback-no-url",
-            "لینک پرداخت آنلاین تنظیم نشده است.",
-        )
-        self.assertIn("PAYMENT_BASE_URL", send.call_args.args[1])
+        self.assertTrue(any(
+            "bot was blocked" in str(call.args[0])
+            for call in log.call_args_list
+        ))
 
     def test_unauthorized_admin_callback_never_calls_database(self):
         callback = {
@@ -234,13 +279,19 @@ class BotOrderWorkflowTests(unittest.TestCase):
         }
         with (
             patch("run_bot.forward_message") as forward,
+            patch(
+                "run_bot.process_bot_order_action",
+                return_value={"id": 42, "status": "payment_review", "changed": True},
+            ) as update_status,
             patch("run_bot.send_message") as send,
         ):
             self.assertTrue(handle_receipt_message(photo_message))
 
         forward.assert_called_once()
+        update_status.assert_called_once_with(42, "payment_review")
         self.assertNotIn("9001", awaiting_receipts)
         self.assertIn("برای مدیر ارسال شد", send.call_args.args[1])
+        self.assertIn("به‌تنهایی تأیید واریز محسوب نمی‌شود", send.call_args.args[1])
 
 
 if __name__ == "__main__":

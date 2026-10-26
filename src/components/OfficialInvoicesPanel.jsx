@@ -65,28 +65,36 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   }, []);
 
   useEffect(() => {
-    const handleAppEscape = () => {
+    const handleAppEscape = (event) => {
       if (isCustomerListOpen) {
+        event.preventDefault();
         setIsCustomerListOpen(false);
         return;
       }
       if (editingId !== null) {
+        event.preventDefault();
         handleCancelEdit();
         return;
       }
       if (checklistOpenId !== null) {
+        event.preventDefault();
         setChecklistOpenId(null);
         return;
       }
       if (printInvoice) {
+        event.preventDefault();
         setPrintInvoice(null);
         return;
       }
       if (whatsAppInvoice) {
+        event.preventDefault();
         setWhatsAppInvoice(null);
         return;
       }
-      if (detailsInvoice) setDetailsInvoice(null);
+      if (detailsInvoice) {
+        event.preventDefault();
+        setDetailsInvoice(null);
+      }
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
@@ -95,7 +103,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const filteredCustomers = customers.filter((customer) => {
     const query = customerSearch.trim().toLocaleLowerCase('fa-IR');
     return query && [customer['Full name'], customer.phone].some((value) =>
-      String(value || '').toLocaleLowerCase('fa-IR').includes(query)
+      String(value ?? '').toLocaleLowerCase('fa-IR').includes(query)
     );
   }).slice(0, 8);
 

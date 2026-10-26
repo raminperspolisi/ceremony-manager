@@ -40,8 +40,11 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
   const [editForm, setEditForm] = useState({});
 
   useEffect(() => {
-    const handleAppEscape = () => {
-      if (editingId !== null) setEditingId(null);
+    const handleAppEscape = (event) => {
+      if (editingId !== null) {
+        event.preventDefault();
+        setEditingId(null);
+      }
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);

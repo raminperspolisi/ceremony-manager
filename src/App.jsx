@@ -27,6 +27,7 @@ import {
 const DEFAULT_BUSINESS_NAME = 'تشریفات آژو';
 const DEFAULT_LOGO_URL = '/azho-logo.png';
 const BUSINESS_LOGO_BUCKET = 'business-logos';
+const APP_SECTION_HISTORY_KEY = '__ceremonyManagerSection';
 const SECTION_BY_FUNCTION_KEY = {
   F1: 'customers',
   F2: 'inventory',
@@ -121,6 +122,8 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [activeSection, setActiveSection] = useState('dashboard');
+  const activeSectionRef = useRef(activeSection);
+  activeSectionRef.current = activeSection;
   const [visitedSections, setVisitedSections] = useState(() => new Set(['dashboard']));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [offlineStatus, setOfflineStatus] = useState(getOfflineSyncStatus);
@@ -130,6 +133,8 @@ export default function App() {
   const [globalSearch, setGlobalSearch] = useState('');
   const [globalSearchResults, setGlobalSearchResults] = useState([]);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const backLayerStateRef = useRef({});
+  backLayerStateRef.current = { profileOpen, profileLoading, mobileMenuOpen, globalSearchOpen };
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   const [globalSearchError, setGlobalSearchError] = useState('');
   const [globalSearchRevision, setGlobalSearchRevision] = useState(0);
@@ -378,7 +383,14 @@ export default function App() {
       if (!session || !section || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || profileOpen) return;
 
       event.preventDefault();
-      setActiveSection(section);
+      if (activeSectionRef.current !== section) {
+        window.history.pushState({
+          ...(window.history.state || {}),
+          [APP_SECTION_HISTORY_KEY]: section,
+        }, '');
+        activeSectionRef.current = section;
+        setActiveSection(section);
+      }
       setVisitedSections((visited) => new Set(visited).add(section));
       setMobileMenuOpen(false);
     };
@@ -402,14 +414,71 @@ export default function App() {
         setGlobalSearchOpen(false);
         return;
       }
-      window.dispatchEvent(new CustomEvent('app-escape', { detail: activeSection }));
+      window.dispatchEvent(new CustomEvent('app-escape', { detail: activeSection, cancelable: true }));
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [activeSection, globalSearchOpen, mobileMenuOpen, profileLoading, profileOpen]);
 
-  const handleSectionChange = (section) => {
-    setActiveSection(section);
+  useEffect(() => {
+    if (!sessionUserId) return undefined;
+
+    window.history.replaceState({
+      ...(window.history.state || {}),
+      [APP_SECTION_HISTORY_KEY]: activeSectionRef.current,
+    }, '');
+
+    const handlePopState = (event) => {
+      const { profileOpen: isProfileOpen, profileLoading: isProfileLoading, mobileMenuOpen: isMobileMenuOpen, globalSearchOpen: isGlobalSearchOpen } = backLayerStateRef.current;
+      let backConsumed = false;
+      if (isProfileOpen) {
+        if (!isProfileLoading) setProfileOpen(false);
+        backConsumed = true;
+      } else if (isMobileMenuOpen) {
+        setMobileMenuOpen(false);
+        backConsumed = true;
+      } else if (isGlobalSearchOpen) {
+        setGlobalSearchOpen(false);
+        backConsumed = true;
+      } else {
+        const appEscapeEvent = new CustomEvent('app-escape', {
+          detail: activeSectionRef.current,
+          cancelable: true,
+        });
+        window.dispatchEvent(appEscapeEvent);
+        backConsumed = appEscapeEvent.defaultPrevented;
+      }
+
+      if (backConsumed) {
+        window.history.pushState({
+          ...(window.history.state || {}),
+          [APP_SECTION_HISTORY_KEY]: activeSectionRef.current,
+        }, '');
+        return;
+      }
+
+      const section = event.state?.[APP_SECTION_HISTORY_KEY];
+      if (typeof section !== 'string') return;
+      activeSectionRef.current = section;
+      setActiveSection(section);
+      setVisitedSections((visited) => new Set(visited).add(section));
+      setMobileMenuOpen(false);
+      setGlobalSearchOpen(false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [sessionUserId]);
+
+  function handleSectionChange(section) {
+    if (activeSectionRef.current !== section) {
+      window.history.pushState({
+        ...(window.history.state || {}),
+        [APP_SECTION_HISTORY_KEY]: section,
+      }, '');
+      activeSectionRef.current = section;
+      setActiveSection(section);
+    }
     setVisitedSections((visited) => new Set(visited).add(section));
     setMobileMenuOpen(false);
   };
@@ -706,11 +775,12 @@ export default function App() {
           <span role="status" aria-live="polite" className={`offline-status offline-status-${offlineStatus}`}>
             {offlineSyncError ? 'خطا در همگام‌سازی' :
               !offlineCacheReady ? 'در حال آماده‌سازی آفلاین…' :
-              !browserOnline ? 'آفلاین؛ تغییرات ذخیره می‌شوند' :
-              offlineStatus === 'server-unavailable' ? 'آنلاین؛ ارتباط با سرور برقرار نیست' :
+              !browserOnline || offlineStatus === 'offline' || offlineStatus === 'offline-pending'
+                ? 'آفلاین؛ دسترسی مستقیم به پایگاه داده ندارید' :
+              offlineStatus === 'server-unavailable' ? 'پایگاه داده در دسترس نیست؛ داده‌های محلی فعال‌اند' :
               offlineStatus === 'syncing' ? 'در حال همگام‌سازی…' :
                 offlineStatus === 'sync-error' ? 'خطا در همگام‌سازی' :
-                  offlineStatus === 'pending' || offlineStatus === 'offline-pending' ? 'آنلاین؛ همگام‌سازی در انتظار' :
+                  offlineStatus === 'pending' ? 'آنلاین؛ همگام‌سازی در انتظار' :
                     'آنلاین'}
           </span>
           <span className="status-dot" />

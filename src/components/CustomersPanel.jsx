@@ -48,12 +48,14 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   }, [selectedCustomer?.id]);
 
   useEffect(() => {
-    const handleAppEscape = () => {
+    const handleAppEscape = (event) => {
       if (isSearching) {
+        event.preventDefault();
         setIsSearching(false);
         return;
       }
       if (editingCeremonyId !== null) {
+        event.preventDefault();
         setEditingCeremonyId(null);
         setCerDate('');
         setCerGuests('');
@@ -61,7 +63,10 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
         setCerNotes('');
         return;
       }
-      if (editingId !== null) handleCancelEdit();
+      if (editingId !== null) {
+        event.preventDefault();
+        handleCancelEdit();
+      }
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
