@@ -1,3 +1,4 @@
+from html import escape
 import os
 import ssl
 import time
@@ -389,21 +390,17 @@ def payment_instruction_message(order):
     if not holder_name:
         raise ValueError("Approved order has no bank account holder name.")
 
-    grouped_card_number = " ".join(
-        card_number[index:index + 4]
-        for index in range(0, len(card_number), 4)
-    )
     lines = [
         f"✨ سفارش شما با موفقیت تایید شد. (#{persian_digits(order['id'])})",
         f"💵 مبلغ قابل پرداخت: {format_price(order['total_price'])}",
         "",
         "💳 اطلاعات واریز کارت‌به‌کارت:",
-        f"شماره کارت: {persian_digits(grouped_card_number)}",
-        f"به نام: {holder_name}",
+        f"شماره کارت:\n<code>{card_number}</code>",
+        f"به نام: {escape(holder_name)}",
     ]
     bank_name = str(payment_info.get("bank_name") or "").strip()
     if bank_name:
-        lines.append(f"بانک: {bank_name}")
+        lines.append(f"بانک: {escape(bank_name)}")
     lines.extend([
         "",
         "پس از واریز، تصویر یا فایل رسید را برای مدیر ارسال کنید.",
@@ -441,6 +438,7 @@ def process_pending_payment_notifications(limit=10):
                         }
                     ]]
                 },
+                parse_mode="HTML",
             )
         except (requests.RequestException, RuntimeError, ValueError) as error:
             print(

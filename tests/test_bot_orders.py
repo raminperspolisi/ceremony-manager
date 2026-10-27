@@ -53,9 +53,9 @@ class BotOrderWorkflowTests(unittest.TestCase):
 
         self.assertIn("✨ سفارش شما با موفقیت تایید شد.", message)
         self.assertIn("💵 مبلغ قابل پرداخت: 125,000 تومان", message)
-        self.assertIn("شماره کارت: ۶۰۳۷ ۱۲۳۴ ۱۲۳۴ ۵۶۷۸", message)
-        self.assertIn("به نام: <نام صاحب حساب>", message)
-        self.assertIn("بانک: بانک & نمونه", message)
+        self.assertIn("شماره کارت:\n<code>6037123412345678</code>", message)
+        self.assertIn("به نام: &lt;نام صاحب حساب&gt;", message)
+        self.assertIn("بانک: بانک &amp; نمونه", message)
         self.assertIn("نیازمند بررسی مدیر", message)
         self.assertIn("آدرس دقیق", message)
 
@@ -192,7 +192,8 @@ class BotOrderWorkflowTests(unittest.TestCase):
             process_pending_payment_notifications(limit=1)
 
         self.assertEqual(send.call_args.args[0], "9001")
-        self.assertIn("۶۰۳۷ ۱۲۳۴ ۱۲۳۴ ۵۶۷۸", send.call_args.args[1])
+        self.assertIn("<code>6037123412345678</code>", send.call_args.args[1])
+        self.assertEqual(send.call_args.kwargs["parse_mode"], "HTML")
         self.assertIn("آدرس دقیق", send.call_args.args[1])
         self.assertEqual(
             send.call_args.args[2]["inline_keyboard"][0][0]["callback_data"],
