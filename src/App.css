@@ -5169,6 +5169,11 @@ textarea:focus-visible {
 }
 
 @media (max-width: 600px) {
+  .app-header {
+    grid-template-rows: auto auto auto;
+    row-gap: 8px;
+  }
+
   .page-heading {
     flex-direction: column;
   }
@@ -5179,8 +5184,22 @@ textarea:focus-visible {
   }
 
   .global-search {
-    width: 100%;
-    flex: 1;
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: center;
+    width: min(82vw, 340px);
+    flex: none;
+    margin-top: 2px;
+  }
+
+  .global-search label {
+    margin-bottom: 2px;
+    font-size: 9px;
+  }
+
+  .global-search input {
+    min-height: 34px;
+    padding: 6px 9px;
   }
 
   .backup-panel {
@@ -6136,13 +6155,21 @@ textarea:focus-visible {
 @media (max-width: 900px) {
   .app-header {
     grid-template-rows: auto auto auto;
+    row-gap: 10px;
+  }
+
+  .app-header .brand {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
   }
 
   .app-header .global-search {
     grid-column: 1 / -1;
     grid-row: 2;
-    width: min(100%, 440px);
+    width: min(76vw, 320px);
     justify-self: center;
+    margin-top: 4px;
   }
 
   .app-header .header-status {
@@ -6156,10 +6183,27 @@ textarea:focus-visible {
     grid-template-rows: auto auto auto;
   }
 
+  .app-header .brand {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+  }
+
   .app-header .global-search {
     grid-column: 1 / -1;
     grid-row: 2;
-    width: 100%;
+    width: min(76vw, 320px);
+    margin-top: 4px;
+  }
+
+  .app-header .global-search label {
+    margin-bottom: 2px;
+    text-align: center;
+  }
+
+  .app-header .global-search input {
+    min-height: 34px;
+    padding: 6px 9px;
   }
 
   .app-header .header-status {
