@@ -136,7 +136,14 @@ export default function OrganizationManagementPanel({
           section_permissions: permissionValues(invitePermissions),
         },
       });
-      if (error) throw error;
+      if (error) {
+        const response = error.context;
+        if (response instanceof Response) {
+          const result = await response.clone().json().catch(() => null);
+          if (typeof result?.error === 'string') throw new Error(result.error);
+        }
+        throw error;
+      }
       setInviteEmail('');
       setInviteRole('member');
       setInvitePermissions(DEFAULT_PERMISSIONS);

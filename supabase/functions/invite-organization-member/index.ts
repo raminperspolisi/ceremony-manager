@@ -54,8 +54,11 @@ Deno.serve(async (request) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data: userData, error: userError } = await userClient.auth.getUser();
+    const { data: userData, error: userError } = await userClient.auth.getUser(
+      authorization.slice('Bearer '.length),
+    );
     if (userError || !userData.user) {
+      console.error('Could not verify invitation requester:', userError?.message || 'No user returned.');
       return response(401, { error: 'The access token is invalid or expired.' });
     }
 
