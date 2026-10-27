@@ -1,5 +1,14 @@
-const CACHE_NAME = 'ceremony-manager-shell-v1';
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/app-icon.svg', '/azho-logo.png'];
+const CACHE_NAME = 'ceremony-manager-shell-v2';
+const APP_SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/azho-app-icon-32.png',
+  '/azho-app-icon-180.png',
+  '/azho-app-icon-192.png',
+  '/azho-app-icon-512.png',
+  '/azho-logo.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
