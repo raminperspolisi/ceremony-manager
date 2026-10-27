@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
 
 const SECTIONS = [
   ['dashboard', 'داشبورد'],
@@ -119,7 +119,16 @@ export default function OrganizationManagementPanel({
     setErrorMessage('');
     setFeedback('');
     try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session?.access_token) {
+        throw new Error('نشست ورود معتبر نیست. دوباره وارد برنامه شوید و دعوت را تکرار کنید.');
+      }
       const { data, error } = await supabase.functions.invoke('invite-organization-member', {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: {
           organization_id: organization.id,
           email: inviteEmail.trim(),
