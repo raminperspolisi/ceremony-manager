@@ -29,16 +29,20 @@ export async function readAllBackupRows(table, readTable) {
 
 export async function restoreBackupDocument(
   value,
-  { userId, projectUrl, readTable, insertRows, updateRows },
+  { userId, organizationId, projectUrl, readTable, insertRows, updateRows },
 ) {
   const backup = validateBackupDocument(value);
   if (backup.userId !== userId) throw new Error('این فایل پشتیبان متعلق به حساب کاربری دیگری است.');
   if (backup.projectUrl !== projectUrl) throw new Error('این فایل برای پروژهٔ دیگری ساخته شده است.');
+  if (backup.organizationId && backup.organizationId !== organizationId) {
+    throw new Error('این فایل پشتیبان متعلق به فضای کاری دیگری است.');
+  }
 
   const restoredCounts = {};
   const restoredIds = new Map(BACKUP_TABLES.map((table) => [table, new Map()]));
   const rewriteReferences = (table, source) => {
     const row = { ...source };
+    delete row.organization_id;
     const references = table === 'invoices'
       ? [['quotation_id', 'quotations']]
       : table === 'cash_transactions'
@@ -94,6 +98,7 @@ export async function restoreBackupDocument(
           continue;
         }
         const { id, ...updates } = row;
+        delete updates.organization_id;
         const { error } = await updateRows(table, updates, [{ column: 'id', operator: 'eq', value: id }]);
         if (error) throw new Error(`به‌روزرسانی ${TABLE_LABELS[table]} با شناسهٔ ${id} ناموفق بود: ${error.message}`);
         restoredCounts[table].updated += 1;

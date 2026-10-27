@@ -25,7 +25,7 @@ const actionButtonStyle = {
   fontWeight: 700,
 };
 
-export default function BackupPanel({ userId }) {
+export default function BackupPanel({ userId, organizationId }) {
   const fileInput = useRef(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -44,6 +44,7 @@ export default function BackupPanel({ userId }) {
         exportedAt: new Date().toISOString(),
         userId,
         projectUrl: SUPABASE_URL,
+        organizationId,
       });
       const blob = new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -66,7 +67,8 @@ export default function BackupPanel({ userId }) {
     setErrorMessage('');
     try {
       if (file.size > 25 * 1024 * 1024) throw new Error('حجم فایل از سقف ۲۵ مگابایت بیشتر است.');
-      const backup = validateBackupDocument(JSON.parse(await file.text()));
+      const backupDocument = JSON.parse(await file.text());
+      const backup = validateBackupDocument(backupDocument);
       if (backup.userId !== userId) throw new Error('این فایل پشتیبان متعلق به حساب کاربری دیگری است.');
       if (backup.projectUrl !== SUPABASE_URL) throw new Error('این فایل برای پروژهٔ دیگری ساخته شده است.');
       const confirmed = window.confirm(
@@ -74,8 +76,9 @@ export default function BackupPanel({ userId }) {
       );
       if (!confirmed) return;
 
-      const restoredCounts = await restoreBackupDocument(backup, {
+      const restoredCounts = await restoreBackupDocument(backupDocument, {
         userId,
+        organizationId,
         projectUrl: SUPABASE_URL,
         readTable,
         insertRows,

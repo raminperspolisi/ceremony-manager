@@ -8,9 +8,10 @@ test('backup document has a version and all supported tables', () => {
     exportedAt: '2026-10-23T00:00:00.000Z',
     userId: 'user-1',
     projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
   });
 
-  assert.equal(document.version, 2);
+  assert.equal(document.version, 3);
   assert.deepEqual(Object.keys(document.tables), BACKUP_TABLES);
   assert.deepEqual(validateBackupDocument(document), document);
 });
@@ -46,12 +47,14 @@ test('restore merges records by ID without deleting existing data', async () => 
     exportedAt: '2026-10-23T00:00:00.000Z',
     userId: 'user-1',
     projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
   });
   const updates = [];
   const inserts = [];
 
   const counts = await restoreBackupDocument(backup, {
     userId: 'user-1',
+    organizationId: 'organization-1',
     projectUrl: 'https://example.supabase.co',
     readTable: async (table) => ({
       data: table === 'customers' ? [{ id: 1, 'Full name': 'قدیمی' }] : [],
@@ -93,12 +96,14 @@ test('restore remaps offline account and invoice IDs before importing cash trans
     exportedAt: '2026-10-23T00:00:00.000Z',
     userId: 'user-1',
     projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
   });
   const inserts = [];
   const ids = { financial_accounts: 10, invoices: 20, cash_transactions: 30 };
 
   await restoreBackupDocument(backup, {
     userId: 'user-1',
+    organizationId: 'organization-1',
     projectUrl: 'https://example.supabase.co',
     readTable: async () => ({ data: [], error: null }),
     updateRows: async () => ({ error: null }),
@@ -120,17 +125,45 @@ test('restore rejects another account before reading or writing data', async () 
     exportedAt: '2026-10-23T00:00:00.000Z',
     userId: 'user-1',
     projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
   });
 
   await assert.rejects(
     restoreBackupDocument(backup, {
       userId: 'user-2',
+      organizationId: 'organization-1',
       projectUrl: 'https://example.supabase.co',
       readTable: async () => { accessed = true; return { data: [], error: null }; },
       updateRows: async () => ({ error: null }),
       insertRows: async () => ({ error: null }),
     }),
     /حساب کاربری دیگری/,
+  );
+  assert.equal(accessed, false);
+});
+
+test('restore rejects a backup from another organization before reading or writing data', async () => {
+  let accessed = false;
+  const backup = createBackupDocument(
+    Object.fromEntries(BACKUP_TABLES.map((table) => [table, []])),
+    {
+      exportedAt: '2026-10-23T00:00:00.000Z',
+      userId: 'user-1',
+      projectUrl: 'https://example.supabase.co',
+      organizationId: 'organization-1',
+    },
+  );
+
+  await assert.rejects(
+    restoreBackupDocument(backup, {
+      userId: 'user-1',
+      organizationId: 'organization-2',
+      projectUrl: 'https://example.supabase.co',
+      readTable: async () => { accessed = true; return { data: [], error: null }; },
+      updateRows: async () => ({ error: null }),
+      insertRows: async () => ({ error: null }),
+    }),
+    /فضای کاری دیگری/,
   );
   assert.equal(accessed, false);
 });

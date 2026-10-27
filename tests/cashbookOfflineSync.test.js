@@ -19,13 +19,21 @@ globalThis.window = {
   clearTimeout,
 };
 
-const { insertRows, readTable, recordCashTransaction, setOfflineUser, syncPendingMutations } =
+const {
+  insertRows,
+  readTable,
+  recordCashTransaction,
+  setOfflineOrganization,
+  setOfflineUser,
+  syncPendingMutations,
+} =
   await import('../src/offlineSync.js');
 const { supabase } = await import('../src/supabaseClient.js');
 await supabase.auth.stopAutoRefresh();
 
 test('offline invoice receipts update local invoices and sync as one RPC with mapped IDs', async () => {
   setOfflineUser('cashbook-offline-test-user');
+  setOfflineOrganization('cashbook-offline-test-organization');
   const accountResult = await insertRows('financial_accounts', [{
     account_name: 'صندوق اصلی',
     account_type: 'cash',
@@ -105,6 +113,7 @@ test('offline invoice receipts update local invoices and sync as one RPC with ma
 
   assert.equal(rpcTransaction.account_id, 12);
   assert.equal(rpcTransaction.invoice_id, 24);
+  assert.equal(rpcTransaction.organization_id, 'cashbook-offline-test-organization');
   assert.equal(rpcTransaction.reference_number, 'TRX-1042');
   assert.equal(rpcTransaction.receipt_note, 'واریز کارت به کارت');
   assert.equal(requests.filter((request) => request.url.pathname.endsWith('/rpc/record_cash_transaction')).length, 1);

@@ -5,9 +5,21 @@ const DATABASE_VERSION = 1;
 const CACHE_PAGE_SIZE = 1000;
 const READ_TIMEOUT_MS = 8000;
 const PENDING_ID_PREFIX = 'offline:';
+const TENANT_TABLES = new Set([
+  'customers',
+  'ceremonies',
+  'events',
+  'inventory',
+  'quotations',
+  'invoices',
+  'financial_accounts',
+  'cash_transactions',
+  'bot_orders',
+]);
 
 let databasePromise;
 let activeUserId = null;
+let activeOrganizationId = null;
 let syncPromise = null;
 let syncStatus = navigator.onLine ? 'online' : 'offline';
 const statusListeners = new Set();
@@ -57,12 +69,26 @@ const getStore = async (name, mode = 'readonly') => {
 };
 
 const getUserId = async () => {
-  if (activeUserId) return activeUserId;
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  activeUserId = data.session?.user?.id || null;
+  if (!activeUserId) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    activeUserId = data.session?.user?.id || null;
+  }
   if (!activeUserId) throw new Error('برای استفاده از داده‌های آفلاین ابتدا باید آنلاین وارد حساب شوید.');
-  return activeUserId;
+  if (!activeOrganizationId) throw new Error('برای دسترسی به داده‌ها باید یک فضای کاری انتخاب شود.');
+  return `${activeUserId}:${activeOrganizationId}`;
+};
+
+const organizationIdForScope = (userScope) => String(userScope).split(':').slice(1).join(':');
+const withOrganizationForScope = (table, row, userScope) => (
+  TENANT_TABLES.has(table)
+    ? { ...row, organization_id: organizationIdForScope(userScope) }
+    : row
+);
+const withOrganizationFilter = (table, filters, organizationId) => {
+  if (!TENANT_TABLES.has(table)) return filters;
+  if (!organizationId) throw new Error('همگام‌سازی تغییر فاقد شناسهٔ فضای کاری مجاز نیست.');
+  return [...filters, { column: 'organization_id', operator: 'eq', value: organizationId }];
 };
 
 const makeCacheKey = (userId, table, id) => `${userId}:${table}:${String(id)}`;
@@ -222,9 +248,16 @@ const sortRows = (rows, orderBy, ascending = true) => {
   });
 };
 
-const buildQuery = (table, { columns = '*', filters = [], orderBy, ascending = true, limit, offset } = {}) => {
+const buildQuery = (
+  table,
+  { columns = '*', filters = [], orderBy, ascending = true, limit, offset } = {},
+  organizationId = activeOrganizationId,
+) => {
   let query = supabase.from(table).select(columns);
-  for (const filter of filters) {
+  const scopedFilters = TENANT_TABLES.has(table)
+    ? [...filters, { column: 'organization_id', operator: 'eq', value: organizationId }]
+    : filters;
+  for (const filter of scopedFilters) {
     if (filter.operator === 'in') query = query.in(filter.column, filter.value);
     else if (filter.operator === 'notNull') query = query.not(filter.column, 'is', null);
     else if (filter.operator === 'isNull') query = query.is(filter.column, null);
@@ -237,13 +270,22 @@ const buildQuery = (table, { columns = '*', filters = [], orderBy, ascending = t
 };
 
 export const setOfflineUser = (userId) => {
+  if (activeUserId !== (userId || null)) activeOrganizationId = null;
   activeUserId = userId || null;
   if (!activeUserId) {
+    activeOrganizationId = null;
     notifyStatus(navigator.onLine ? 'online' : 'offline');
     return;
   }
   notifyStatus(navigator.onLine ? 'online' : 'offline');
-  if (navigator.onLine) syncPendingMutations();
+  if (activeOrganizationId && navigator.onLine) void syncPendingMutations();
+};
+
+export const setOfflineOrganization = (organizationId) => {
+  if (activeOrganizationId === (organizationId || null)) return;
+  activeOrganizationId = organizationId || null;
+  notifyStatus(navigator.onLine ? 'online' : 'offline');
+  if (activeOrganizationId && activeUserId && navigator.onLine) void syncPendingMutations();
 };
 
 export const getOfflineSyncStatus = () => syncStatus;
@@ -255,12 +297,13 @@ export const subscribeOfflineSyncStatus = (listener) => {
 export async function readTable(table, options = {}) {
   try {
     const userId = await getUserId();
+    const organizationId = organizationIdForScope(userId);
     if (navigator.onLine) {
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
       let result;
       try {
-        result = await buildQuery(table, options).abortSignal(controller.signal);
+        result = await buildQuery(table, options, organizationId).abortSignal(controller.signal);
       } catch (error) {
         result = { data: null, error };
       } finally {
@@ -354,7 +397,12 @@ const putLocalRows = async (userId, table, rows, { pending = false } = {}) => {
 
 const enqueueMutation = async (userId, mutation) => {
   const { store, transaction } = await getStore('mutations', 'readwrite');
-  store.add({ ...mutation, userId, createdAt: Date.now() });
+  store.add({
+    ...mutation,
+    userId,
+    organizationId: organizationIdForScope(userId),
+    createdAt: Date.now(),
+  });
   await new Promise((resolve, reject) => {
     transaction.oncomplete = resolve;
     transaction.onerror = () => reject(transaction.error || new Error('ثبت تغییر برای همگام‌سازی ناموفق بود.'));
@@ -365,7 +413,7 @@ const enqueueMutation = async (userId, mutation) => {
 
 const saveOfflineInsert = async (userId, table, rows) => {
   const localRows = rows.map((row) => ({
-    ...row,
+    ...withOrganizationForScope(table, row, userId),
     id: row.id ?? makePendingId(),
     offline_sync_id: row.offline_sync_id || crypto.randomUUID(),
   }));
@@ -379,7 +427,9 @@ const saveOfflineInsert = async (userId, table, rows) => {
 export async function insertRows(table, rows) {
   const userId = await getUserId();
   if (!(await mustQueueBehindPendingMutations(userId))) {
-    const preparedRows = await Promise.all(rows.map((row) => rewriteReferences(userId, table, row)));
+    const preparedRows = await Promise.all(rows.map((row) => (
+      rewriteReferences(userId, table, withOrganizationForScope(table, row, userId))
+    )));
     const { data, error } = await supabase.from(table).insert(preparedRows).select('*');
     if (!error) {
       await cacheRows(userId, table, data || []);
@@ -421,8 +471,10 @@ const applyCashTransactionResult = async (userId, localRow, result) => {
 
 export async function recordCashTransaction(transaction) {
   const userId = await getUserId();
+  const organizationId = organizationIdForScope(userId);
   const row = {
     ...transaction,
+    organization_id: organizationId,
     offline_sync_id: transaction.offline_sync_id || crypto.randomUUID(),
   };
 
@@ -488,8 +540,16 @@ const updateCachedRows = async (userId, table, filters, updates, { pending = fal
 
 export async function updateRows(table, updates, filters) {
   const userId = await getUserId();
+  const organizationId = organizationIdForScope(userId);
+  if (TENANT_TABLES.has(table) && Object.hasOwn(updates, 'organization_id')) {
+    return { data: null, error: { message: 'تغییر سازمان یک رکورد مجاز نیست.' } };
+  }
   if (!(await mustQueueBehindPendingMutations(userId))) {
-    const serverFilters = await rewriteFilters(userId, table, filters);
+    const serverFilters = withOrganizationFilter(
+      table,
+      await rewriteFilters(userId, table, filters),
+      organizationId,
+    );
     const serverUpdates = await rewriteReferences(userId, table, updates);
     let query = supabase.from(table).update(serverUpdates);
     for (const filter of serverFilters) {
@@ -546,8 +606,13 @@ const purgeDeletedRows = async (userId, table, filters) => {
 
 export async function deleteRows(table, filters) {
   const userId = await getUserId();
+  const organizationId = organizationIdForScope(userId);
   if (!(await mustQueueBehindPendingMutations(userId))) {
-    const serverFilters = await rewriteFilters(userId, table, filters);
+    const serverFilters = withOrganizationFilter(
+      table,
+      await rewriteFilters(userId, table, filters),
+      organizationId,
+    );
     let query = supabase.from(table).delete();
     for (const filter of serverFilters) {
       if (filter.operator === 'in') query = query.in(filter.column, filter.value);
@@ -645,6 +710,8 @@ export async function warmOfflineCache() {
     'invoices',
     'financial_accounts',
     'cash_transactions',
+    'bot_catalog_items',
+    'bot_orders',
   ];
   const failures = [];
   await Promise.all(tables.map(async (table) => {
@@ -696,6 +763,7 @@ const applyMutation = async (userId, mutation) => {
           .from('invoices')
           .select('*')
           .eq('quotation_id', String(row.quotation_id))
+          .eq('organization_id', mutation.organizationId)
           .maybeSingle();
         if (!lookupError && existingInvoice) {
           if (isPendingId(localId)) {
@@ -716,7 +784,11 @@ const applyMutation = async (userId, mutation) => {
     return;
   }
 
-  const filters = await rewriteFilters(userId, mutation.table, mutation.filters);
+  const filters = withOrganizationFilter(
+    mutation.table,
+    await rewriteFilters(userId, mutation.table, mutation.filters),
+    mutation.organizationId,
+  );
   const updates = mutation.type === 'update'
     ? await rewriteReferences(userId, mutation.table, mutation.updates)
     : null;

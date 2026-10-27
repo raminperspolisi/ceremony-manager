@@ -30,6 +30,47 @@ If you are developing a production application, we recommend using TypeScript wi
 7. سیاست‌های RLS جدول‌های `customers`, `ceremonies`, `events`, `inventory`, `quotations` و `invoices` را بررسی کنید. کاربر واردشده باید مجوزهای لازم برای `SELECT`, `INSERT`, `UPDATE` و `DELETE` را داشته باشد. درج‌های آفلاین هنگام همگام‌سازی با `upsert` انجام می‌شوند؛ بنابراین سیاست‌های درج/به‌روزرسانی و دسترسی خواندن نیز باید با این روش سازگار باشند.
 8. نسخهٔ production را روی دامنهٔ **HTTPS** منتشر کنید. Service Worker و نصب PWA روی دامنهٔ امن کار می‌کنند؛ `localhost` برای آزمایش محلی استثناست.
 
+## سازمان‌ها، اعضا و دسترسی بخش‌محور
+
+سامانه از یک پایگاه دادهٔ مشترک با چند فضای کاری استفاده می‌کند؛ هر رکورد کاری با `organization_id` به یک سازمان وابسته است. RLS در Supabase دسترسی را بر اساس عضویت و مجوز بخش کنترل می‌کند. مخفی بودن منو صرفاً برای تجربهٔ کاربری است و مرز امنیتی اصلی دیتابیس است.
+
+### راه‌اندازی و انتقال داده‌های فعلی
+
+1. پیش از انتشار نسخهٔ چندسازمانی، دستگاه‌های آنلاین را همگام کنید تا تغییرات آفلاینِ نسخهٔ قبلی در صف باقی نمانده باشد. صف آفلاین قدیمی عمداً به سازمانی نسبت داده نمی‌شود؛ نسبت‌دادن خودکار آن ممکن است داده را به فضای اشتباه منتقل کند.
+2. ابتدا migrationهای قبلی پروژه را به‌ترتیب اجرا کنید و سپس `supabase/migrations/20261027160000_organizations_and_section_permissions.sql` را در یک محیط staging اجرا و بررسی کنید. این migration همهٔ داده‌های قبلی را به فضای کاری اولیه منتقل می‌کند و تا زمان تعیین مالک، هیچ کاربری را خودکار مدیر نمی‌کند. اگر جدول‌های خالی `customers` و `events` قبلاً با ساختار ناسازگار ساخته شده باشند، migration ستون‌های لازم برنامه را برمی‌گرداند و برای شناسه‌های مشتریِ موجود در مراسم، نام جایگزین می‌سازد؛ این کار اطلاعات تماس مشتریان حذف‌شده را بازیابی نمی‌کند. پیش از اجرا، هر کش آفلاین قدیمی را جداگانه صادر و نگه‌داری کنید.
+3. مالک اولیه را دستی در Supabase SQL Editor تعیین کنید. ایمیل را با ایمیل دقیق حسابی که در **Authentication → Users** بررسی کرده‌اید جایگزین کنید:
+
+   ```sql
+   DO $$
+   DECLARE
+     v_organization_id uuid;
+     v_user_id uuid;
+     v_email text;
+   BEGIN
+     SELECT id INTO STRICT v_organization_id
+     FROM public.organizations
+     WHERE is_initial;
+
+     SELECT id, email INTO STRICT v_user_id, v_email
+     FROM auth.users
+     WHERE lower(email) = lower('owner@example.com');
+
+     INSERT INTO public.organization_memberships (
+       organization_id, user_id, email, role, section_permissions
+     )
+     VALUES (v_organization_id, v_user_id, lower(COALESCE(v_email, '')), 'owner', '{}'::jsonb)
+     ON CONFLICT (organization_id, user_id) DO UPDATE
+     SET role = 'owner', section_permissions = '{}'::jsonb;
+   END $$;
+   ```
+
+4. Edge Function دعوت را با `supabase functions deploy invite-organization-member` منتشر کنید. هرگز `SUPABASE_SERVICE_ROLE_KEY` را در frontend قرار ندهید. در صورت نیاز، مقصد بازگشت پس از پذیرش دعوت را با secret سمت سرور `INVITE_REDIRECT_URL` تنظیم کنید و همان URL را در تنظیمات Redirect URLs احراز هویت Supabase مجاز کنید.
+5. مالک وارد برنامه می‌شود، نام فضای کاری اولیه را در «مدیریت کاربران و دسترسی» تنظیم می‌کند و اعضا را دعوت می‌کند. مدیران می‌توانند لوگوی همان فضای کاری را نیز تنظیم کنند؛ لوگوها در مسیر سازمانی جدا ذخیره می‌شوند. لوگوهای قدیمی که با حساب کاربر ذخیره شده‌اند خودکار منتقل نمی‌شوند و مدیر باید لوگوی فضای کاری را دوباره بارگذاری کند. برای هر کاربر عادی، دسترسی بخش‌هایی مانند مشتریان، انبار، پیش‌فاکتور، فاکتور، تقویم/یادآورها و حسابداری را تعیین می‌کند. فقط مالک می‌تواند مدیر دیگری بسازد یا نقش مدیر را بردارد. مالک و مدیر سازمان همهٔ بخش‌ها را دارند؛ کاربر عادی فقط بخش‌های انتخاب‌شده را می‌بیند.
+6. هر کاربر مجاز است فضای کاری جدید بسازد؛ فضای تازه خالی است و داده‌های فضای اولیه را کپی نمی‌کند. کاربرانِ چند فضا می‌توانند از انتخاب‌گر فضای کاری جابه‌جا شوند. کش آفلاین نیز با شناسهٔ کاربر و سازمان جدا می‌شود.
+7. ربات تلگرام در این مرحله فقط از کالاهای فضای کاری اولیه کاتالوگ می‌سازد و سفارش‌های آن را در همان فضا ثبت می‌کند. اتصال ربات به فضاهای جدید در این نسخه پشتیبانی نمی‌شود.
+
+مالک اولیه تا زمان اجرای دستور دستی بالا، فضای اولیه را نمی‌بیند؛ این رفتار fail-closed و برای جلوگیری از واگذاری ناامن داده‌های قدیمی است. پس از اجرای migration، ابتدا staging و جداسازی دو سازمان را آزمایش کنید و سپس migration را روی پروژهٔ اصلی اجرا کنید.
+
 ### ربات تلگرام
 
 ربات فقط کاتالوگ محدودشده را می‌خواند و به اطلاعات مشتریان، مراسم‌ها یا هزینهٔ خرید دسترسی ندارد. RPC کاتالوگ، سه ستون `price_level1`، `price_level2` و `price_level3` انبار را برای نمایش در بات برمی‌گرداند؛ این سه قیمت برای کاربران بات قابل مشاهده‌اند. migrationهای `supabase/migrations/20261024160000_bot_catalog_rpc.sql`، سپس `supabase/migrations/20261024230000_bot_public_catalog.sql`، `supabase/migrations/20261024233000_bot_orders.sql`، `supabase/migrations/20261025010000_bot_price_tiers_and_admin_orders.sql`، `supabase/migrations/20261025230000_bot_order_approval.sql`، `supabase/migrations/20261025233000_bot_online_payment.sql`، `supabase/migrations/20261027090000_bot_card_payment_review.sql`، `supabase/migrations/20261027100000_bot_order_status_rls.sql`، `supabase/migrations/20261027110000_bot_order_status_rls_fix.sql` و در پایان `supabase/migrations/20261027120000_bot_order_address_and_notifications.sql` را به‌ترتیب در SQL Editor اجرا کنید. اگر migrationهای قبلی اجرا شده‌اند، فقط migrationهای جدید را به همین ترتیب اجرا کنید. migration مربوط به RLS خطای تغییر وضعیت را رفع می‌کند؛ اعتبار وضعیت و مبلغ همچنان با constraintهای جدول کنترل می‌شوند و کاربر واردشده فقط مجاز به ویرایش وضعیت و مبلغ سفارش است.

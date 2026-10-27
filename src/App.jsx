@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
 import InventoryPanel from './components/InventoryPanel';
 import QuotationPanel from './components/QuotationPanel';
@@ -14,10 +14,12 @@ import BackupPanel from './components/BackupPanel';
 import CashbookPanel from './components/CashbookPanel';
 import DashboardPanel from './components/DashboardPanel';
 import BotOrdersPanel from './components/BotOrdersPanel';
+import OrganizationManagementPanel from './components/OrganizationManagementPanel';
 import { formatDisplay } from './styles';
 import {
   getOfflineSyncStatus,
   readTable,
+  setOfflineOrganization,
   setOfflineUser,
   subscribeOfflineSyncStatus,
   syncPendingMutations,
@@ -28,6 +30,13 @@ const DEFAULT_BUSINESS_NAME = 'تشریفات آژو';
 const DEFAULT_LOGO_URL = '/azho-logo.png';
 const BUSINESS_LOGO_BUCKET = 'business-logos';
 const APP_SECTION_HISTORY_KEY = '__ceremonyManagerSection';
+const getOrganizationLogoUrl = (organization) => {
+  if (!organization?.id || !organization.logo_updated_at) return DEFAULT_LOGO_URL;
+  const publicUrl = supabase.storage
+    .from(BUSINESS_LOGO_BUCKET)
+    .getPublicUrl(`${organization.id}/logo.webp`).data.publicUrl;
+  return `${publicUrl}?v=${encodeURIComponent(organization.logo_updated_at)}`;
+};
 const SECTION_BY_FUNCTION_KEY = {
   F1: 'customers',
   F2: 'inventory',
@@ -39,6 +48,27 @@ const SECTION_BY_FUNCTION_KEY = {
   F8: 'reminders',
   F9: 'dashboard',
 };
+const SECTION_PERMISSION_BY_NAV = {
+  dashboard: 'dashboard',
+  customers: 'customers',
+  inventory: 'inventory',
+  'bot-orders': 'bot_orders',
+  quotations: 'quotations',
+  official: 'official',
+  backup: 'backup',
+  cashbook: 'accounting',
+  reports: 'accounting',
+  analytics: 'accounting',
+  calendar: 'calendar',
+  reminders: 'calendar',
+  tutorial: 'tutorial',
+  contact: 'contact',
+};
+const SECTION_FALLBACK_ORDER = [
+  'dashboard', 'customers', 'inventory', 'quotations', 'official',
+  'bot-orders', 'cashbook', 'reports', 'analytics', 'calendar',
+  'reminders', 'backup', 'tutorial', 'contact',
+];
 const GLOBAL_SEARCH_TABLES = [
   { table: 'customers', section: 'customers', label: 'مشتری' },
   { table: 'inventory', section: 'inventory', label: 'کالا' },
@@ -107,9 +137,12 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [organizationMemberships, setOrganizationMemberships] = useState([]);
+  const [activeOrganizationId, setActiveOrganizationId] = useState(null);
+  const [organizationLoading, setOrganizationLoading] = useState(false);
+  const [organizationError, setOrganizationError] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState('');
-  const [profileBusinessName, setProfileBusinessName] = useState(DEFAULT_BUSINESS_NAME);
   const [profileLogoUrl, setProfileLogoUrl] = useState(DEFAULT_LOGO_URL);
   const [profileLogoPreview, setProfileLogoPreview] = useState(DEFAULT_LOGO_URL);
   const [profileLogoFile, setProfileLogoFile] = useState(null);
@@ -142,11 +175,26 @@ export default function App() {
   const globalSearchCache = useRef(null);
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
-  const businessName = session?.user?.user_metadata?.business_name?.trim() || DEFAULT_BUSINESS_NAME;
-  const storedLogoVersion = session?.user?.user_metadata?.business_logo_updated_at || '';
-  const logoUrl = session?.user?.id && storedLogoVersion
-    ? `${supabase.storage.from(BUSINESS_LOGO_BUCKET).getPublicUrl(`${session.user.id}/logo.webp`).data.publicUrl}?v=${encodeURIComponent(storedLogoVersion)}`
-    : DEFAULT_LOGO_URL;
+  const sessionUserId = session?.user?.id;
+  const activeOrganizationMembership = organizationMemberships.find(
+    (membership) => membership.organization_id === activeOrganizationId,
+  ) || null;
+  const activeOrganization = activeOrganizationMembership?.organizations || null;
+  const isOrganizationAdmin = ['owner', 'admin'].includes(activeOrganizationMembership?.role);
+  const hasSectionAccess = useCallback((section) => {
+    if (section === 'organization-creation') return Boolean(activeOrganizationMembership);
+    if (isOrganizationAdmin) return true;
+    const permission = SECTION_PERMISSION_BY_NAV[section] || section;
+    return Boolean(activeOrganizationMembership?.section_permissions?.[permission]);
+  }, [activeOrganizationMembership, isOrganizationAdmin]);
+  const offlineScopeId = sessionUserId && activeOrganizationId
+    ? `${sessionUserId}:${activeOrganizationId}`
+    : null;
+  const offlineCacheReady = Boolean(offlineScopeId && offlineCacheUserId === offlineScopeId);
+  const businessName = activeOrganization?.name
+    || session?.user?.user_metadata?.business_name?.trim()
+    || DEFAULT_BUSINESS_NAME;
+  const logoUrl = getOrganizationLogoUrl(activeOrganization);
 
   useEffect(() => {
     let mounted = true;
@@ -157,6 +205,9 @@ export default function App() {
         setAuthError('');
         setAuthReady(true);
         if (!nextSession) {
+          setOrganizationMemberships([]);
+          setActiveOrganizationId(null);
+          setOfflineOrganization(null);
           setInventory([]);
           setSelectedItems([]);
         }
@@ -204,12 +255,73 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    if (session) fetchData();
-  }, [session]);
+  const refreshOrganizationMemberships = useCallback(async (preferredOrganizationId) => {
+    if (!sessionUserId) return [];
+    setOrganizationLoading(true);
+    setOrganizationError('');
+    try {
+      const { data, error } = await supabase
+        .from('organization_memberships')
+        .select('organization_id,user_id,role,section_permissions,organizations(id,name,is_initial,logo_updated_at)')
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      const memberships = data || [];
+      setOrganizationMemberships(memberships);
+      const preferred = memberships.find((membership) => (
+        membership.organization_id === preferredOrganizationId
+      ));
+      const selected = preferred || memberships[0] || null;
+      setActiveOrganizationId(selected?.organization_id || null);
+      setOfflineOrganization(selected?.organization_id || null);
+      return memberships;
+    } catch (error) {
+      setOrganizationError(error.message);
+      setActiveOrganizationId(null);
+      setOfflineOrganization(null);
+      throw error;
+    } finally {
+      setOrganizationLoading(false);
+    }
+  }, [sessionUserId]);
 
-  const sessionUserId = session?.user?.id;
-  const offlineCacheReady = offlineCacheUserId === sessionUserId;
+  useEffect(() => {
+    if (!sessionUserId) {
+      setOrganizationMemberships([]);
+      setActiveOrganizationId(null);
+      setOfflineOrganization(null);
+      setOrganizationLoading(false);
+      return undefined;
+    }
+    let active = true;
+    setOrganizationMemberships([]);
+    setActiveOrganizationId(null);
+    setOfflineOrganization(null);
+    setOrganizationLoading(true);
+    refreshOrganizationMemberships().catch((error) => {
+      if (active) console.error('بارگیری فضای کاری ناموفق بود:', error.message);
+    });
+    return () => { active = false; };
+  }, [sessionUserId, refreshOrganizationMemberships]);
+
+  useEffect(() => {
+    if (!activeOrganizationMembership || hasSectionAccess(activeSection)) return;
+    const fallbackSection = SECTION_FALLBACK_ORDER.find((section) => hasSectionAccess(section));
+    const nextSection = fallbackSection || (isOrganizationAdmin ? 'organization-management' : 'organization-creation');
+    activeSectionRef.current = nextSection;
+    setActiveSection(nextSection);
+    setVisitedSections((visited) => new Set(visited).add(nextSection));
+  }, [
+    activeOrganizationId,
+    activeOrganizationMembership,
+    activeSection,
+    isOrganizationAdmin,
+    hasSectionAccess,
+  ]);
+
+  useEffect(() => {
+    if (session && activeOrganizationId && hasSectionAccess('inventory')) fetchData();
+    else setInventory([]);
+  }, [session, activeOrganizationId, activeOrganizationMembership, hasSectionAccess]);
 
   useEffect(() => {
     const refreshSearchCache = () => {
@@ -222,12 +334,12 @@ export default function App() {
 
   useEffect(() => {
     const query = normalizeSearchText(globalSearch);
-    if (!sessionUserId || query.length < 2) return undefined;
+    if (!sessionUserId || !activeOrganizationId || query.length < 2) return undefined;
 
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
-        let rows = globalSearchCache.current?.userId === sessionUserId
+        let rows = globalSearchCache.current?.scopeId === offlineScopeId
           ? globalSearchCache.current.rows
           : null;
         let searchError = '';
@@ -243,7 +355,7 @@ export default function App() {
           }));
           rows = tables.flatMap(({ table, data }) => data.map((row) => ({ table, row })));
           searchError = tables.map((result) => result.error).filter(Boolean).join('؛ ');
-          if (!cancelled && !searchError) globalSearchCache.current = { userId: sessionUserId, rows };
+          if (!cancelled && !searchError) globalSearchCache.current = { scopeId: offlineScopeId, rows };
         }
         const matches = rows.flatMap(({ table, row }) => {
             const { section, label } = GLOBAL_SEARCH_TABLES.find((source) => source.table === table);
@@ -257,7 +369,7 @@ export default function App() {
               row.customer_phone,
               ...(Array.isArray(items) ? items.map((item) => item.title || item.item_name || item.name) : []),
             ];
-            if (!values.some((value) => normalizeSearchText(value).includes(query))) return [];
+            if (!hasSectionAccess(section) || !values.some((value) => normalizeSearchText(value).includes(query))) return [];
             const name = row['Full name'] || row.customer_name || row.title || `شمارهٔ ${formatDisplay(row.id)}`;
             const detail = row.phone || row.customer_phone || (row.total_price ? `${formatDisplay(row.total_price)} تومان` : '');
             return [{ id: `${table}-${row.id}`, section, label, name, detail }];
@@ -279,22 +391,30 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [globalSearch, globalSearchRevision, sessionUserId]);
+  }, [
+    globalSearch,
+    globalSearchRevision,
+    sessionUserId,
+    activeOrganizationId,
+    offlineScopeId,
+    activeOrganizationMembership,
+    hasSectionAccess,
+  ]);
 
   useEffect(() => {
-    if (!sessionUserId) return undefined;
+    if (!sessionUserId || !activeOrganizationId) return undefined;
     let mounted = true;
     warmOfflineCache().then(() => {
-      if (mounted) setOfflineCacheUserId(sessionUserId);
+      if (mounted) setOfflineCacheUserId(offlineScopeId);
     }).catch((error) => {
       console.error('آماده‌سازی داده‌های آفلاین ناموفق بود:', error.message);
       setOfflineSyncError(error.message);
     });
     return () => { mounted = false; };
-  }, [sessionUserId]);
+  }, [sessionUserId, activeOrganizationId, offlineScopeId]);
 
   useEffect(() => {
-    if (!sessionUserId) return undefined;
+    if (!sessionUserId || !activeOrganizationId) return undefined;
     let lastRefreshAt = Date.now();
     let refreshing = false;
     let realtimeRefreshTimer;
@@ -342,7 +462,7 @@ export default function App() {
     window.addEventListener('focus', refreshFromServer);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     const refreshInterval = window.setInterval(refreshFromServer, 30000);
-    const channel = supabase.channel(`live-data-${sessionUserId}`);
+    const channel = supabase.channel(`live-data-${sessionUserId}-${activeOrganizationId}`);
     [
       'customers',
       'ceremonies',
@@ -353,7 +473,12 @@ export default function App() {
       'financial_accounts',
       'cash_transactions',
     ].forEach((table) => {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table }, refreshAfterRealtimeChange);
+      channel.on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table,
+        filter: `organization_id=eq.${activeOrganizationId}`,
+      }, refreshAfterRealtimeChange);
     });
     channel.subscribe((status) => {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -368,10 +493,10 @@ export default function App() {
       document.removeEventListener('visibilitychange', refreshWhenVisible);
       void supabase.removeChannel(channel);
     };
-  }, [sessionUserId]);
+  }, [sessionUserId, activeOrganizationId]);
 
   useEffect(() => {
-    if (!sessionUserId) {
+    if (!sessionUserId || !activeOrganizationId || !hasSectionAccess('bot-orders')) {
       setBotOrderNotification(null);
       return undefined;
     }
@@ -421,10 +546,15 @@ export default function App() {
       await refreshBotOrders();
       if (!mounted) return;
       channel = supabase
-        .channel(`bot-order-notifications-${sessionUserId}`)
+        .channel(`bot-order-notifications-${sessionUserId}-${activeOrganizationId}`)
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'bot_orders' },
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'bot_orders',
+            filter: `organization_id=eq.${activeOrganizationId}`,
+          },
           () => { void refreshBotOrders(); },
         );
       channel.subscribe((status) => {
@@ -447,20 +577,20 @@ export default function App() {
       document.removeEventListener('visibilitychange', refreshWhenVisible);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [sessionUserId]);
+  }, [sessionUserId, activeOrganizationId, activeOrganizationMembership, hasSectionAccess]);
 
   useEffect(() => {
     const refreshInventoryCache = () => {
-      if (sessionUserId) fetchData();
+      if (sessionUserId && activeOrganizationId && hasSectionAccess('inventory')) fetchData();
     };
     window.addEventListener('offline-data-updated', refreshInventoryCache);
     return () => window.removeEventListener('offline-data-updated', refreshInventoryCache);
-  }, [sessionUserId]);
+  }, [sessionUserId, activeOrganizationId, activeOrganizationMembership, hasSectionAccess]);
 
   useEffect(() => {
     const handleFunctionKey = (event) => {
       const section = SECTION_BY_FUNCTION_KEY[event.code] || SECTION_BY_FUNCTION_KEY[event.key];
-      if (!session || !section || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || profileOpen) return;
+      if (!session || !section || !hasSectionAccess(section) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || profileOpen) return;
 
       event.preventDefault();
       if (activeSectionRef.current !== section) {
@@ -477,7 +607,13 @@ export default function App() {
 
     window.addEventListener('keydown', handleFunctionKey, true);
     return () => window.removeEventListener('keydown', handleFunctionKey, true);
-  }, [profileOpen, session]);
+  }, [
+    profileOpen,
+    session,
+    activeOrganizationId,
+    activeOrganizationMembership,
+    hasSectionAccess,
+  ]);
 
   useEffect(() => {
     const handleEscape = (event) => {
@@ -539,6 +675,8 @@ export default function App() {
 
       const section = event.state?.[APP_SECTION_HISTORY_KEY];
       if (typeof section !== 'string') return;
+      if (section !== 'organization-management' && !hasSectionAccess(section)) return;
+      if (section === 'organization-management' && !isOrganizationAdmin) return;
       activeSectionRef.current = section;
       setActiveSection(section);
       setVisitedSections((visited) => new Set(visited).add(section));
@@ -548,9 +686,19 @@ export default function App() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [sessionUserId]);
+  }, [
+    sessionUserId,
+    activeOrganizationId,
+    activeOrganizationMembership,
+    isOrganizationAdmin,
+    hasSectionAccess,
+  ]);
 
   function handleSectionChange(section) {
+    if (
+      (section === 'organization-management' && !isOrganizationAdmin)
+      || (section !== 'organization-management' && !hasSectionAccess(section))
+    ) return;
     if (activeSectionRef.current !== section) {
       window.history.pushState({
         ...(window.history.state || {}),
@@ -563,6 +711,39 @@ export default function App() {
     setMobileMenuOpen(false);
   };
 
+  const handleOrganizationChange = (event) => {
+    const nextOrganizationId = event.target.value;
+    const nextMembership = organizationMemberships.find(
+      (membership) => membership.organization_id === nextOrganizationId,
+    );
+    if (!nextMembership) return;
+
+    setActiveOrganizationId(nextOrganizationId);
+    setOfflineOrganization(nextOrganizationId);
+    setOfflineCacheUserId(null);
+    setInventory([]);
+    setSelectedItems([]);
+    setBotOrderNotification(null);
+    setGlobalSearch('');
+    setGlobalSearchResults([]);
+    globalSearchCache.current = null;
+    const allowed = (section) => (
+      ['owner', 'admin'].includes(nextMembership.role)
+      || Boolean(nextMembership.section_permissions?.[SECTION_PERMISSION_BY_NAV[section] || section])
+    );
+    const nextSection = SECTION_FALLBACK_ORDER.find(allowed)
+      || (['owner', 'admin'].includes(nextMembership.role) ? 'organization-management' : 'organization-creation');
+    activeSectionRef.current = nextSection;
+    setActiveSection(nextSection);
+    setVisitedSections(new Set([nextSection]));
+  };
+
+  const handleOrganizationCreated = async (organization) => {
+    await refreshOrganizationMemberships(organization?.id);
+    setActiveSection('dashboard');
+    activeSectionRef.current = 'dashboard';
+    setVisitedSections(new Set(['dashboard']));
+  };
   const handleSignIn = async (e) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -590,7 +771,6 @@ export default function App() {
 
   const handleOpenProfile = () => {
     setProfileName(session.user.user_metadata?.display_name || '');
-    setProfileBusinessName(businessName);
     setProfileLogoUrl(logoUrl);
     setProfileLogoPreview(logoUrl);
     setProfileLogoFile(null);
@@ -639,32 +819,48 @@ export default function App() {
 
     const emailChanged = profileEmail.trim() !== (session.user.email || '');
     try {
-      let logoVersion = session.user.user_metadata?.business_logo_updated_at || null;
-      if (profileLogoFile) {
-        const optimizedLogo = await resizeLogoToWebp(profileLogoFile);
-        const { error: uploadError } = await supabase.storage
-          .from(BUSINESS_LOGO_BUCKET)
-          .upload(`${session.user.id}/logo.webp`, optimizedLogo, {
-            cacheControl: '3600',
-            contentType: 'image/webp',
-            upsert: true,
-          });
-        if (uploadError) throw uploadError;
-        logoVersion = String(Date.now());
-      } else if (removeProfileLogo && logoVersion) {
-        const { error: removeError } = await supabase.storage
-          .from(BUSINESS_LOGO_BUCKET)
-          .remove([`${session.user.id}/logo.webp`]);
-        if (removeError) throw removeError;
-        logoVersion = null;
+      let updatedOrganization = activeOrganization;
+      if (profileLogoFile || removeProfileLogo) {
+        if (!isOrganizationAdmin || !activeOrganizationId) {
+          throw new Error('فقط مدیر فضای کاری می‌تواند لوگوی مجموعه را تغییر دهد.');
+        }
+
+        const logoVersion = profileLogoFile ? new Date().toISOString() : null;
+        const logoPath = `${activeOrganizationId}/logo.webp`;
+        if (profileLogoFile) {
+          const optimizedLogo = await resizeLogoToWebp(profileLogoFile);
+          const { error: uploadError } = await supabase.storage
+            .from(BUSINESS_LOGO_BUCKET)
+            .upload(logoPath, optimizedLogo, {
+              cacheControl: '3600',
+              contentType: 'image/webp',
+              upsert: true,
+            });
+          if (uploadError) throw uploadError;
+        } else {
+          const { error: removeError } = await supabase.storage
+            .from(BUSINESS_LOGO_BUCKET)
+            .remove([logoPath]);
+          if (removeError) throw removeError;
+        }
+
+        const { error: logoVersionError } = await supabase.rpc('update_organization_logo_version', {
+          p_organization_id: activeOrganizationId,
+          p_logo_updated_at: logoVersion,
+        });
+        if (logoVersionError) throw logoVersionError;
+        updatedOrganization = { ...activeOrganization, logo_updated_at: logoVersion };
+        setOrganizationMemberships((memberships) => memberships.map((membership) => (
+          membership.organization_id === activeOrganizationId
+            ? { ...membership, organizations: updatedOrganization }
+            : membership
+        )));
       }
 
       const attributes = {
         data: {
           ...session.user.user_metadata,
           display_name: profileName.trim(),
-          business_name: profileBusinessName.trim() || DEFAULT_BUSINESS_NAME,
-          business_logo_updated_at: logoVersion,
         }
       };
       if (emailChanged) attributes.email = profileEmail.trim();
@@ -674,13 +870,8 @@ export default function App() {
       if (data.user) {
         setSession((current) => current ? { ...current, user: data.user } : current);
       }
-      setProfileBusinessName(data.user?.user_metadata?.business_name || DEFAULT_BUSINESS_NAME);
-      setProfileLogoUrl(logoVersion
-        ? `${supabase.storage.from(BUSINESS_LOGO_BUCKET).getPublicUrl(`${session.user.id}/logo.webp`).data.publicUrl}?v=${encodeURIComponent(logoVersion)}`
-        : DEFAULT_LOGO_URL);
-      setProfileLogoPreview(logoVersion
-        ? `${supabase.storage.from(BUSINESS_LOGO_BUCKET).getPublicUrl(`${session.user.id}/logo.webp`).data.publicUrl}?v=${encodeURIComponent(logoVersion)}`
-        : DEFAULT_LOGO_URL);
+      setProfileLogoUrl(getOrganizationLogoUrl(updatedOrganization));
+      setProfileLogoPreview(getOrganizationLogoUrl(updatedOrganization));
       setProfileLogoFile(null);
       setRemoveProfileLogo(false);
       setProfilePassword('');
@@ -758,6 +949,41 @@ export default function App() {
           </button>
         </form>
         <p style={{ margin: '14px 0 0', color: '#64748b', fontSize: 12 }}>حساب‌ها باید از بخش Authentication در Supabase ساخته شوند.</p>
+      </main>
+    );
+  }
+
+  if (organizationLoading) {
+    return <main style={{ maxWidth: 620, margin: '15vh auto', padding: 24, textAlign: 'center' }}>در حال بارگیری فضاهای کاری…</main>;
+  }
+
+  if (organizationError) {
+    return (
+      <main className="login-card" style={{ maxWidth: 620, margin: '10vh auto', padding: 24, direction: 'rtl' }}>
+        <h1>بارگیری فضای کاری ناموفق بود</h1>
+        <p role="alert">{organizationError}</p>
+        <button
+          type="button"
+          onClick={() => refreshOrganizationMemberships().catch((error) => setOrganizationError(error.message))}
+        >
+          تلاش دوباره
+        </button>
+        <button type="button" onClick={handleSignOut}>خروج</button>
+      </main>
+    );
+  }
+
+  if (!activeOrganizationId || !activeOrganizationMembership) {
+    return (
+      <main style={{ maxWidth: 760, margin: '8vh auto', padding: 24 }}>
+        <OrganizationManagementPanel
+          key="organization-creation"
+          organization={null}
+          membership={null}
+          onOrganizationCreated={handleOrganizationCreated}
+          onMembershipChanged={() => refreshOrganizationMemberships()}
+        />
+        <button type="button" onClick={handleSignOut}>خروج</button>
       </main>
     );
   }
@@ -939,16 +1165,8 @@ export default function App() {
                 placeholder="نام شما"
               />
               <label htmlFor="profile-business-name">نام مجموعه / برند روی فاکتورها</label>
-              <input
-                id="profile-business-name"
-                type="text"
-                autoComplete="organization"
-                maxLength={80}
-                value={profileBusinessName}
-                onChange={(e) => setProfileBusinessName(e.target.value)}
-                placeholder={DEFAULT_BUSINESS_NAME}
-              />
-              <p className="profile-password-hint">این نام در سربرگ برنامه، فاکتور رسمی، پیش‌فاکتور و یادآوری‌ها نمایش داده می‌شود.</p>
+              <input id="profile-business-name" type="text" value={businessName} readOnly />
+              <p className="profile-password-hint">نام فضای کاری از بخش «مدیریت کاربران و دسترسی» تغییر می‌کند.</p>
               <label htmlFor="profile-business-logo">لوگوی مجموعه</label>
               <div className="business-logo-settings">
                 <img src={profileLogoPreview} alt="پیش‌نمایش لوگوی مجموعه" />
@@ -958,9 +1176,13 @@ export default function App() {
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     onChange={handleProfileLogoChange}
-                    disabled={profileLoading}
+                    disabled={profileLoading || !isOrganizationAdmin}
                   />
-                  <p className="profile-password-hint">PNG، JPG یا WebP؛ تصویر به WebP فشرده می‌شود و حداکثر ۸ مگابایت باشد.</p>
+                  <p className="profile-password-hint">
+                    {isOrganizationAdmin
+                      ? 'PNG، JPG یا WebP؛ تصویر به WebP فشرده می‌شود و حداکثر ۸ مگابایت باشد.'
+                      : 'برای تغییر لوگوی مجموعه، از مدیر فضای کاری بخواهید.'}
+                  </p>
                   {profileLogoUrl !== DEFAULT_LOGO_URL && !removeProfileLogo && (
                     <button
                       type="button"
@@ -970,11 +1192,19 @@ export default function App() {
                         setProfileLogoFile(null);
                         setRemoveProfileLogo(true);
                       }}
-                      disabled={profileLoading}
+                      disabled={profileLoading || !isOrganizationAdmin}
                     >
                       حذف لوگوی سفارشی
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className={`nav-button ${activeSection === 'organization-creation' ? 'active' : ''}`}
+                    onClick={() => handleSectionChange('organization-creation')}
+                  >
+                    <span className="nav-icon">＋</span>
+                    <span className="nav-text">ساخت فضای کاری جدید</span>
+                  </button>
                   {removeProfileLogo && <p className="profile-password-hint">لوگوی پیش‌فرض پس از ذخیره برمی‌گردد.</p>}
                 </div>
               </div>
@@ -1057,10 +1287,28 @@ export default function App() {
             </div>
           </div>
 
+          <div className="organization-switcher" dir="rtl">
+            {organizationMemberships.length > 1 ? (
+              <label>
+                فضای کاری
+                <select value={activeOrganizationId} onChange={handleOrganizationChange}>
+                  {organizationMemberships.map((membership) => (
+                    <option key={membership.organization_id} value={membership.organization_id}>
+                      {membership.organizations?.name || 'فضای کاری'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <span>{activeOrganization?.name || businessName}</span>
+            )}
+          </div>
+
           <nav className="section-nav" aria-label="بخش‌های برنامه">
             <button
               type="button"
               className={`nav-button ${activeSection === "dashboard" ? "active" : ""}`}
+              hidden={!hasSectionAccess('dashboard')}
               aria-keyshortcuts="F9"
               onClick={() => handleSectionChange("dashboard")}
             >
@@ -1073,6 +1321,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "customers" ? "active" : ""}`}
+              hidden={!hasSectionAccess('customers')}
               aria-keyshortcuts="F1"
               onClick={() => handleSectionChange("customers")}
             >
@@ -1085,6 +1334,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "inventory" ? "active" : ""}`}
+              hidden={!hasSectionAccess('inventory')}
               aria-keyshortcuts="F2"
               onClick={() => handleSectionChange("inventory")}
             >
@@ -1097,6 +1347,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "bot-orders" ? "active" : ""}`}
+              hidden={!hasSectionAccess('bot-orders')}
               onClick={() => handleSectionChange("bot-orders")}
             >
               <span className="nav-icon">🛍</span>
@@ -1107,6 +1358,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "quotations" ? "active" : ""}`}
+              hidden={!hasSectionAccess('quotations')}
               aria-keyshortcuts="F3"
               onClick={() => handleSectionChange("quotations")}
             >
@@ -1120,6 +1372,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "official" ? "active" : ""}`}
+              hidden={!hasSectionAccess('official')}
               aria-keyshortcuts="F4"
               onClick={() => handleSectionChange("official")}
             >
@@ -1131,6 +1384,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "backup" ? "active" : ""}`}
+              hidden={!hasSectionAccess('backup')}
               onClick={() => handleSectionChange("backup")}
             >
               <span className="nav-icon">⬇</span>
@@ -1140,6 +1394,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "cashbook" ? "active" : ""}`}
+              hidden={!hasSectionAccess('cashbook')}
               onClick={() => handleSectionChange("cashbook")}
             >
               <span className="nav-icon">💰</span>
@@ -1150,6 +1405,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "reports" ? "active" : ""}`}
+              hidden={!hasSectionAccess('reports')}
               aria-keyshortcuts="F5"
               onClick={() => handleSectionChange("reports")}
             >
@@ -1162,6 +1418,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "analytics" ? "active" : ""}`}
+              hidden={!hasSectionAccess('analytics')}
               aria-keyshortcuts="F6"
               onClick={() => handleSectionChange("analytics")}
             >
@@ -1174,6 +1431,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "calendar" ? "active" : ""}`}
+              hidden={!hasSectionAccess('calendar')}
               aria-keyshortcuts="F7"
               onClick={() => handleSectionChange("calendar")}
             >
@@ -1186,6 +1444,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "reminders" ? "active" : ""}`}
+              hidden={!hasSectionAccess('reminders')}
               aria-keyshortcuts="F8"
               onClick={() => handleSectionChange("reminders")}
             >
@@ -1197,6 +1456,7 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "tutorial" ? "active" : ""}`}
+              hidden={!hasSectionAccess('tutorial')}
               onClick={() => handleSectionChange("tutorial")}
             >
               <span className="nav-icon">📖</span>
@@ -1206,11 +1466,22 @@ export default function App() {
             <button
               type="button"
               className={`nav-button ${activeSection === "contact" ? "active" : ""}`}
+              hidden={!hasSectionAccess('contact')}
               onClick={() => handleSectionChange("contact")}
             >
               <span className="nav-icon">📞</span>
               <span className="nav-text">ارتباط با ما</span>
             </button>
+            {isOrganizationAdmin && (
+              <button
+                type="button"
+                className={`nav-button ${activeSection === 'organization-management' ? 'active' : ''}`}
+                onClick={() => handleSectionChange('organization-management')}
+              >
+                <span className="nav-icon">⚙</span>
+                <span className="nav-text">مدیریت کاربران و دسترسی</span>
+              </button>
+            )}
           </nav>
 
           <div className="sidebar-note">
@@ -1250,6 +1521,10 @@ export default function App() {
                   ? "پشتیبان‌گیری و بازیابی"
                   : activeSection === "cashbook"
                   ? "صندوق و بانک"
+                  : activeSection === "organization-management"
+                  ? "مدیریت کاربران و دسترسی"
+                  : activeSection === "organization-creation"
+                  ? "ساخت فضای کاری جدید"
                   : "ارتباط با ما"}
               </h2>
             </div>
@@ -1264,35 +1539,58 @@ export default function App() {
           </div>
 
           <div className="panel-container">
-            {activeSection === "dashboard" && <DashboardPanel onNavigate={handleSectionChange} />}
-            {activeSection === "customers" && <CustomersPanel businessName={businessName} />}
-            {activeSection === "inventory" && (
-              <InventoryPanel 
-                items={inventory} 
-                refresh={fetchData} 
-                onItemSelected={handleSelectItem} 
-                onItemUpdated={handleItemUpdated} 
+            {activeSection === 'organization-creation' ? (
+              <OrganizationManagementPanel
+                organization={null}
+                membership={null}
+                onOrganizationCreated={handleOrganizationCreated}
+                onMembershipChanged={() => refreshOrganizationMemberships()}
               />
+            ) : activeSection === 'organization-management' && isOrganizationAdmin ? (
+              <OrganizationManagementPanel
+                key={activeOrganizationId}
+                organization={activeOrganization}
+                membership={activeOrganizationMembership}
+                onOrganizationCreated={handleOrganizationCreated}
+                onMembershipChanged={() => refreshOrganizationMemberships(activeOrganizationId)}
+              />
+            ) : hasSectionAccess(activeSection) ? (
+              <>
+                {activeSection === "dashboard" && <DashboardPanel onNavigate={handleSectionChange} />}
+                {activeSection === "customers" && <CustomersPanel businessName={businessName} />}
+                {activeSection === "inventory" && (
+                  <InventoryPanel
+                    items={inventory}
+                    refresh={fetchData}
+                    onItemSelected={handleSelectItem}
+                    onItemUpdated={handleItemUpdated}
+                  />
+                )}
+                {activeSection === "bot-orders" && <BotOrdersPanel />}
+                {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} businessName={businessName} logoUrl={logoUrl} />}
+                {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} />}
+                {activeSection === "backup" && (
+                  <BackupPanel userId={sessionUserId} organizationId={activeOrganizationId} />
+                )}
+                {activeSection === "cashbook" && <CashbookPanel />}
+                {activeSection === "reports" && <FinancialReportPanel businessName={businessName} logoUrl={logoUrl} />}
+                {activeSection === "analytics" && <AnalyticsPanel />}
+                {visitedSections.has("calendar") && hasSectionAccess('calendar') && (
+                  <div style={{ display: activeSection === "calendar" ? "block" : "none" }}>
+                    <CalendarPanel active={activeSection === "calendar"} />
+                  </div>
+                )}
+                {visitedSections.has("reminders") && hasSectionAccess('reminders') && (
+                  <div style={{ display: activeSection === "reminders" ? "block" : "none" }}>
+                    <RemindersPanel businessName={businessName} logoUrl={logoUrl} active={activeSection === "reminders"} />
+                  </div>
+                )}
+                {activeSection === "tutorial" && <TutorialPanel />}
+                {activeSection === "contact" && <ContactPanel />}
+              </>
+            ) : (
+              <p role="alert">به این بخش دسترسی ندارید. برای دریافت دسترسی با مدیر فضای کاری تماس بگیرید.</p>
             )}
-            {activeSection === "bot-orders" && <BotOrdersPanel />}
-            {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} businessName={businessName} logoUrl={logoUrl} />}
-            {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} />}
-            {activeSection === "backup" && <BackupPanel userId={sessionUserId} />}
-            {activeSection === "cashbook" && <CashbookPanel />}
-            {activeSection === "reports" && <FinancialReportPanel businessName={businessName} logoUrl={logoUrl} />}
-            {activeSection === "analytics" && <AnalyticsPanel />}
-            {visitedSections.has("calendar") && (
-              <div style={{ display: activeSection === "calendar" ? "block" : "none" }}>
-                <CalendarPanel active={activeSection === "calendar"} />
-              </div>
-            )}
-            {visitedSections.has("reminders") && (
-              <div style={{ display: activeSection === "reminders" ? "block" : "none" }}>
-                <RemindersPanel businessName={businessName} logoUrl={logoUrl} active={activeSection === "reminders"} />
-              </div>
-            )}
-            {activeSection === "tutorial" && <TutorialPanel />}
-            {activeSection === "contact" && <ContactPanel />}
           </div>
         </section>
       </div>

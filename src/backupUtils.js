@@ -1,5 +1,5 @@
 export const BACKUP_FORMAT = 'ceremony-manager-backup';
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 export const BACKUP_TABLES = [
   'customers',
   'ceremonies',
@@ -12,13 +12,14 @@ export const BACKUP_TABLES = [
 ];
 const PRE_CASHBOOK_TABLES = ['customers', 'ceremonies', 'events', 'inventory', 'quotations', 'invoices'];
 
-export function createBackupDocument(tables, { exportedAt, userId, projectUrl }) {
+export function createBackupDocument(tables, { exportedAt, userId, projectUrl, organizationId }) {
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
     exportedAt,
     userId,
     projectUrl,
+    organizationId,
     tables: Object.fromEntries(BACKUP_TABLES.map((table) => [table, tables[table] || []])),
   };
 }
@@ -27,11 +28,14 @@ export function validateBackupDocument(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('ساختار فایل پشتیبان معتبر نیست.');
   }
-  if (value.format !== BACKUP_FORMAT || ![1, BACKUP_VERSION].includes(value.version)) {
+  if (value.format !== BACKUP_FORMAT || ![1, 2, BACKUP_VERSION].includes(value.version)) {
     throw new Error('نسخه یا قالب فایل پشتیبان پشتیبانی نمی‌شود.');
   }
   if (!value.userId || !value.projectUrl || !value.tables || typeof value.tables !== 'object') {
     throw new Error('اطلاعات حساب یا جدول‌های فایل پشتیبان ناقص است.');
+  }
+  if (value.version === BACKUP_VERSION && typeof value.organizationId !== 'string') {
+    throw new Error('شناسهٔ فضای کاری در فایل پشتیبان وجود ندارد.');
   }
 
   const compatibleTables = value.version === 1
