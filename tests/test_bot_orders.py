@@ -7,11 +7,13 @@ from run_bot import (
     customer_order_message,
     handle_callback,
     handle_admin_order_action,
+    handle_address_message,
     handle_receipt_message,
     handle_receipt_request,
     is_admin_callback,
     order_admin_message,
     payment_instruction_message,
+    process_pending_payment_notifications,
 )
 
 
@@ -55,6 +57,7 @@ class BotOrderWorkflowTests(unittest.TestCase):
         self.assertIn("به نام: <نام صاحب حساب>", message)
         self.assertIn("بانک: بانک & نمونه", message)
         self.assertIn("نیازمند بررسی مدیر", message)
+        self.assertIn("آدرس دقیق", message)
 
     def test_payment_message_requires_valid_bank_details(self):
         with self.assertRaisesRegex(ValueError, "valid bank card number"):
@@ -130,7 +133,7 @@ class BotOrderWorkflowTests(unittest.TestCase):
             callback["message"]["chat"]["type"] = "group"
             self.assertFalse(is_admin_callback(callback))
 
-    def test_admin_approval_sends_card_details_and_receipt_button(self):
+    def test_admin_approval_waits_for_notification_queue(self):
         callback = {
             "id": "callback-1",
             "message": {
@@ -163,33 +166,14 @@ class BotOrderWorkflowTests(unittest.TestCase):
         rpc.assert_called_once_with(42, "approve")
         answer.assert_called_once_with("callback-1", "سفارش تأیید شد.")
         self.assertIn("تایید شد", edit.call_args.args[2])
-        self.assertEqual(send.call_args.args[0], "9001")
-        self.assertIn("125,000 تومان", send.call_args.args[1])
-        self.assertIn("۶۰۳۷ ۱۲۳۴ ۱۲۳۴ ۵۶۷۸", send.call_args.args[1])
-        self.assertIn("نیازمند بررسی مدیر", send.call_args.args[1])
-        self.assertEqual(
-            send.call_args.args[2]["inline_keyboard"][0][0],
-            {
-                "text": "📤 ارسال رسید و فیش پرداخت",
-                "callback_data": "order:receipt:42",
-            },
-        )
-        self.assertEqual(len(send.call_args.args[2]["inline_keyboard"]), 1)
+        self.assertIn("بررسی خودکار ربات", edit.call_args.args[2])
+        send.assert_not_called()
 
-    def test_card_details_delivery_failure_logs_telegram_error(self):
-        callback = {
-            "id": "callback-send-failed",
-            "message": {
-                "chat": {"id": 1234, "type": "private"},
-                "message_id": 77,
-            },
-            "from": {"id": 1234},
-        }
-        approved_order = {
+    def test_approved_orders_are_notified_and_address_state_is_recorded(self):
+        order = {
             "id": 42,
             "telegram_user_id": "9001",
             "total_price": 125000,
-            "changed": True,
             "payment_info": {
                 "card_number": "6037123412345678",
                 "holder_name": "نام صاحب حساب",
@@ -198,24 +182,123 @@ class BotOrderWorkflowTests(unittest.TestCase):
         }
 
         with (
-            patch("run_bot.TELEGRAM_ADMIN_CHAT_ID", "1234"),
-            patch("run_bot.process_bot_order_action", return_value=approved_order),
-            patch("run_bot.answer_callback"),
-            patch("run_bot.edit_message_text"),
+            patch("run_bot.claim_bot_order_payment_notification", return_value=order),
+            patch(
+                "run_bot.complete_bot_order_payment_notification",
+                return_value={"id": 42, "changed": True},
+            ) as complete,
+            patch("run_bot.send_message") as send,
+        ):
+            process_pending_payment_notifications(limit=1)
+
+        self.assertEqual(send.call_args.args[0], "9001")
+        self.assertIn("۶۰۳۷ ۱۲۳۴ ۱۲۳۴ ۵۶۷۸", send.call_args.args[1])
+        self.assertIn("آدرس دقیق", send.call_args.args[1])
+        self.assertEqual(
+            send.call_args.args[2]["inline_keyboard"][0][0]["callback_data"],
+            "order:receipt:42",
+        )
+        complete.assert_called_once_with(42)
+
+    def test_failed_payment_notification_is_left_for_retry(self):
+        with (
+            patch(
+                "run_bot.claim_bot_order_payment_notification",
+                return_value={
+                    "id": 43,
+                    "telegram_user_id": "9001",
+                    "total_price": 125000,
+                    "payment_info": {
+                        "card_number": "6037123412345678",
+                        "holder_name": "نام صاحب حساب",
+                    },
+                },
+            ),
+            patch(
+                "run_bot.complete_bot_order_payment_notification",
+            ) as complete,
             patch(
                 "run_bot.send_message",
-                side_effect=RuntimeError(
-                    "Telegram API method sendMessage failed: bot was blocked"
-                ),
+                side_effect=RuntimeError("Telegram API method sendMessage failed"),
             ),
             patch("builtins.print") as log,
         ):
-            handle_admin_order_action(callback, "approve", 42)
+            process_pending_payment_notifications(limit=1)
 
+        complete.assert_not_called()
         self.assertTrue(any(
-            "bot was blocked" in str(call.args[0])
+            "it will be retried" in str(call.args[0])
             for call in log.call_args_list
         ))
+
+    def test_customer_address_is_saved_to_order_and_forwarded_to_admin(self):
+        message = {
+            "from": {
+                "id": 9001,
+                "first_name": "نام",
+                "username": "customer",
+            },
+            "chat": {"id": 9001, "type": "private"},
+            "text": "تهران، خیابان نمونه، کوچه ۱۲، پلاک ۳",
+        }
+        saved_order = {
+            "found": True,
+            "saved": True,
+            "id": 44,
+            "delivery_address": message["text"],
+        }
+
+        with (
+            patch("run_bot.TELEGRAM_ADMIN_CHAT_ID", "1234"),
+            patch("run_bot.save_bot_order_address", return_value=saved_order) as save,
+            patch("run_bot.send_message") as send,
+        ):
+            handled = handle_address_message(message)
+
+        self.assertTrue(handled)
+        save.assert_called_once_with("9001", message["text"])
+        self.assertEqual(send.call_args_list[0].args[0], "1234")
+        self.assertIn("#۴۴", send.call_args_list[0].args[1])
+        self.assertIn(message["text"], send.call_args_list[0].args[1])
+        self.assertEqual(send.call_args_list[1].args[0], 9001)
+        self.assertIn("برای مدیر ارسال شد", send.call_args_list[1].args[1])
+
+    def test_address_message_without_active_order_is_not_consumed(self):
+        message = {
+            "from": {"id": 9001},
+            "chat": {"id": 9001, "type": "private"},
+            "text": "آدرس نمونه‌ای که برای سفارش فعال نیست",
+        }
+        with (
+            patch(
+                "run_bot.save_bot_order_address",
+                return_value={"found": False},
+            ) as save,
+            patch("run_bot.send_message") as send,
+        ):
+            handled = handle_address_message(message)
+
+        self.assertFalse(handled)
+        save.assert_called_once()
+        send.assert_not_called()
+
+    def test_short_address_is_rejected_only_when_order_is_waiting_for_it(self):
+        message = {
+            "from": {"id": 9001},
+            "chat": {"id": 9001, "type": "private"},
+            "text": "تهران",
+        }
+        with (
+            patch(
+                "run_bot.save_bot_order_address",
+                return_value={"found": True, "saved": False},
+            ),
+            patch("run_bot.send_message") as send,
+        ):
+            handled = handle_address_message(message)
+
+        self.assertTrue(handled)
+        self.assertIn("۱۰ تا ۱۰۰۰ نویسه", send.call_args.args[1])
 
     def test_unauthorized_admin_callback_never_calls_database(self):
         callback = {

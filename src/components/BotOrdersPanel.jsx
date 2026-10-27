@@ -57,6 +57,11 @@ export default function BotOrdersPanel() {
   }, [refreshOrders]);
 
   const handleStatusChange = async (order, status) => {
+    if (status === 'approved' && order.total_price === null) {
+      setErrorMessage('برای تأیید سفارش، ابتدا مبلغ نهایی را ثبت کنید.');
+      return;
+    }
+
     setBusyOrderId(order.id);
     setErrorMessage('');
     setFeedback('');
@@ -223,6 +228,12 @@ export default function BotOrdersPanel() {
                 <span>{order.total_price === null ? 'قیمت نهایی' : 'جمع سفارش'}</span>
                 <strong>{formatMoney(order.total_price)}</strong>
               </footer>
+              {order.delivery_address && (
+                <div className="bot-order-address">
+                  <strong>آدرس ارسال</strong>
+                  <p>{order.delivery_address}</p>
+                </div>
+              )}
               {order.total_price === null && (
                 <div className="bot-order-quote">
                   <label htmlFor={`bot-order-price-${order.id}`}>

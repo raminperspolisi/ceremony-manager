@@ -57,6 +57,33 @@ def telegram_error_description(response):
     return description[:240] or None
 
 
+def supabase_error_description(error):
+    response = getattr(error, "response", None)
+    if response is None:
+        return type(error).__name__
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+
+    if isinstance(payload, dict):
+        code = payload.get("code")
+        message = payload.get("message")
+        hint = payload.get("hint")
+        details = payload.get("details")
+        parts = [f"HTTP {response.status_code}"]
+        if isinstance(code, str) and code:
+            parts.append(f"code {code[:40]}")
+        if isinstance(message, str) and message:
+            parts.append(message[:240])
+        if isinstance(details, str) and details:
+            parts.append(details[:180])
+        if isinstance(hint, str) and hint:
+            parts.append(f"hint: {hint[:180]}")
+        return "; ".join(parts)
+    return f"HTTP {response.status_code}"
+
+
 def send_message(chat_id, text, reply_markup=None, parse_mode=None):
     payload = {"chat_id": chat_id, "text": f"\u200f{text}"}
     if reply_markup:
@@ -146,6 +173,59 @@ def process_bot_order_action(order_id, action):
     result = response.json()
     if not isinstance(result, dict) or result.get("id") is None:
         raise ValueError("Invalid order action response.")
+    return result
+
+
+def claim_bot_order_payment_notification():
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/claim_bot_order_payment_notification",
+        json={"p_approval_secret": ORDER_APPROVAL_SECRET},
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if result is not None and (
+        not isinstance(result, dict)
+        or result.get("id") is None
+        or result.get("telegram_user_id") is None
+    ):
+        raise ValueError("Invalid payment notification claim response.")
+    return result
+
+
+def complete_bot_order_payment_notification(order_id):
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/complete_bot_order_payment_notification",
+        json={
+            "p_order_id": int(order_id),
+            "p_approval_secret": ORDER_APPROVAL_SECRET,
+        },
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if not isinstance(result, dict) or result.get("id") is None:
+        raise ValueError("Invalid payment notification completion response.")
+    return result
+
+
+def save_bot_order_address(telegram_user_id, address):
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/submit_bot_order_address",
+        json={
+            "p_telegram_user_id": str(telegram_user_id),
+            "p_address": address,
+            "p_approval_secret": ORDER_APPROVAL_SECRET,
+        },
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if not isinstance(result, dict) or "found" not in result:
+        raise ValueError("Invalid order address response.")
     return result
 
 
@@ -328,8 +408,62 @@ def payment_instruction_message(order):
         "",
         "پس از واریز، تصویر یا فایل رسید را برای مدیر ارسال کنید.",
         "رسید به‌تنهایی پرداخت را تأیید نمی‌کند؛ وضعیت تا بررسی مدیر، «نیازمند بررسی مدیر» می‌ماند.",
+        "",
+        "لطفاً آدرس دقیق و شماره تماس خود را هم برای ارسال سفارش در همین گفت‌وگو بفرستید.",
     ])
     return "\n".join(lines)
+
+
+def process_pending_payment_notifications(limit=10):
+    for _ in range(limit):
+        try:
+            order = claim_bot_order_payment_notification()
+        except (requests.RequestException, ValueError, RuntimeError) as error:
+            print(
+                f"Approved order notification lookup failed "
+                f"({supabase_error_description(error)})."
+            )
+            return
+        if order is None:
+            return
+
+        order_id = order["id"]
+        customer_id = order["telegram_user_id"]
+        try:
+            send_message(
+                customer_id,
+                payment_instruction_message(order),
+                {
+                    "inline_keyboard": [[
+                        {
+                            "text": "📤 ارسال رسید و فیش پرداخت",
+                            "callback_data": f"order:receipt:{order_id}",
+                        }
+                    ]]
+                },
+            )
+        except (requests.RequestException, RuntimeError, ValueError) as error:
+            print(
+                f"Approved order payment notification failed "
+                f"({type(error).__name__}); it will be retried."
+            )
+            continue
+
+        try:
+            result = complete_bot_order_payment_notification(order_id)
+            if not result.get("changed"):
+                print(
+                    f"Payment notification completion made no change: "
+                    f"order_id={order_id}."
+                )
+                continue
+        except (requests.RequestException, ValueError, RuntimeError) as error:
+            print(
+                f"Payment notification completion failed "
+                f"({type(error).__name__}); it will be retried."
+            )
+            continue
+        print(f"Approved order payment message sent: order_id={order_id}.")
 
 
 def main_menu():
@@ -767,61 +901,14 @@ def handle_admin_order_action(callback, action, order_id, callback_answered=Fals
         edit_message_text(
             chat_id,
             message_id,
-            f"✅ سفارش #{persian_digits(order_id)} تایید شد.",
+            f"✅ سفارش #{persian_digits(order_id)} تایید شد.\n"
+            "پیام پرداخت پس از بررسی خودکار ربات برای مشتری ارسال می‌شود.",
             {"inline_keyboard": []},
         )
     except (requests.RequestException, RuntimeError) as error:
         print(
             f"Approved order admin message edit failed "
             f"({type(error).__name__})."
-        )
-    try:
-        send_message(
-            customer_id,
-            payment_instruction_message(result),
-            {
-                "inline_keyboard": [[
-                    {
-                        "text": "📤 ارسال رسید و فیش پرداخت",
-                        "callback_data": f"order:receipt:{order_id}",
-                    }
-                ]]
-            },
-        )
-        print(f"Approved order payment message sent: order_id={order_id}.")
-    except requests.HTTPError as error:
-        status = error.response.status_code if error.response is not None else "unknown"
-        description = telegram_error_description(error.response)
-        if description:
-            print(
-                f"Approved order payment notification failed "
-                f"(HTTP status: {status}): {description}"
-            )
-        else:
-            print(
-                f"Approved order payment notification failed "
-                f"(HTTP status: {status}); response details omitted."
-            )
-        edit_message_text(
-            chat_id,
-            message_id,
-            f"✅ سفارش #{persian_digits(order_id)} تایید شد.\n"
-            "⚠️ ارسال پیام پرداخت به مشتری ناموفق بود؛ لطفاً دستی پیگیری کنید.",
-            {"inline_keyboard": []},
-        )
-    except (requests.RequestException, RuntimeError, ValueError) as error:
-        detail = (
-            f": {str(error)[:240]}"
-            if isinstance(error, RuntimeError)
-            else f" ({type(error).__name__})"
-        )
-        print(f"Approved order payment notification failed{detail}.")
-        edit_message_text(
-            chat_id,
-            message_id,
-            f"✅ سفارش #{persian_digits(order_id)} تایید شد.\n"
-            "⚠️ ارسال پیام پرداخت به مشتری ناموفق بود؛ لطفاً دستی پیگیری کنید.",
-            {"inline_keyboard": []},
         )
 
 
@@ -929,6 +1016,80 @@ def handle_receipt_message(message):
         "وضعیت پرداخت تا بررسی مدیر تأییدشده نیست؛ ارسال رسید به‌تنهایی تأیید واریز محسوب نمی‌شود.",
         main_menu(),
     )
+    return True
+
+
+def handle_address_message(message):
+    user = message.get("from") or {}
+    chat = message.get("chat") or {}
+    user_id = str(user.get("id") or "")
+    text = message.get("text")
+    if (
+        not user_id
+        or chat.get("type") != "private"
+        or str(chat.get("id")) != user_id
+        or not isinstance(text, str)
+        or text.lstrip().startswith("/")
+    ):
+        return False
+
+    address = text.strip()
+    try:
+        result = save_bot_order_address(user_id, address)
+    except (requests.RequestException, ValueError, RuntimeError) as error:
+        print(
+            f"Order delivery address save failed "
+            f"({supabase_error_description(error)})."
+        )
+        send_message(
+            chat["id"],
+            "ذخیرهٔ آدرس ناموفق بود؛ لطفاً کمی بعد دوباره ارسال کنید.",
+        )
+        return True
+
+    if not result.get("found"):
+        return False
+    if not result.get("saved"):
+        send_message(
+            chat["id"],
+            "لطفاً آدرس دقیق را با جزئیات بیشتری بفرستید (۱۰ تا ۱۰۰۰ نویسه).",
+        )
+        return True
+
+    order_id = result["id"]
+    customer_name = " ".join(
+        filter(None, [user.get("first_name"), user.get("last_name")])
+    ) or str(result.get("customer_name") or "مشتری تلگرام")
+    username_line = (
+        f"\nنام کاربری: @{user['username']}"
+        if user.get("username")
+        else ""
+    )
+    try:
+        send_message(
+            TELEGRAM_ADMIN_CHAT_ID,
+            f"📍 آدرس ارسال سفارش #{persian_digits(order_id)}\n"
+            f"مشتری: {customer_name}\n"
+            f"شناسه تلگرام: {user_id}{username_line}\n\n"
+            f"آدرس:\n{result['delivery_address']}",
+        )
+    except (requests.RequestException, RuntimeError) as error:
+        print(
+            f"Order delivery address admin notification failed "
+            f"({type(error).__name__}); address remains saved in the order."
+        )
+        send_message(
+            chat["id"],
+            f"آدرس سفارش #{persian_digits(order_id)} ذخیره شد، "
+            "اما ارسال اعلان به مدیر ناموفق بود؛ لطفاً با مدیر تماس بگیرید.",
+            main_menu(),
+        )
+    else:
+        send_message(
+            chat["id"],
+            f"آدرس سفارش #{persian_digits(order_id)} ثبت شد و برای مدیر ارسال شد.",
+            main_menu(),
+        )
     return True
 
 
@@ -1139,6 +1300,7 @@ def main():
     validate_settings()
     offset = 0
     print("Telegram catalog bot is ready.")
+    process_pending_payment_notifications()
 
     while True:
         try:
@@ -1161,6 +1323,8 @@ def main():
                 message = update.get("message")
                 if not message:
                     continue
+                if handle_address_message(message):
+                    continue
                 if handle_receipt_message(message):
                     continue
                 if not message.get("text"):
@@ -1178,6 +1342,8 @@ def main():
                 elif text.startswith("/cancel"):
                     carts.pop(str(message.get("from", {}).get("id")), None)
                     send_message(chat_id, "سبد خرید شما پاک شد.", main_menu())
+
+            process_pending_payment_notifications()
 
         except requests.HTTPError as error:
             status = (
