@@ -6258,6 +6258,58 @@ textarea:focus-visible {
   }
 }
 
+.bot-order-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 16px;
+  padding: 10px 12px;
+  border: 1px solid #a8d7c8;
+  border-radius: 8px;
+  background: #eaf7f2;
+  color: #174e43;
+  font-size: 13px;
+}
+
+.bot-order-notice-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.bot-order-notice-actions button {
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid #a8d7c8;
+  border-radius: 6px;
+  background: #fff;
+  color: #174e43;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bot-order-notice-actions .bot-order-notice-dismiss {
+  width: 32px;
+  padding: 0;
+  font-size: 20px;
+}
+
+@media (max-width: 600px) {
+  .bot-order-notice {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+    margin: 8px 10px;
+  }
+
+  .bot-order-notice-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 .bot-orders-panel {
   display: grid;
   gap: 14px;

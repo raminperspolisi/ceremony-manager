@@ -6,7 +6,6 @@ const ORDER_STATUSES = [
   { value: 'approved', label: 'تأییدشده؛ منتظر پرداخت' },
   { value: 'payment_review', label: 'نیازمند بررسی مدیر' },
   { value: 'rejected', label: 'ردشده' },
-  { value: 'payment_review', label: 'نیازمند بررسی مدیر' },
   { value: 'processing', label: 'در حال پیگیری' },
   { value: 'completed', label: 'انجام‌شده' },
   { value: 'cancelled', label: 'لغوشده' },

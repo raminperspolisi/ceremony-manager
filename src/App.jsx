@@ -138,6 +138,7 @@ export default function App() {
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   const [globalSearchError, setGlobalSearchError] = useState('');
   const [globalSearchRevision, setGlobalSearchRevision] = useState(0);
+  const [botOrderNotification, setBotOrderNotification] = useState(null);
   const globalSearchCache = useRef(null);
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
@@ -366,6 +367,85 @@ export default function App() {
       window.removeEventListener('focus', refreshFromServer);
       document.removeEventListener('visibilitychange', refreshWhenVisible);
       void supabase.removeChannel(channel);
+    };
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId) {
+      setBotOrderNotification(null);
+      return undefined;
+    }
+
+    let mounted = true;
+    let initialized = false;
+    let checking = false;
+    let channel;
+    const knownOrderIds = new Set();
+    const refreshBotOrders = async () => {
+      if (checking || document.visibilityState === 'hidden') return;
+      checking = true;
+      try {
+        const result = await readTable('bot_orders', {
+          orderBy: 'created_at',
+          ascending: false,
+          limit: 300,
+        });
+        if (!mounted || result.error) return;
+
+        const orders = result.data || [];
+        if (!initialized) {
+          orders.forEach((order) => knownOrderIds.add(String(order.id)));
+          initialized = true;
+          return;
+        }
+        if (result.offline) return;
+
+        const newOrders = orders.filter((order) => (
+          order.status === 'pending' && !knownOrderIds.has(String(order.id))
+        ));
+        orders.forEach((order) => knownOrderIds.add(String(order.id)));
+        if (newOrders.length) {
+          setBotOrderNotification((current) => ({
+            orderId: String(newOrders[0].id),
+            count: (current?.count || 0) + newOrders.length,
+          }));
+        }
+      } catch (error) {
+        console.error('بررسی سفارش‌های جدید ربات ناموفق بود:', error.message);
+      } finally {
+        checking = false;
+      }
+    };
+
+    const startRealtimeNotifications = async () => {
+      await refreshBotOrders();
+      if (!mounted) return;
+      channel = supabase
+        .channel(`bot-order-notifications-${sessionUserId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'bot_orders' },
+          () => { void refreshBotOrders(); },
+        );
+      channel.subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`اشتراک اعلان سفارش‌های ربات ناموفق بود: ${status}`);
+        }
+      });
+    };
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshBotOrders();
+    };
+    const poll = window.setInterval(() => { void refreshBotOrders(); }, 30000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    void startRealtimeNotifications();
+
+    return () => {
+      mounted = false;
+      window.clearInterval(poll);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [sessionUserId]);
 
@@ -786,6 +866,35 @@ export default function App() {
           <span className="status-dot" />
         </div>
       </header>
+      {botOrderNotification && (
+        <div className="bot-order-notice" role="status" aria-live="polite">
+          <span>
+            سفارش جدید ربات ثبت شد
+            {botOrderNotification.count > 1
+              ? ` · ${formatDisplay(botOrderNotification.count)} سفارش جدید`
+              : ` · شمارهٔ ${formatDisplay(botOrderNotification.orderId)}`}
+          </span>
+          <div className="bot-order-notice-actions">
+            <button
+              type="button"
+              onClick={() => {
+                handleSectionChange('bot-orders');
+                setBotOrderNotification(null);
+              }}
+            >
+              مشاهدهٔ سفارش‌ها
+            </button>
+            <button
+              type="button"
+              className="bot-order-notice-dismiss"
+              aria-label="بستن اعلان سفارش جدید"
+              onClick={() => setBotOrderNotification(null)}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       {offlineSyncError && (
         <div role="alert" style={{ margin: '10px 20px', padding: '10px 12px', borderRadius: 8, color: '#92400e', background: '#fef3c7', fontSize: 12 }}>
           {offlineSyncError} تغییرات محلی نگه داشته شده‌اند و با اتصال بعدی دوباره تلاش می‌شود.
