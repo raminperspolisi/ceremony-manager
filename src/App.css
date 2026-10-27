@@ -6180,13 +6180,37 @@ textarea:focus-visible {
 
 @media (max-width: 600px) {
   .app-header {
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto;
   }
 
+  .app-header .mobile-menu-toggle {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    grid-column: auto;
+    grid-row: auto;
+    z-index: 1;
+  }
+
   .app-header .brand {
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 1;
     justify-self: center;
+    width: min(100%, 340px);
+    padding-left: 42px;
+  }
+
+  .app-header .header-title {
+    flex: 1;
+  }
+
+  .app-header .brand-title {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    font-size: 12px;
   }
 
   .app-header .global-search {
