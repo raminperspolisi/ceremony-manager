@@ -137,6 +137,8 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
   const [organizationMemberships, setOrganizationMemberships] = useState([]);
   const [activeOrganizationId, setActiveOrganizationId] = useState(null);
   const [organizationLoading, setOrganizationLoading] = useState(false);
@@ -153,6 +155,7 @@ export default function App() {
   const [profileError, setProfileError] = useState('');
   const [profileMessage, setProfileMessage] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [activeSection, setActiveSection] = useState('dashboard');
   const activeSectionRef = useRef(activeSection);
@@ -748,12 +751,39 @@ export default function App() {
     e.preventDefault();
     setAuthLoading(true);
     setAuthError('');
+    setAuthMessage('');
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (error) throw error;
       setPassword('');
     } catch (error) {
       setAuthError('خطا در ورود: ' + error.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+    setAuthMessage('');
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: { phone_number: phone.trim() },
+          emailRedirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
+      setPassword('');
+      if (!data.session) {
+        setAuthMessage('اگر این ایمیل قابل ثبت باشد، لینک تأیید برای آن ارسال می‌شود. پس از تأیید ایمیل وارد برنامه شوید.');
+      }
+    } catch (error) {
+      setAuthError('خطا در ثبت‌نام: ' + error.message);
     } finally {
       setAuthLoading(false);
     }
@@ -936,19 +966,48 @@ export default function App() {
     return (
       <main className="login-card" style={{ maxWidth: 420, margin: '10vh auto', padding: 24, direction: 'rtl', background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(15, 23, 42, 0.1)' }}>
         <img src="/azho-logo.png" alt="لوگوی آژو مراسم" className="login-logo" />
-        <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>ورود به مدیریت تشریفات</h1>
-        <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 14 }}>برای دسترسی به سامانه با حساب کاربری خود وارد شوید.</p>
+        <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>{isSignUp ? 'ساخت حساب کاربری' : 'ورود به مدیریت تشریفات'}</h1>
+        <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 14 }}>
+          {isSignUp
+            ? 'فعلاً حساب با ایمیل تأیید می‌شود؛ شماره تلفن برای فعال‌سازی ورود پیامکی در آینده ذخیره خواهد شد.'
+            : 'برای دسترسی به سامانه با حساب کاربری خود وارد شوید.'}
+        </p>
         {authError && <div role="alert" style={{ marginBottom: 14, padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
-        <form onSubmit={handleSignIn}>
+        {authMessage && <div role="status" style={{ marginBottom: 14, padding: 10, borderRadius: 6, color: '#166534', background: '#dcfce7' }}>{authMessage}</div>}
+        <form onSubmit={isSignUp ? handleSignUp : handleSignIn}>
+          {isSignUp && (
+            <>
+              <label htmlFor="auth-phone" style={{ display: 'block', marginBottom: 6 }}>شماره تلفن</label>
+              <input
+                id="auth-phone"
+                type="tel"
+                autoComplete="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </>
+          )}
           <label htmlFor="auth-email" style={{ display: 'block', marginBottom: 6 }}>ایمیل</label>
-          <input id="auth-email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input id="auth-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           <label htmlFor="auth-password" style={{ display: 'block', marginBottom: 6 }}>رمز عبور</label>
-          <input id="auth-password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input id="auth-password" type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} minLength={isSignUp ? 6 : undefined} required value={password} onChange={(e) => setPassword(e.target.value)} />
           <button type="submit" disabled={authLoading} style={{ width: '100%', color: '#fff', background: '#28645a', opacity: authLoading ? 0.7 : 1 }}>
-            {authLoading ? 'در حال ورود...' : 'ورود'}
+            {authLoading ? 'لطفاً صبر کنید…' : isSignUp ? 'ثبت‌نام و ارسال لینک تأیید' : 'ورود'}
           </button>
         </form>
-        <p style={{ margin: '14px 0 0', color: '#64748b', fontSize: 12 }}>حساب‌ها باید از بخش Authentication در Supabase ساخته شوند.</p>
+        <button
+          type="button"
+          disabled={authLoading}
+          onClick={() => {
+            setIsSignUp((current) => !current);
+            setAuthError('');
+            setAuthMessage('');
+          }}
+          style={{ width: '100%', marginTop: 12, color: '#28645a', background: 'transparent' }}
+        >
+          {isSignUp ? 'قبلاً حساب ساخته‌اید؟ ورود' : 'حساب ندارید؟ ثبت‌نام'}
+        </button>
       </main>
     );
   }
