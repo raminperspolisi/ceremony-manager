@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './supabaseClient';
+import SMSAuthPanel from './components/SMSAuthPanel';
 import InventoryPanel from './components/InventoryPanel';
 import QuotationPanel from './components/QuotationPanel';
 import CustomersPanel from './components/CustomersPanel';
@@ -964,51 +965,17 @@ export default function App() {
 
   if (!session) {
     return (
-      <main className="login-card" style={{ maxWidth: 420, margin: '10vh auto', padding: 24, direction: 'rtl', background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(15, 23, 42, 0.1)' }}>
-        <img src="/azho-logo.png" alt="لوگوی آژو مراسم" className="login-logo" />
-        <h1 style={{ margin: '0 0 8px', fontSize: 22 }}>{isSignUp ? 'ساخت حساب کاربری' : 'ورود به مدیریت تشریفات'}</h1>
-        <p style={{ margin: '0 0 20px', color: '#64748b', fontSize: 14 }}>
-          {isSignUp
-            ? 'فعلاً حساب با ایمیل تأیید می‌شود؛ شماره تلفن برای فعال‌سازی ورود پیامکی در آینده ذخیره خواهد شد.'
-            : 'برای دسترسی به سامانه با حساب کاربری خود وارد شوید.'}
-        </p>
-        {authError && <div role="alert" style={{ marginBottom: 14, padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
-        {authMessage && <div role="status" style={{ marginBottom: 14, padding: 10, borderRadius: 6, color: '#166534', background: '#dcfce7' }}>{authMessage}</div>}
-        <form onSubmit={isSignUp ? handleSignUp : handleSignIn}>
-          {isSignUp && (
-            <>
-              <label htmlFor="auth-phone" style={{ display: 'block', marginBottom: 6 }}>شماره تلفن</label>
-              <input
-                id="auth-phone"
-                type="tel"
-                autoComplete="tel"
-                required
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-            </>
-          )}
-          <label htmlFor="auth-email" style={{ display: 'block', marginBottom: 6 }}>ایمیل</label>
-          <input id="auth-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          <label htmlFor="auth-password" style={{ display: 'block', marginBottom: 6 }}>رمز عبور</label>
-          <input id="auth-password" type="password" autoComplete={isSignUp ? 'new-password' : 'current-password'} minLength={isSignUp ? 6 : undefined} required value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button type="submit" disabled={authLoading} style={{ width: '100%', color: '#fff', background: '#28645a', opacity: authLoading ? 0.7 : 1 }}>
-            {authLoading ? 'لطفاً صبر کنید…' : isSignUp ? 'ثبت‌نام و ارسال لینک تأیید' : 'ورود'}
-          </button>
-        </form>
-        <button
-          type="button"
-          disabled={authLoading}
-          onClick={() => {
-            setIsSignUp((current) => !current);
-            setAuthError('');
-            setAuthMessage('');
-          }}
-          style={{ width: '100%', marginTop: 12, color: '#28645a', background: 'transparent' }}
-        >
-          {isSignUp ? 'قبلاً حساب ساخته‌اید؟ ورود' : 'حساب ندارید؟ ثبت‌نام'}
-        </button>
-      </main>
+      <SMSAuthPanel
+        isSignUp={isSignUp}
+        onSignInToggle={() => {
+          setIsSignUp((current) => !current);
+          setAuthError('');
+          setAuthMessage('');
+        }}
+        onAuthenticated={() => {
+          setAuthMessage('با موفقیت وارد سیستم شدید.');
+        }}
+      />
     );
   }
 
