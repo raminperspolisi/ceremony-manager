@@ -9,12 +9,21 @@ const toPersianDigits = (value) =>
 export default function SMSAuthPanel({
   isSignUp = false,
   onSignInToggle,
-  onLegacyEmailToggle,
   onAuthenticated,
+  email,
+  setEmail,
+  password,
+  setPassword,
+  authLoading = false,
+  authError: emailAuthError = '',
+  authMessage: emailAuthMessage = '',
+  onEmailSignIn,
+  onEmailSignUp,
+  onClearAuthMessages,
   className = '',
 }) {
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [pendingPhone, setPendingPhone] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -22,6 +31,7 @@ export default function SMSAuthPanel({
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authMessage, setAuthMessage] = useState('');
+  const [useEmailAuth, setUseEmailAuth] = useState(false);
 
   const resendTimerRef = useRef(null);
 
@@ -50,8 +60,8 @@ export default function SMSAuthPanel({
 
     try {
       const normalizedPhone = normalizeIranianMobile(phone);
-      const metadata = isSignUp && email.trim()
-        ? { contact_email: email.trim().toLowerCase() }
+      const metadata = isSignUp && contactEmail.trim()
+        ? { contact_email: contactEmail.trim().toLowerCase() }
         : undefined;
 
       const { error } = await supabase.auth.signInWithOtp({
@@ -94,7 +104,7 @@ export default function SMSAuthPanel({
       setOtpSent(false);
       setOtpCode('');
       setPhone('');
-      setEmail('');
+      setContactEmail('');
       clearResendTimer();
 
       if (onAuthenticated) {
@@ -117,8 +127,8 @@ export default function SMSAuthPanel({
     setAuthMessage('');
 
     try {
-      const metadata = isSignUp && email.trim()
-        ? { contact_email: email.trim().toLowerCase() }
+      const metadata = isSignUp && contactEmail.trim()
+        ? { contact_email: contactEmail.trim().toLowerCase() }
         : undefined;
 
       const { error } = await supabase.auth.signInWithOtp({
@@ -144,22 +154,30 @@ export default function SMSAuthPanel({
     setOtpSent(false);
     setOtpCode('');
     setPhone('');
-    setEmail('');
+    setContactEmail('');
     setPendingPhone('');
     clearResendTimer();
     clearAuthMessages();
     onSignInToggle();
   };
 
-  const handleSwitchToLegacy = () => {
+  const handleSwitchToEmail = () => {
     setOtpSent(false);
     setOtpCode('');
     setPhone('');
-    setEmail('');
+    setContactEmail('');
     setPendingPhone('');
+    setUseEmailAuth(true);
     clearResendTimer();
     clearAuthMessages();
-    onLegacyEmailToggle();
+    onClearAuthMessages?.();
+  };
+
+  const handleSwitchToPhone = () => {
+    setUseEmailAuth(false);
+    setPassword('');
+    clearAuthMessages();
+    onClearAuthMessages?.();
   };
 
   const startResendTimer = useCallback(() => {
@@ -178,15 +196,19 @@ export default function SMSAuthPanel({
 
   const resendDisabled = resendSeconds > 0 || loading || !otpSent;
 
-  const title = isSignUp
-    ? 'ساخت حساب کاربری با موبایل'
-    : 'ورود با شماره موبایل';
+  const title = useEmailAuth
+    ? isSignUp ? 'ساخت حساب کاربری با ایمیل' : 'ورود با ایمیل'
+    : isSignUp ? 'ساخت حساب کاربری با موبایل' : 'ورود با شماره موبایل';
 
-  const description = otpSent
-    ? 'کد یک‌بارمصرف به شماره موبایل شما پیامک شده است.'
-    : isSignUp
-      ? 'شماره موبایل را وارد کنید؛ ایمیل اختیاری است.'
-      : 'برای ورود، کد یک‌بارمصرف به شماره موبایل تأییدشدهٔ شما پیامک می‌شود.';
+  const description = useEmailAuth
+    ? isSignUp
+      ? 'برای ساخت حساب، ایمیل و یک گذرواژه وارد کنید.'
+      : 'با ایمیل و گذرواژهٔ حساب خود وارد شوید.'
+    : otpSent
+      ? 'کد یک‌بارمصرف به شماره موبایل شما پیامک شده است.'
+      : isSignUp
+        ? 'شماره موبایل را وارد کنید؛ ایمیل اختیاری است.'
+        : 'برای ورود، کد یک‌بارمصرف به شماره موبایل تأییدشدهٔ شما پیامک می‌شود.';
 
   return (
     <section
@@ -235,7 +257,7 @@ export default function SMSAuthPanel({
         {description}
       </p>
 
-      {authError && (
+      {(useEmailAuth ? emailAuthError : authError) && (
         <div
           role="alert"
           style={{
@@ -248,10 +270,10 @@ export default function SMSAuthPanel({
             textAlign: 'right',
           }}
         >
-          {authError}
+          {useEmailAuth ? emailAuthError : authError}
         </div>
       )}
-      {authMessage && (
+      {(useEmailAuth ? emailAuthMessage : authMessage) && (
         <div
           role="status"
           style={{
@@ -264,15 +286,79 @@ export default function SMSAuthPanel({
             textAlign: 'right',
           }}
         >
-          {authMessage}
+          {useEmailAuth ? emailAuthMessage : authMessage}
         </div>
       )}
 
-      <form
-        onSubmit={otpSent ? handleVerifyPhoneOtp : handleRequestPhoneOtp}
-        style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-      >
-        {!otpSent && (
+      {useEmailAuth ? (
+        <form
+          onSubmit={isSignUp ? onEmailSignUp : onEmailSignIn}
+          style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+        >
+          <label htmlFor="email-auth-email" style={{ fontSize: 14, color: '#334155' }}>ایمیل</label>
+          <input
+            id="email-auth-email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            disabled={authLoading}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{
+              width: '100%',
+              padding: 10,
+              fontSize: 15,
+              border: '1px solid #cbd5e1',
+              borderRadius: 8,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          <label htmlFor="email-auth-password" style={{ fontSize: 14, color: '#334155' }}>گذرواژه</label>
+          <input
+            id="email-auth-password"
+            type="password"
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}
+            minLength={6}
+            required
+            value={password}
+            disabled={authLoading}
+            onChange={(e) => setPassword(e.target.value)}
+            style={{
+              width: '100%',
+              padding: 10,
+              fontSize: 15,
+              border: '1px solid #cbd5e1',
+              borderRadius: 8,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          <button
+            type="submit"
+            disabled={authLoading}
+            style={{
+              width: '100%',
+              padding: 10,
+              fontSize: 15,
+              fontWeight: 600,
+              color: '#fff',
+              background: authLoading ? '#94a3b8' : '#28645a',
+              border: 'none',
+              borderRadius: 8,
+              cursor: authLoading ? 'not-allowed' : 'pointer',
+              opacity: authLoading ? 0.7 : 1,
+            }}
+          >
+            {authLoading ? 'لطفاً صبر کنید…' : isSignUp ? 'ثبت‌نام با ایمیل' : 'ورود با ایمیل'}
+          </button>
+        </form>
+      ) : (
+        <form
+          onSubmit={otpSent ? handleVerifyPhoneOtp : handleRequestPhoneOtp}
+          style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+        >
+          {!otpSent && (
           <>
             <label
               htmlFor="sms-auth-phone"
@@ -292,7 +378,7 @@ export default function SMSAuthPanel({
               autoComplete="tel"
               required
               value={phone}
-              disabled={loading}
+              disabled={loading || authLoading}
               onChange={(e) => setPhone(e.target.value)}
               style={{
                 width: '100%',
@@ -321,9 +407,9 @@ export default function SMSAuthPanel({
                   id="sms-auth-contact-email"
                   type="email"
                   autoComplete="email"
-                  value={email}
+                  value={contactEmail}
                   disabled={loading}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setContactEmail(e.target.value)}
                   style={{
                     width: '100%',
                     padding: 10,
@@ -378,7 +464,7 @@ export default function SMSAuthPanel({
             </div>
           </>
         )}
-        <button
+          <button
           type="submit"
           disabled={loading}
           style={{
@@ -390,7 +476,7 @@ export default function SMSAuthPanel({
             background: loading ? '#94a3b8' : '#28645a',
             border: 'none',
             borderRadius: 8,
-            cursor: loading ? 'not-allowed' : 'pointer',
+            cursor: loading || authLoading ? 'not-allowed' : 'pointer',
             opacity: loading ? 0.7 : 1,
           }}
         >
@@ -401,10 +487,11 @@ export default function SMSAuthPanel({
                 ? 'تأیید کد و ساخت حساب'
                 : 'تأیید کد و ورود'
               : 'ارسال کد تأیید'}
-        </button>
-      </form>
+          </button>
+        </form>
+      )}
 
-      {otpSent && (
+      {!useEmailAuth && otpSent && (
         <button
           type="button"
           disabled={resendDisabled || loading}
@@ -430,7 +517,7 @@ export default function SMSAuthPanel({
       {!otpSent && (
         <button
           type="button"
-          disabled={loading}
+          disabled={loading || authLoading}
           onClick={handleSwitchMode}
           style={{
             width: '100%',
@@ -441,17 +528,20 @@ export default function SMSAuthPanel({
             background: 'transparent',
             border: 'none',
             borderRadius: 8,
-            cursor: loading ? 'not-allowed' : 'pointer',
+            cursor: loading || authLoading ? 'not-allowed' : 'pointer',
           }}
         >
-          {isSignUp ? 'حساب دارید؟ ورود با موبایل' : 'حساب ندارید؟ ثبت‌نام با موبایل'}
+          {isSignUp
+            ? `حساب دارید؟ ورود با ${useEmailAuth ? 'ایمیل' : 'موبایل'}`
+            : `حساب ندارید؟ ثبت‌نام با ${useEmailAuth ? 'ایمیل' : 'موبایل'}`}
         </button>
       )}
 
+      {!otpSent && (
       <button
         type="button"
-        disabled={loading || otpSent}
-        onClick={handleSwitchToLegacy}
+        disabled={loading || authLoading}
+        onClick={useEmailAuth ? handleSwitchToPhone : handleSwitchToEmail}
         style={{
           width: '100%',
           marginTop: 8,
@@ -461,11 +551,14 @@ export default function SMSAuthPanel({
           background: 'transparent',
           border: '1px solid #cbd5e1',
           borderRadius: 8,
-          cursor: loading || otpSent ? 'not-allowed' : 'pointer',
+          cursor: loading || authLoading ? 'not-allowed' : 'pointer',
         }}
       >
-        ورود قدیمی با ایمیل
+        {useEmailAuth
+          ? isSignUp ? 'ثبت‌نام با شماره موبایل' : 'ورود با شماره موبایل'
+          : isSignUp ? 'ثبت‌نام با ایمیل' : 'ورود با ایمیل'}
       </button>
+      )}
     </section>
   );
 }

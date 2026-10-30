@@ -967,6 +967,19 @@ export default function App() {
     return (
       <SMSAuthPanel
         isSignUp={isSignUp}
+        email={email}
+        setEmail={setEmail}
+        password={password}
+        setPassword={setPassword}
+        authLoading={authLoading}
+        authError={authError}
+        authMessage={authMessage}
+        onEmailSignIn={handleSignIn}
+        onEmailSignUp={handleSignUp}
+        onClearAuthMessages={() => {
+          setAuthError('');
+          setAuthMessage('');
+        }}
         onSignInToggle={() => {
           setIsSignUp((current) => !current);
           setAuthError('');
