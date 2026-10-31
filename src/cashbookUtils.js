@@ -16,7 +16,7 @@ const toPersianDigits = (value) => String(value).replace(/\d/g, (digit) =>
 );
 
 export const normalizeCardNumber = (value) => {
-  const normalized = String(value || '')
+  const normalized = String(value ?? '')
     .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
     .replace(/[٠-٩]/g, (digit) => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit))
     .replace(/[\s-]/g, '');
@@ -24,12 +24,12 @@ export const normalizeCardNumber = (value) => {
 };
 
 export const maskCardNumber = (value) => {
-  const digits = String(value || '').replace(/\D/g, '');
+  const digits = String(value ?? '').replace(/\D/g, '');
   return digits.length === 16 ? `•••• •••• •••• ${toPersianDigits(digits.slice(-4))}` : '';
 };
 
 export const parseJalaliDate = (value) => {
-  const normalized = String(value || '')
+  const normalized = String(value ?? '')
     .trim()
     .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
     .replace(/[٠-٩]/g, (digit) => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit))

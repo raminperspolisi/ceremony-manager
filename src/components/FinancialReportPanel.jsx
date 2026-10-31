@@ -1,6 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { readTable, updateRows } from '../offlineSync';
 import FormattedNumberInput from './FormattedNumberInput';
+import { getInvoicePaymentStatus } from '../cashbookUtils';
+import {
+  calculateInvoiceItemsTotal,
+  getInvoiceItems,
+  getInvoiceItemDetails,
+  summarizeInvoiceRevenue,
+} from '../financialReportUtils';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fa-IR');
 const toPersianDigits = (value) => String(value).replace(/[0-9٠-٩]/g, (digit) => {
@@ -13,6 +20,7 @@ const toPersianDigits = (value) => String(value).replace(/[0-9٠-٩]/g, (digit) 
 export default function FinancialReportPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   const [newItemTitle, setNewItemTitle] = useState('');
@@ -20,11 +28,26 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
   const [newItemQty, setNewItemQty] = useState(1);
   const [newItemPrice, setNewItemPrice] = useState('');
 
-  useEffect(() => {
-    fetchFinancialData();
-    window.addEventListener('offline-data-updated', fetchFinancialData);
-    return () => window.removeEventListener('offline-data-updated', fetchFinancialData);
+  const fetchFinancialData = useCallback(async () => {
+    const { data, error } = await readTable('invoices', { orderBy: 'created_at', ascending: true });
+
+    if (error) {
+      setLoadError(`بارگذاری فاکتورهای مالی ناموفق بود: ${error.message}`);
+    } else {
+      setInvoices(data || []);
+      setLoadError('');
+    }
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    const initialLoad = window.setTimeout(() => { void fetchFinancialData(); }, 0);
+    window.addEventListener('offline-data-updated', fetchFinancialData);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.removeEventListener('offline-data-updated', fetchFinancialData);
+    };
+  }, [fetchFinancialData]);
 
   useEffect(() => {
     const handleAppEscape = (event) => {
@@ -36,24 +59,11 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     return () => window.removeEventListener('app-escape', handleAppEscape);
   }, [selectedInvoice]);
 
-  async function fetchFinancialData() {
-    setLoading(true);
-    const { data, error } = await readTable('invoices', { orderBy: 'created_at', ascending: true });
-      
-    if (data) {
-      setInvoices(data);
-    }
-    if (error) {
-      console.error("Error fetching financial invoices:", error.message);
-    }
-    setLoading(false);
-  }
-
   async function handleAddItem(e) {
     e.preventDefault();
     if (!newItemTitle.trim()) return;
 
-    const currentItems = selectedInvoice.items_data || selectedInvoice.items_json || selectedInvoice.items || [];
+    const currentItems = getInvoiceItems(selectedInvoice);
     const updatedItems = [
       ...currentItems,
       {
@@ -64,72 +74,55 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
       }
     ];
 
-    let newTotal = 0;
-    updatedItems.forEach(it => {
-      const q = Number(it.qty || 1);
-      const p = Number(it.unit_price || it.p1 || it.price || 0);
-      newTotal += p * q;
-    });
-
-    const { error } = await updateRows('invoices', {
-        items_data: updatedItems,
-        total_price: newTotal 
-      }, [{ column: 'id', operator: 'eq', value: selectedInvoice.id }]);
-
-    if (error) {
-      alert("خطا در ذخیره‌سازی آیتم جدید: " + error.message);
-      return;
+    const saved = await saveInvoiceItems(updatedItems);
+    if (saved) {
+      setNewItemTitle('');
+      setNewItemQty(1);
+      setNewItemPrice('');
     }
-
-    const updatedInvoiceObj = {
-      ...selectedInvoice,
-      items_data: updatedItems,
-      total_price: newTotal
-    };
-
-    setSelectedInvoice(updatedInvoiceObj);
-    setInvoices(invoices.map(inv => inv.id === selectedInvoice.id ? updatedInvoiceObj : inv));
-
-    setNewItemTitle('');
-    setNewItemQty(1);
-    setNewItemPrice('');
   }
 
   async function handleDeleteItem(indexToRemove) {
-    const currentItems = selectedInvoice.items_data || selectedInvoice.items_json || selectedInvoice.items || [];
+    const currentItems = getInvoiceItems(selectedInvoice);
     const updatedItems = currentItems.filter((_, idx) => idx !== indexToRemove);
+    await saveInvoiceItems(updatedItems);
+  }
 
-    let newTotal = 0;
-    updatedItems.forEach(it => {
-      const q = Number(it.qty || 1);
-      const p = Number(it.unit_price || it.p1 || it.price || 0);
-      newTotal += p * q;
-    });
+  async function saveInvoiceItems(updatedItems) {
+    const newTotal = calculateInvoiceItemsTotal(updatedItems);
+    const paidAmount = Number(selectedInvoice.paid_amount || 0);
+    if (newTotal < paidAmount) {
+      alert('مبلغ کل فاکتور نمی‌تواند از مبلغی که تاکنون دریافت شده کمتر باشد.');
+      return false;
+    }
 
     const { error } = await updateRows('invoices', {
-        items_data: updatedItems,
-        total_price: newTotal 
-      }, [{ column: 'id', operator: 'eq', value: selectedInvoice.id }]);
+      items_data: updatedItems,
+      total_price: newTotal,
+      payment_status: getInvoicePaymentStatus(paidAmount, newTotal),
+    }, [{ column: 'id', operator: 'eq', value: selectedInvoice.id }]);
 
     if (error) {
-      alert("خطا در حذف آیتم: " + error.message);
-      return;
+      alert(`خطا در ذخیره‌سازی اقلام فاکتور: ${error.message}`);
+      return false;
     }
 
     const updatedInvoiceObj = {
       ...selectedInvoice,
       items_data: updatedItems,
-      total_price: newTotal
+      total_price: newTotal,
+      payment_status: getInvoicePaymentStatus(paidAmount, newTotal),
     };
 
     setSelectedInvoice(updatedInvoiceObj);
     setInvoices(invoices.map(inv => inv.id === selectedInvoice.id ? updatedInvoiceObj : inv));
+    return true;
   }
 
   function handlePrintInvoice() {
     if (!selectedInvoice) return;
 
-    const items = selectedInvoice.items_data || selectedInvoice.items_json || selectedInvoice.items || [];
+    const items = getInvoiceItems(selectedInvoice);
     const invoiceNumber = selectedInvoice.invoiceNumber || '---';
     const customerName = selectedInvoice.customer_name || 'مشتری محترم';
     const customerPhone = toPersianDigits(selectedInvoice.customer_phone || selectedInvoice.phone || 'ثبت نشده');
@@ -249,17 +242,17 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     printWindow.document.close();
   }
 
-  let totalRevenue = 0;
-  let totalSaleProfit = 0;
-  let totalRentRevenue = 0;
+  const revenueSummary = summarizeInvoiceRevenue(invoices);
+  const totalRevenue = revenueSummary.totalRevenue;
+  const totalSaleRevenue = revenueSummary.saleRevenue;
+  const totalRentRevenue = revenueSummary.rentRevenue;
+  const unclassifiedRevenue = revenueSummary.unclassifiedRevenue;
 
   const ceremonyStats = {};
   const productPerformance = {};
 
   invoices.forEach((inv, index) => {
     const invTotal = Number(inv.total_price || inv.total_amount || 0);
-    totalRevenue += invTotal;
-
     const customerName = inv.customer_name || `مشتری #${formatNumber(index + 1)}`;
     if (!ceremonyStats[customerName]) {
       ceremonyStats[customerName] = { total: 0, count: 0 };
@@ -267,46 +260,25 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     ceremonyStats[customerName].total += invTotal;
     ceremonyStats[customerName].count += 1;
 
-    const items = inv.items_data || inv.items_json || inv.items || [];
+    const items = getInvoiceItems(inv);
     if (Array.isArray(items) && items.length > 0) {
-      let invRent = 0;
-      let invSale = 0;
-
       items.forEach(item => {
-        const qty = Number(item.qty || item.requestedQuantity || 1);
-        const price = Number(item.unit_price || item.p1 || item.price || 0);
-        const itemType = String(item.item_type || item.type || '').trim().toLowerCase();
+        const { category, quantity: qty, total: itemTotal } = getInvoiceItemDetails(item);
         const itemName = String(item.title || item.name || 'محصول ناشناخته').trim();
-        
-        const itemTotal = price * qty;
-        const isSale = itemType === 'sale' || itemType === 'فروش' || itemType === 'فروشی' || itemName.includes('فروش');
-
-        if (isSale) {
-          invSale += itemTotal > 0 ? itemTotal : price;
-        } else {
-          invRent += itemTotal > 0 ? itemTotal : price;
-        }
 
         if (!productPerformance[itemName]) {
           productPerformance[itemName] = { rentalCount: 0, saleCount: 0, rentalRevenue: 0, saleRevenue: 0 };
         }
-        if (isSale) {
+        if (category === 'sale') {
           productPerformance[itemName].saleCount += qty;
           productPerformance[itemName].saleRevenue += itemTotal;
-        } else {
+        } else if (category === 'rent') {
           productPerformance[itemName].rentalCount += qty;
           productPerformance[itemName].rentalRevenue += itemTotal;
         }
       });
-
-      totalRentRevenue += invRent;
-      totalSaleProfit += invSale;
-    } else {
-      totalRentRevenue += invTotal;
     }
   });
-
-  const totalNetProfit = totalSaleProfit + totalRentRevenue;
 
   const topCeremonies = Object.entries(ceremonyStats)
     .map(([name, data]) => ({ name, ...data }))
@@ -331,6 +303,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
   return (
     <div style={{ background: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', fontFamily: 'Tahoma, sans-serif', direction: 'rtl' }}>
       <h3 style={{ margin: '0 0 15px 0', color: '#1e293b', fontSize: '16px' }}>گزارش مالی و تحلیل پیشرفته تشریفات</h3>
+      {loadError && <p role="alert" style={{ color: '#b91c1c' }}>{loadError}</p>}
 
       <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '15px', borderRadius: '8px', marginBottom: '25px' }}>
         <h4 style={{ margin: '0 0 12px 0', color: '#0f172a', fontSize: '14px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
@@ -339,7 +312,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '15px' }}>
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#0369a1', marginBottom: '8px' }}>🏆 پرسودترین مراسم‌ها و مشتریان</div>
+            <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#0369a1', marginBottom: '8px' }}>🏆 بالاترین مبلغ فاکتور به تفکیک مشتری</div>
             {topCeremonies.length === 0 ? (
               <div style={{ fontSize: '11px', color: '#94a3b8' }}>داده‌ای ثبت نشده است.</div>
             ) : (
@@ -391,14 +364,17 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
 
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '15px', borderRadius: '6px' }}>
           <div style={{ fontSize: '12px', color: '#1e40af', marginBottom: '8px' }}>درآمد اقلام فروشی</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1d4ed8' }}>{formatNumber(totalSaleProfit)} تومان</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1d4ed8' }}>{formatNumber(totalSaleRevenue)} تومان</div>
         </div>
 
         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '15px', borderRadius: '6px' }}>
-          <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '8px' }}>مجموع سود خالص کل</div>
-          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#dc2626' }}>{formatNumber(totalNetProfit)} تومان</div>
+          <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '8px' }}>درآمد بدون دسته‌بندی</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#dc2626' }}>{formatNumber(unclassifiedRevenue)} تومان</div>
         </div>
       </div>
+      <p style={{ margin: '-12px 0 20px', color: '#64748b', fontSize: '11px' }}>
+        این ارقام درآمد فاکتور هستند، نه سود خالص؛ هزینه‌های جاری، بهای تمام‌شدهٔ اجاره و مبالغ وصول‌شده در این جمع کسر یا محاسبه نشده‌اند.
+      </p>
 
       <div style={{ overflowX: 'auto' }}>
         <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>💡 لیست فاکتورهای صادر شده:</div>
@@ -423,7 +399,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
               </tr>
             ) : (
               invoices.map((inv, idx) => {
-                const invoiceNumber = 100 + idx;
+                const invoiceNumber = inv.invoice_number || inv.id;
                 return (
                   <tr 
                     key={inv.id || idx} 

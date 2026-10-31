@@ -1600,6 +1600,7 @@ export default function App() {
                 {activeSection === "inventory" && (
                   <InventoryPanel
                     items={inventory}
+                    organizationId={activeOrganizationId}
                     refresh={fetchData}
                     onItemSelected={handleSelectItem}
                     onItemUpdated={handleItemUpdated}

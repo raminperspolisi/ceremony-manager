@@ -15,6 +15,12 @@ const TENANT_TABLES = new Set([
   'financial_accounts',
   'cash_transactions',
   'bot_orders',
+  'inventory_warehouses',
+  'inventory_suppliers',
+  'inventory_stock_movements',
+  'inventory_purchase_receipts',
+  'inventory_transfers',
+  'inventory_reservations',
 ]);
 
 let databasePromise;
@@ -137,32 +143,59 @@ const localizeRows = async (userId, table, rows) => {
     mappings.filter((mapping) => mapping.table === table)
       .map((mapping) => [String(mapping.serverId), mapping.localId]),
   );
-  const quotationLocalIdByServerId = new Map(
-    mappings.filter((mapping) => mapping.table === 'quotations')
-      .map((mapping) => [String(mapping.serverId), mapping.localId]),
-  );
-  const accountLocalIdByServerId = new Map(
-    mappings.filter((mapping) => mapping.table === 'financial_accounts')
-      .map((mapping) => [String(mapping.serverId), mapping.localId]),
-  );
-  const invoiceLocalIdByServerId = new Map(
-    mappings.filter((mapping) => mapping.table === 'invoices')
-      .map((mapping) => [String(mapping.serverId), mapping.localId]),
-  );
+  const localIdByTableAndServerId = new Map(mappings.map((mapping) => [
+    `${mapping.table}:${String(mapping.serverId)}`,
+    mapping.localId,
+  ]));
+  const referenceTables = {
+    invoices: { quotation_id: 'quotations' },
+    cash_transactions: {
+      account_id: 'financial_accounts',
+      transfer_to_account_id: 'financial_accounts',
+      invoice_id: 'invoices',
+    },
+    inventory_stock_movements: {
+      inventory_id: 'inventory',
+      warehouse_id: 'inventory_warehouses',
+      reservation_id: 'inventory_reservations',
+    },
+    inventory_purchase_receipts: {
+      inventory_id: 'inventory',
+      warehouse_id: 'inventory_warehouses',
+      supplier_id: 'inventory_suppliers',
+    },
+    inventory_transfers: {
+      inventory_id: 'inventory',
+      from_warehouse_id: 'inventory_warehouses',
+      to_warehouse_id: 'inventory_warehouses',
+    },
+    inventory_reservations: {
+      inventory_id: 'inventory',
+      warehouse_id: 'inventory_warehouses',
+    },
+  };
   return rows.map((row) => {
     const localId = localIdByServerId.get(String(row.id));
     let localizedRow = localId === undefined ? row : { ...row, id: localId };
-    if (table === 'invoices' && row.quotation_id !== undefined && row.quotation_id !== null) {
-      const localQuotationId = quotationLocalIdByServerId.get(String(row.quotation_id));
-      if (localQuotationId !== undefined) localizedRow = { ...localizedRow, quotation_id: localQuotationId };
+    const itemField = table === 'quotations' ? 'items_json' : table === 'invoices' ? 'items_data' : null;
+    if (itemField && Array.isArray(row[itemField])) {
+      localizedRow = {
+        ...localizedRow,
+        [itemField]: row[itemField].map((item) => {
+          if (item.inventory_id === undefined || item.inventory_id === null) return item;
+          const localInventoryId = localIdByTableAndServerId.get(`inventory:${String(item.inventory_id)}`);
+          return localInventoryId === undefined
+            ? item
+            : { ...item, inventory_id: localInventoryId };
+        }),
+      };
     }
-    if (table === 'cash_transactions') {
-      const localAccountId = accountLocalIdByServerId.get(String(row.account_id));
-      const localDestinationId = accountLocalIdByServerId.get(String(row.transfer_to_account_id));
-      const localInvoiceId = invoiceLocalIdByServerId.get(String(row.invoice_id));
-      if (localAccountId !== undefined) localizedRow = { ...localizedRow, account_id: localAccountId };
-      if (localDestinationId !== undefined) localizedRow = { ...localizedRow, transfer_to_account_id: localDestinationId };
-      if (localInvoiceId !== undefined) localizedRow = { ...localizedRow, invoice_id: localInvoiceId };
+    for (const [column, referencedTable] of Object.entries(referenceTables[table] || {})) {
+      if (row[column] === undefined || row[column] === null) continue;
+      const localizedReferenceId = localIdByTableAndServerId.get(`${referencedTable}:${String(row[column])}`);
+      if (localizedReferenceId !== undefined) {
+        localizedRow = { ...localizedRow, [column]: localizedReferenceId };
+      }
     }
     return localizedRow;
   });
@@ -299,16 +332,31 @@ export async function readTable(table, options = {}) {
     const userId = await getUserId();
     const organizationId = organizationIdForScope(userId);
     if (navigator.onLine) {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
-      let result;
-      try {
-        result = await buildQuery(table, options, organizationId).abortSignal(controller.signal);
-      } catch (error) {
-        result = { data: null, error };
-      } finally {
-        window.clearTimeout(timeoutId);
+      const rows = [];
+      const requestedLimit = options.limit ?? Number.POSITIVE_INFINITY;
+      let result = { data: [], error: null };
+      while (rows.length < requestedLimit) {
+        const pageLimit = Math.min(CACHE_PAGE_SIZE, requestedLimit - rows.length);
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+        try {
+          result = await buildQuery(table, {
+            ...options,
+            limit: pageLimit,
+            offset: (options.offset || 0) + rows.length,
+          }, organizationId).abortSignal(controller.signal);
+        } catch (error) {
+          result = { data: null, error };
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
+        if (result.error) break;
+        const page = result.data || [];
+        rows.push(...page);
+        if (page.length < pageLimit) break;
       }
+
+      if (!result.error) result.data = rows;
       const { data, error } = result;
       if (!error) {
         await cacheRows(userId, table, data || []);
@@ -354,6 +402,16 @@ const rewriteReferences = async (userId, table, value) => {
       rewritten[key] = key === 'quotation_id' ? String(serverId) : serverId;
     }
   }
+  const itemField = table === 'quotations' ? 'items_json' : table === 'invoices' ? 'items_data' : null;
+  if (itemField && Array.isArray(rewritten[itemField])) {
+    rewritten[itemField] = await Promise.all(rewritten[itemField].map(async (item) => {
+      if (item.inventory_id === undefined || item.inventory_id === null) return item;
+      return {
+        ...item,
+        inventory_id: await resolveServerId(userId, 'inventory', item.inventory_id),
+      };
+    }));
+  }
   return rewritten;
 };
 
@@ -362,6 +420,12 @@ const tableForReference = (key, fallback) => {
   if (key === 'quotation_id') return 'quotations';
   if (key === 'account_id' || key === 'transfer_to_account_id') return 'financial_accounts';
   if (key === 'invoice_id') return 'invoices';
+  if (key === 'inventory_id') return 'inventory';
+  if (key === 'warehouse_id' || key === 'from_warehouse_id' || key === 'to_warehouse_id') {
+    return 'inventory_warehouses';
+  }
+  if (key === 'supplier_id') return 'inventory_suppliers';
+  if (key === 'reservation_id') return 'inventory_reservations';
   return fallback;
 };
 
@@ -712,6 +776,12 @@ export async function warmOfflineCache() {
     'cash_transactions',
     'bot_catalog_items',
     'bot_orders',
+    'inventory_warehouses',
+    'inventory_suppliers',
+    'inventory_stock_movements',
+    'inventory_purchase_receipts',
+    'inventory_transfers',
+    'inventory_reservations',
   ];
   const failures = [];
   await Promise.all(tables.map(async (table) => {

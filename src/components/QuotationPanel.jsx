@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import { deleteRows, insertRows, readTable } from '../offlineSync';
+import { formatPersianDate } from '../dateUtils';
 import FormattedNumberInput from './FormattedNumberInput';
+import PersianDateInput from './PersianDateInput';
 import { convertQuotationToInvoice, deleteSelectedDocuments } from '../quotationInvoice';
 
 const win95Style = {
@@ -62,6 +64,13 @@ const win95Style = {
     color: '#334155'
   }
 };
+
+const hasInventoryReference = (value) => (
+  value !== undefined
+  && value !== null
+  && String(value).trim() !== ''
+  && !String(value).startsWith('restored-')
+);
 
 export default function QuotationPanel({ selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const items = selectedItems || [];
@@ -194,10 +203,26 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
       return; 
     }
 
+    const rentalItemsWithoutDates = items.filter((item) => {
+      const inventoryReference = item.inventory_id || item.id;
+      const isInventoryItem = hasInventoryReference(inventoryReference);
+      const isRent = ['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type);
+      return isInventoryItem
+        && isRent
+        && (!item.rental_checkout_date
+          || !item.rental_return_date
+          || item.rental_return_date < item.rental_checkout_date);
+    });
+    if (rentalItemsWithoutDates.length) {
+      alert('برای هر کالای اجاره‌ای از انبار، تاریخ تحویل و مهلت عودت معتبر را وارد کنید.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const itemsPayload = items.map(i => {
         const qty = getQuantity(i.requestedQuantity);
+        const inventoryReference = i.inventory_id || i.id;
         const unitPrice = Number(i.price_level1) || 0;
         const unitCost = Number(i.base_cost) || 0;
         const lineTotal = unitPrice * qty;
@@ -206,6 +231,9 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
         return {
           title: i.title,
+          ...(hasInventoryReference(inventoryReference)
+            ? { inventory_id: inventoryReference }
+            : {}),
           qty: qty,
           p1: Number(i.price_level1) || 0,
           p2: Number(i.price_level2) || 0,
@@ -215,7 +243,13 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
           unit_price: unitPrice,
           total_price: lineTotal,
           total_cost: lineCost,
-          profit: lineTotal - lineCost
+          profit: lineTotal - lineCost,
+          ...(typeNormalized === 'rent'
+            ? {
+                rental_checkout_date: i.rental_checkout_date || null,
+                rental_return_date: i.rental_return_date || null,
+              }
+            : {}),
         };
       });
 
@@ -275,6 +309,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                     <th>نام کالا / خدمت</th>
                     <th style="width: 80px;">نوع کالا</th>
                     <th style="width: 65px;">تعداد</th>
+                    <th>تحویل / مهلت عودت</th>
                     <th>درجه یک (تومان)</th>
                     <th>درجه دو (تومان)</th>
                     <th>درجه سه (تومان)</th>
@@ -287,6 +322,9 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                       <td style="text-align: right; font-weight: 500;">${item.title}</td>
                       <td>${(item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای') ? 'اجاره‌ای' : 'فروشی'}</td>
                       <td>${getQuantity(item.requestedQuantity)}</td>
+                      <td>${['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type)
+                        ? `${formatPersianDate(item.rental_checkout_date)} تا ${formatPersianDate(item.rental_return_date)}`
+                        : '—'}</td>
                       <td>${Number(item.price_level1 || 0).toLocaleString('fa-IR')}</td>
                       <td>${Number(item.price_level2 || 0).toLocaleString('fa-IR')}</td>
                       <td>${Number(item.price_level3 || 0).toLocaleString('fa-IR')}</td>
@@ -364,6 +402,14 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     }
   };
 
+  const handleQuotationItemChange = (itemId, field, value) => {
+    if (setSelectedItems) {
+      setSelectedItems(items.map((item) => (
+        item.id === itemId ? { ...item, [field]: value } : item
+      )));
+    }
+  };
+
   const handleRemoveItem = (itemId) => {
     if (setSelectedItems) {
       setSelectedItems(items.filter(item => item.id !== itemId));
@@ -374,13 +420,16 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     const itemsData = inv.items_json || inv.items_data || [];
     const restoredItems = itemsData.map((item, index) => ({
       id: item.id || `restored-${index}-${Date.now()}`, 
+      inventory_id: item.inventory_id,
       title: item.title, 
       requestedQuantity: item.qty, 
       price_level1: item.p1 || item.unit_price || 0, 
       price_level2: item.p2 || 0, 
       price_level3: item.p3 || 0, 
       base_cost: item.cost || 0,
-      item_type: item.item_type || 'sale'
+      item_type: item.item_type || 'sale',
+      rental_checkout_date: item.rental_checkout_date || '',
+      rental_return_date: item.rental_return_date || '',
     }));
     
     if (setSelectedItems) {
@@ -531,6 +580,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                 <th style={win95Style.tableHeader}>نام کالا / خدمت</th>
                 <th style={{ ...win95Style.tableHeader, textAlign: 'center', width: '90px' }}>نوع کالا</th>
                 <th style={{ ...win95Style.tableHeader, textAlign: 'center', width: '85px' }}>تعداد</th>
+                <th style={{ ...win95Style.tableHeader, textAlign: 'center' }}>بازهٔ اجاره</th>
                 <th style={win95Style.tableHeader}>درجه ۱ (تومان)</th>
                 <th style={win95Style.tableHeader}>درجه ۲ (تومان)</th>
                 <th style={win95Style.tableHeader}>درجه ۳ (تومان)</th>
@@ -540,7 +590,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
             <tbody>
               {items.length === 0 ? (
                 <tr className="quotation-items-empty-row">
-                  <td colSpan={showBuyingPrice ? 9 : 8} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                  <td colSpan={showBuyingPrice ? 10 : 9} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
                     هیچ کالایی به پیش‌فاکتور اضافه نشده است. (کالاهای مورد نظر را از بخش انبار انتخاب کنید)
                   </td>
                 </tr>
@@ -575,6 +625,27 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                         onValueChange={(value) => handleQuantityChange(item.id, value)}
                         style={{ ...win95Style.input, width: '100%', textAlign: 'center' }} 
                       />
+                    </td>
+                    <td data-label="بازهٔ اجاره" style={{ ...win95Style.tableCell, minWidth: '180px' }}>
+                      {['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type)
+                        && hasInventoryReference(item.inventory_id || item.id) ? (
+                        <div style={{ display: 'grid', gap: '4px' }}>
+                          <label>
+                            <span>تحویل </span>
+                            <PersianDateInput
+                              value={item.rental_checkout_date || ''}
+                              onChange={(value) => handleQuotationItemChange(item.id, 'rental_checkout_date', value)}
+                            />
+                          </label>
+                          <label>
+                            <span>عودت </span>
+                            <PersianDateInput
+                              value={item.rental_return_date || ''}
+                              onChange={(value) => handleQuotationItemChange(item.id, 'rental_return_date', value)}
+                            />
+                          </label>
+                        </div>
+                      ) : '—'}
                     </td>
                     <td data-label="درجه ۱ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
                       {formatDisplay(item.price_level1)}

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { deleteRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
+import PersianDateInput from './PersianDateInput';
 import { updateOfficialInvoice } from '../quotationInvoice';
 import { getInvoicePaymentStatus } from '../cashbookUtils';
+import { formatPersianDate } from '../dateUtils';
 
 // مقادیر مجاز وضعیت پرداخت
 const PAYMENT_STATUSES = [
@@ -29,6 +31,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customers, setCustomers] = useState([]);
+  const [inventoryItems, setInventoryItems] = useState([]);
+  const [inventoryLoadError, setInventoryLoadError] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
   const [isCustomerListOpen, setIsCustomerListOpen] = useState(false);
   const [customerLoadError, setCustomerLoadError] = useState('');
@@ -55,10 +59,25 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       setCustomers(data || []);
       setCustomerLoadError('');
     };
+    const fetchInventory = async () => {
+      const { data, error } = await readTable('inventory', {
+        columns: 'id, title, item_type',
+        orderBy: 'title',
+        ascending: true,
+      });
+      if (error) {
+        setInventoryLoadError(`بارگذاری کالاهای انبار ناموفق بود: ${error.message}`);
+        return;
+      }
+      setInventoryItems(data || []);
+      setInventoryLoadError('');
+    };
     fetchCustomers();
+    fetchInventory();
     const refreshData = () => {
       fetchOfficialInvoices();
       fetchCustomers();
+      fetchInventory();
     };
     window.addEventListener('offline-data-updated', refreshData);
     return () => window.removeEventListener('offline-data-updated', refreshData);
@@ -315,6 +334,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       return {
         ...item,
         item_type: item.item_type || 'sale',
+        inventory_id: item.inventory_id || '',
         price_level: lvl,
         p1: Number(item.p1 || item.price || 0),
         p2: Number(item.p2 || 0),
@@ -331,6 +351,19 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     const updated = [...editableItems];
     updated[index][field] = value;
     setEditableItems(updated);
+  };
+
+  const handleInventoryLinkChange = (index, inventoryId) => {
+    const inventoryItem = inventoryItems.find((item) => String(item.id) === inventoryId);
+    setEditableItems((current) => current.map((item, itemIndex) => (
+      itemIndex === index
+        ? {
+            ...item,
+            inventory_id: inventoryId,
+            ...(inventoryItem ? { item_type: inventoryItem.item_type || 'sale' } : {}),
+          }
+        : item
+    )));
   };
 
   const handlePriceLevelChange = (index, level) => {
@@ -354,7 +387,19 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const handleAddEditableItem = () => {
     setEditableItems([
       ...editableItems,
-      { title: '', item_type: 'sale', price_level: '1', qty: 1, p1: '', p2: '', p3: '', base_cost: '' }
+      {
+        title: '',
+        item_type: 'sale',
+        inventory_id: '',
+        rental_checkout_date: '',
+        rental_return_date: '',
+        price_level: '1',
+        qty: 1,
+        p1: '',
+        p2: '',
+        p3: '',
+        base_cost: '',
+      }
     ]);
   };
 
@@ -370,7 +415,25 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       p3: Number(item.p3) || 0,
       base_cost: Number(item.base_cost) || 0,
       qty: Number(item.qty) || 1,
+      inventory_id: Number.isSafeInteger(Number(item.inventory_id)) && Number(item.inventory_id) > 0
+        ? Number(item.inventory_id)
+        : null,
     }));
+    const rentalItemsWithoutDates = normalizedItems.filter((item) => (
+      item.inventory_id
+      && item.item_type === 'rent'
+      && (!item.rental_checkout_date
+        || !item.rental_return_date
+        || item.rental_return_date < item.rental_checkout_date)
+    ));
+    if (rentalItemsWithoutDates.length) {
+      alert('برای هر کالای اجاره‌ای متصل به انبار، تاریخ تحویل و مهلت عودت معتبر را وارد کنید.');
+      return;
+    }
+    if (normalizedItems.some((item) => item.inventory_id) && !navigator.onLine) {
+      alert('برای ذخیرهٔ فاکتورهای متصل به موجودی، اتصال آنلاین لازم است.');
+      return;
+    }
     const newTotalPrice = normalizedItems.reduce((sum, item) => {
       const q = Number(item.qty || 1);
       const p = getActiveUnitPrice(item);
@@ -411,6 +474,9 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[character]));
     const safeLogoUrl = String(logoUrl).replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[character]));
+    const escapeHtml = (value) => String(value ?? '—').replace(/[&<>"']/g, (character) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[character]));
 
@@ -463,6 +529,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                 <th>نوع کالا</th>
                 <th>سطح قیمت</th>
                 <th>تعداد</th>
+                <th>تحویل</th>
+                <th>مهلت عودت</th>
                 <th>قیمت واحد (تومان)</th>
                 <th>مجموع (تومان)</th>
               </tr>
@@ -480,6 +548,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                     <td><span class="${isRent ? 'badge-rent' : 'badge-sale'}">${isRent ? 'اجاره‌ای' : 'فروشی'}</span></td>
                     <td>${levelText}</td>
                     <td>${formatDisplay(qty)}</td>
+                    <td>${isRent ? escapeHtml(formatPersianDate(item.rental_checkout_date)) : '—'}</td>
+                    <td>${isRent ? escapeHtml(formatPersianDate(item.rental_return_date)) : '—'}</td>
                     <td>${formatDisplay(price)}</td>
                     <td>${formatDisplay(qty * price)}</td>
                   </tr>
@@ -678,6 +748,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               <button type="button" className="invoice-details-close" onClick={handleCancelEdit} aria-label="بستن ویرایش فاکتور">×</button>
             </div>
 
+            {inventoryLoadError && <p className="inventory-ops-message error" role="alert">{inventoryLoadError}</p>}
+
             <div className="official-invoice-edit-grid">
               <label className="official-invoice-edit-field">
                 <span>نام مشتری</span>
@@ -759,6 +831,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                     <th>نوع کالا</th>
                     <th>سطح قیمت فعال</th>
                     <th>تعداد</th>
+                    <th>اتصال به انبار / بازهٔ اجاره</th>
                     <th>قیمت واحد فعال (تومان)</th>
                     <th style={{ textAlign: 'center' }}>عملیات</th>
                   </tr>
@@ -777,6 +850,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                       <td style={{ textAlign: 'center' }}>
                         <select
                           value={item.item_type || 'sale'}
+                          disabled={Boolean(item.inventory_id)}
                           onChange={(e) => handleItemChange(itemIdx, 'item_type', e.target.value)}
                           style={{ padding: '5px', fontSize: '12px' }}>
                           <option value="sale">فروشی</option>
@@ -800,6 +874,38 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                           onValueChange={(value) => handleItemChange(itemIdx, 'qty', Number(value))}
                           style={{ width: '60px', padding: '5px', fontSize: '12px', textAlign: 'center' }}
                         />
+                      </td>
+                      <td>
+                        <select
+                          value={item.inventory_id || ''}
+                          onChange={(event) => handleInventoryLinkChange(itemIdx, event.target.value)}
+                          style={{ width: '100%', padding: '5px', fontSize: '12px' }}
+                        >
+                          <option value="">خدمت / بدون کنترل موجودی</option>
+                          {inventoryItems.map((inventoryItem) => (
+                            <option key={inventoryItem.id} value={inventoryItem.id}>
+                              {inventoryItem.title} — {inventoryItem.item_type === 'rent' ? 'اجاره‌ای' : 'فروشی'}
+                            </option>
+                          ))}
+                        </select>
+                        {item.inventory_id && item.item_type === 'rent' && (
+                          <div style={{ display: 'grid', gap: '4px', marginTop: '5px' }}>
+                            <label>
+                              <span>تحویل </span>
+                              <PersianDateInput
+                                value={item.rental_checkout_date || ''}
+                                onChange={(value) => handleItemChange(itemIdx, 'rental_checkout_date', value)}
+                              />
+                            </label>
+                            <label>
+                              <span>مهلت عودت </span>
+                              <PersianDateInput
+                                value={item.rental_return_date || ''}
+                                onChange={(value) => handleItemChange(itemIdx, 'rental_return_date', value)}
+                              />
+                            </label>
+                          </div>
+                        )}
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <FormattedNumberInput
@@ -1010,7 +1116,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               {detailsItems.length ? (
                 <div className="invoice-details-items-wrap">
                   <table className="invoice-details-items">
-                    <thead><tr><th>قلم</th><th>نوع</th><th>تعداد</th><th>قیمت واحد</th><th>جمع</th></tr></thead>
+                    <thead><tr><th>قلم</th><th>نوع</th><th>تعداد</th><th>تحویل</th><th>مهلت عودت</th><th>قیمت واحد</th><th>جمع</th></tr></thead>
                     <tbody>{detailsItems.map((item, index) => {
                       const quantity = Number(item.qty || item.quantity || 1);
                       const price = getActiveUnitPrice(item);
@@ -1019,6 +1125,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                           <td>{item.title || item.item_name || item.name || 'قلم بدون نام'}</td>
                           <td>{item.item_type === 'rent' ? 'اجاره‌ای' : 'فروشی'}</td>
                           <td>{formatDisplay(quantity)}</td>
+                          <td>{formatPersianDate(item.rental_checkout_date)}</td>
+                          <td>{formatPersianDate(item.rental_return_date)}</td>
                           <td>{formatDisplay(price)} تومان</td>
                           <td>{formatDisplay(quantity * price)} تومان</td>
                         </tr>

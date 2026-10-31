@@ -148,8 +148,7 @@ export default function CashbookPanel() {
       accounts.find((account) => String(account.id) === String(transaction.account_id))?.account_name,
       invoices.find((invoice) => String(invoice.id) === String(transaction.invoice_id))?.customer_name,
       transaction.invoice_id,
-    ].some((value) => String(value || '').toLocaleLowerCase().includes(ledgerSearch.trim().toLocaleLowerCase())))
-  ));
+    ].some((value) => String(value ?? '').toLocaleLowerCase().includes(ledgerSearch.trim().toLocaleLowerCase())))  ));
 
   const handleAccountSubmit = async (event) => {
     event.preventDefault();

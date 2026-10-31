@@ -110,7 +110,7 @@ test('offline invoice inserts are queued and duplicate quotation syncs reconcile
   assert.equal(synchronizedQuotations.data[0].id, localQuotationId);
 });
 
-test('warmOfflineCache stores bot orders for offline access', async () => {
+test('warmOfflineCache stores bot orders and inventory operations for offline access', async () => {
   setOfflineUser('offline-sync-test-user');
   setOfflineOrganization('offline-sync-test-organization');
   globalThis.navigator.onLine = true;
@@ -132,11 +132,156 @@ test('warmOfflineCache stores bot orders for offline access', async () => {
 
   await warmOfflineCache();
   assert.ok(requestedTables.has('bot_orders'));
+  assert.ok(requestedTables.has('inventory_warehouses'));
+  assert.ok(requestedTables.has('inventory_stock_movements'));
+  assert.ok(requestedTables.has('inventory_reservations'));
 
   globalThis.navigator.onLine = false;
   const result = await readTable('bot_orders');
   assert.equal(result.offline, true);
   assert.deepEqual(result.data, [cachedOrder]);
+});
+
+test('offline stock movements remap warehouse IDs before synchronization', async () => {
+  setOfflineUser('offline-inventory-sync-test-user');
+  setOfflineOrganization('offline-inventory-sync-test-organization');
+  globalThis.navigator.onLine = false;
+  const warehouse = await insertRows('inventory_warehouses', [{ name: 'انبار دوم' }]);
+  const movement = await insertRows('inventory_stock_movements', [{
+    inventory_id: 17,
+    warehouse_id: warehouse.data[0].id,
+    movement_type: 'opening',
+    quantity_delta: 4,
+    source_type: 'manual',
+  }]);
+  assert.equal(warehouse.offline, true);
+  assert.equal(movement.offline, true);
+
+  const previousFetch = globalThis.fetch;
+  let movementPayload;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(input);
+    const table = url.pathname.split('/').pop();
+    const row = JSON.parse(init.body)[0];
+    if (table === 'inventory_warehouses') {
+      return new Response(JSON.stringify([{ ...row, id: 501 }]), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (table === 'inventory_stock_movements') {
+      movementPayload = row;
+      return new Response(JSON.stringify([{ ...row, id: 502 }]), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    throw new Error(`Unexpected request: ${table}`);
+  };
+
+  try {
+    globalThis.navigator.onLine = true;
+    await syncPendingMutations();
+    assert.equal(movementPayload.warehouse_id, 501);
+    assert.equal(movementPayload.inventory_id, 17);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.navigator.onLine = false;
+  }
+});
+
+test('offline quotation and invoice items remap their inventory references', async () => {
+  setOfflineUser('offline-invoice-inventory-sync-test-user');
+  setOfflineOrganization('offline-invoice-inventory-sync-test-organization');
+  globalThis.navigator.onLine = false;
+  const inventory = await insertRows('inventory', [{ title: 'کالای اجاره‌ای', item_type: 'rent' }]);
+  await insertRows('quotations', [{
+    customer_name: 'مشتری',
+    items_json: [{
+      inventory_id: inventory.data[0].id,
+      item_type: 'rent',
+      qty: 1,
+      rental_checkout_date: '2026-11-01',
+      rental_return_date: '2026-11-03',
+    }],
+  }]);
+  const quotationRows = await readTable('quotations');
+  const offlineInvoice = await insertRows('invoices', [{
+    quotation_id: quotationRows.data[0].id,
+    items_data: [{
+      inventory_id: inventory.data[0].id,
+      item_type: 'rent',
+      qty: 1,
+      rental_checkout_date: '2026-11-01',
+      rental_return_date: '2026-11-03',
+    }],
+  }]);
+
+  const previousFetch = globalThis.fetch;
+  const payloads = {};
+  const serverIds = { inventory: 601, quotations: 602, invoices: 603 };
+  globalThis.fetch = async (input, init = {}) => {
+    const table = new URL(input).pathname.split('/').pop();
+    const row = JSON.parse(init.body)[0];
+    payloads[table] = row;
+    return new Response(JSON.stringify([{ ...row, id: serverIds[table] }]), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    globalThis.navigator.onLine = true;
+    await syncPendingMutations();
+    assert.equal(payloads.inventory.id, undefined);
+    assert.equal(payloads.quotations.items_json[0].inventory_id, 601);
+    assert.equal(payloads.invoices.quotation_id, '602');
+    assert.equal(payloads.invoices.items_data[0].inventory_id, 601);
+    assert.equal(offlineInvoice.offline, true);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.navigator.onLine = false;
+  }
+});
+
+test('unbounded table reads fetch every server page', async () => {
+  setOfflineUser('offline-sync-pagination-test-user');
+  setOfflineOrganization('offline-sync-pagination-test-organization');
+  globalThis.navigator.onLine = true;
+  const rows = Array.from({ length: 1001 }, (_, index) => ({ id: index + 1 }));
+  const requestedRanges = [];
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(input);
+    if (!url.pathname.endsWith('/invoices')) {
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    const range = new Headers(init.headers).get('range');
+    const start = range
+      ? Number(range.split('-')[0])
+      : Number(url.searchParams.get('offset') || 0);
+    const end = range
+      ? Number(range.split('-')[1])
+      : start + Number(url.searchParams.get('limit') || 1000) - 1;
+    requestedRanges.push([start, end]);
+    return new Response(JSON.stringify(rows.slice(start, end + 1)), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Range': `${start}-${Math.min(end, rows.length - 1)}/${rows.length}`,
+      },
+    });
+  };
+
+  try {
+    const result = await readTable('invoices', { orderBy: 'id', ascending: true });
+    assert.equal(result.error, null);
+    assert.equal(result.data.length, 1001);
+    assert.deepEqual(requestedRanges, [[0, 999], [1000, 1999]]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.navigator.onLine = false;
+  }
 });
 
 test('offline records are isolated between organizations for the same user', async () => {

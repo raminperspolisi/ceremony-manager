@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { deleteRows, insertRows, updateRows } from '../offlineSync';
+import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
+import InventoryOperationsPanel from './InventoryOperationsPanel';
 
-export default function InventoryPanel({ items, refresh, onItemSelected, onItemUpdated }) {
+export default function InventoryPanel({ items, refresh, onItemSelected, onItemUpdated, organizationId }) {
   const [title, setTitle] = useState('');
   const [itemType, setItemType] = useState('sale'); // پیش‌فرض: فروشی
   const [baseCost, setBaseCost] = useState('');
+  const [initialQuantity, setInitialQuantity] = useState('');
   const [price1, setPrice1] = useState('');
   const [price2, setPrice2] = useState('');
   const [price3, setPrice3] = useState('');
@@ -54,9 +56,31 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
     e.preventDefault();
     if (!title.trim()) return;
 
+    const stockQuantity = initialQuantity === '' ? 0 : Number(initialQuantity);
+    if (!Number.isFinite(stockQuantity) || stockQuantity < 0
+      || (initialQuantity.split('.')[1] || '').length > 3) {
+      alert('موجودی اولیه باید عددی نامنفی با حداکثر سه رقم اعشار باشد.');
+      return;
+    }
+
     setLoading(true);
+    let itemWasCreated = false;
     try {
-      const { error } = await insertRows('inventory', [{
+      let defaultWarehouse = null;
+      if (stockQuantity > 0) {
+        const warehouseResult = await readTable('inventory_warehouses', {
+          orderBy: 'name',
+          ascending: true,
+        });
+        if (warehouseResult.error) throw warehouseResult.error;
+        const warehouses = warehouseResult.data || [];
+        defaultWarehouse = warehouses.find((warehouse) => warehouse.is_default) || warehouses[0];
+        if (!defaultWarehouse) {
+          throw new Error('برای ثبت موجودی اولیه، ابتدا یک انبار بسازید.');
+        }
+      }
+
+      const { data, error } = await insertRows('inventory', [{
         title: title.trim(),
         item_type: itemType,
         base_cost: baseCost === '' ? 0 : parseFloat(baseCost),
@@ -66,17 +90,38 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
       }]);
 
       if (error) throw error;
+      const createdItem = data?.[0];
+      if (!createdItem?.id) throw new Error('کالا ذخیره شد اما شناسهٔ آن دریافت نشد.');
+      itemWasCreated = true;
 
       setTitle('');
       setItemType('sale');
       setBaseCost('');
+      setInitialQuantity('');
       setPrice1('');
       setPrice2('');
       setPrice3('');
-      refresh();
+      if (stockQuantity > 0) {
+        const movementResult = await insertRows('inventory_stock_movements', [{
+          inventory_id: createdItem.id,
+          warehouse_id: defaultWarehouse.id,
+          movement_type: 'opening',
+          quantity_delta: stockQuantity,
+          unit_cost: baseCost === '' ? null : Number(baseCost),
+          note: 'موجودی اولیه هنگام ثبت کالا',
+          source_type: 'manual',
+          source_id: null,
+          offline_sync_id: crypto.randomUUID(),
+        }]);
+        if (movementResult.error) {
+          throw new Error(`ثبت موجودی اولیه ناموفق بود: ${movementResult.error.message}`);
+        }
+      }
+      await refresh();
     } catch (err) {
-      console.error('خطا در ثبت کالا:', err.message);
-      alert('خطا در ثبت کالا: ' + err.message);
+      console.error(itemWasCreated ? 'خطا در ثبت موجودی اولیه:' : 'خطا در ثبت کالا:', err.message);
+      if (itemWasCreated) await refresh();
+      alert(`${itemWasCreated ? 'کالا ثبت شد، اما ' : 'خطا در ثبت کالا: '}${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -107,6 +152,11 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
   };
 
   const handleInlineSave = async (id) => {
+    if (!editForm.title.trim()) {
+      alert('نام کالا یا خدمت را وارد کنید.');
+      return;
+    }
+
     try {
       const updatedData = {
         title: editForm.title.trim(),
@@ -181,6 +231,16 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
             <option value="sale">فروشی</option>
             <option value="rent">اجاره‌ای</option>
           </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569', fontWeight: 'bold' }}>موجودی اولیه (انبار اصلی)</label>
+          <FormattedNumberInput
+            value={initialQuantity}
+            onValueChange={setInitialQuantity}
+            placeholder="مثلاً ۱۰"
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px' }}
+          />
         </div>
 
         <div>
@@ -366,6 +426,7 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
                           </div>
                         ) : (
                           <div className="inventory-row-actions">
+                            <button type="button" className="inventory-action-button save" onClick={() => handleDoubleClick(item)}>ویرایش</button>
                             <button type="button" className="inventory-action-button delete" onClick={() => handleDelete(item.id)}>حذف</button>
                           </div>
                         )}
@@ -378,6 +439,11 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
           </table>
         </div>
       </div>
+      <InventoryOperationsPanel
+        items={items}
+        organizationId={organizationId}
+        refreshInventory={refresh}
+      />
     </div>
   );
 }

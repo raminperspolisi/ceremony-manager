@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { readTable, updateRows } from '../offlineSync';
+import PersianDateInput from './PersianDateInput';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'جدید' },
@@ -26,6 +27,7 @@ export default function BotOrdersPanel() {
   const [orders, setOrders] = useState(null);
   const [busyOrderId, setBusyOrderId] = useState(null);
   const [priceDrafts, setPriceDrafts] = useState({});
+  const [rentalDateDrafts, setRentalDateDrafts] = useState({});
   const [statusFilter, setStatusFilter] = useState('all');
   const [errorMessage, setErrorMessage] = useState('');
   const [feedback, setFeedback] = useState('');
@@ -56,9 +58,25 @@ export default function BotOrdersPanel() {
     };
   }, [refreshOrders]);
 
+  const requireOnlineData = () => {
+    if (navigator.onLine && !offlineData) return true;
+    setErrorMessage('برای تغییر سفارش و رزرو موجودی، اتصال آنلاین و دادهٔ تازه لازم است.');
+    return false;
+  };
+
   const handleStatusChange = async (order, status) => {
+    if (!requireOnlineData()) return;
     if (status === 'approved' && order.total_price === null) {
       setErrorMessage('برای تأیید سفارش، ابتدا مبلغ نهایی را ثبت کنید.');
+      return;
+    }
+    const hasRentalItems = Array.isArray(order.items)
+      && order.items.some((item) => item.item_type === 'rent');
+    const checkoutDate = order.rental_checkout_date || '';
+    const returnDate = order.rental_return_date || '';
+    if (status === 'approved' && hasRentalItems
+      && (!checkoutDate || !returnDate || returnDate < checkoutDate)) {
+      setErrorMessage('برای تأیید سفارش اجاره، ابتدا تاریخ تحویل و عودت معتبر را ذخیره کنید.');
       return;
     }
 
@@ -83,7 +101,41 @@ export default function BotOrdersPanel() {
     }
   };
 
+  const handleRentalDatesSave = async (order) => {
+    if (!requireOnlineData()) return;
+    const rentalDates = rentalDateDrafts[order.id] || {};
+    const checkoutDate = rentalDates.checkout ?? order.rental_checkout_date ?? '';
+    const returnDate = rentalDates.return ?? order.rental_return_date ?? '';
+    if (!checkoutDate || !returnDate || returnDate < checkoutDate) {
+      setErrorMessage('تاریخ تحویل و عودت معتبر را وارد کنید.');
+      return;
+    }
+
+    setBusyOrderId(order.id);
+    setErrorMessage('');
+    setFeedback('');
+    try {
+      const result = await updateRows(
+        'bot_orders',
+        { rental_checkout_date: checkoutDate, rental_return_date: returnDate },
+        [{ column: 'id', operator: 'eq', value: order.id }],
+      );
+      if (result.error) throw new Error(result.error.message);
+      setOrders((current) => current.map((item) => (
+        String(item.id) === String(order.id)
+          ? { ...item, rental_checkout_date: checkoutDate, rental_return_date: returnDate }
+          : item
+      )));
+      setFeedback('تاریخ تحویل و عودت برای رزرو موجودی ذخیره شد.');
+    } catch (error) {
+      setErrorMessage(`ذخیرهٔ تاریخ اجاره ناموفق بود: ${error.message}`);
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
   const handlePriceSave = async (order) => {
+    if (!requireOnlineData()) return;
     const rawAmount = priceDrafts[order.id] ?? '';
     const amount = Number(rawAmount);
     if (!rawAmount.trim() || !Number.isSafeInteger(amount) || amount < 0) {
@@ -129,7 +181,7 @@ export default function BotOrdersPanel() {
       <div className="bot-orders-toolbar">
         <div>
           <h3>سفارش‌های ربات</h3>
-          <p>سفارش‌ها ثبت می‌شوند، اما موجودی انبار با آن‌ها تغییر نمی‌کند.</p>
+          <p>با تأیید سفارش، موجودی کالا رزرو می‌شود؛ سفارش اجاره بدون ثبت بازهٔ تحویل و عودت تأیید نمی‌شود.</p>
         </div>
         <div className="bot-orders-controls">
           <label>
@@ -223,6 +275,46 @@ export default function BotOrdersPanel() {
                   </li>
                 ))}
               </ul>
+
+              {items.some((item) => item.item_type === 'rent') && order.status === 'pending' && (
+                <div className="bot-order-rental-dates">
+                  <label>
+                    تاریخ تحویل اجاره
+                    <PersianDateInput
+                      value={rentalDateDrafts[order.id]?.checkout ?? order.rental_checkout_date ?? ''}
+                      disabled={String(busyOrderId) === String(order.id)}
+                      onChange={(value) => setRentalDateDrafts((current) => ({
+                        ...current,
+                        [order.id]: {
+                          ...current[order.id],
+                          checkout: value,
+                        },
+                      }))}
+                    />
+                  </label>
+                  <label>
+                    تاریخ عودت اجاره
+                    <PersianDateInput
+                      value={rentalDateDrafts[order.id]?.return ?? order.rental_return_date ?? ''}
+                      disabled={String(busyOrderId) === String(order.id)}
+                      onChange={(value) => setRentalDateDrafts((current) => ({
+                        ...current,
+                        [order.id]: {
+                          ...current[order.id],
+                          return: value,
+                        },
+                      }))}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleRentalDatesSave(order)}
+                    disabled={String(busyOrderId) === String(order.id)}
+                  >
+                    ذخیرهٔ بازه
+                  </button>
+                </div>
+              )}
 
               <footer className="bot-order-total">
                 <span>{order.total_price === null ? 'قیمت نهایی' : 'جمع سفارش'}</span>

@@ -1,5 +1,5 @@
 export const BACKUP_FORMAT = 'ceremony-manager-backup';
-export const BACKUP_VERSION = 3;
+export const BACKUP_VERSION = 4;
 export const BACKUP_TABLES = [
   'customers',
   'ceremonies',
@@ -9,10 +9,25 @@ export const BACKUP_TABLES = [
   'invoices',
   'financial_accounts',
   'cash_transactions',
+  'inventory_warehouses',
+  'inventory_suppliers',
+  'inventory_purchase_receipts',
+  'inventory_transfers',
+  'inventory_reservations',
+  'inventory_stock_movements',
 ];
 const PRE_CASHBOOK_TABLES = ['customers', 'ceremonies', 'events', 'inventory', 'quotations', 'invoices'];
+const PRE_INVENTORY_TABLES = BACKUP_TABLES.slice(0, 8);
 
 export function createBackupDocument(tables, { exportedAt, userId, projectUrl, organizationId }) {
+  const backupTables = Object.fromEntries(BACKUP_TABLES.map((table) => {
+    const rows = tables[table] || [];
+    if (table !== 'inventory_stock_movements') return [table, rows];
+    return [table, rows.filter((row) => (
+      !['purchase', 'transfer'].includes(row.source_type)
+      && !(row.source_type === 'invoice' && row.movement_type === 'sale_issue' && !row.reservation_id)
+    ))];
+  }));
   return {
     format: BACKUP_FORMAT,
     version: BACKUP_VERSION,
@@ -20,7 +35,7 @@ export function createBackupDocument(tables, { exportedAt, userId, projectUrl, o
     userId,
     projectUrl,
     organizationId,
-    tables: Object.fromEntries(BACKUP_TABLES.map((table) => [table, tables[table] || []])),
+    tables: backupTables,
   };
 }
 
@@ -28,7 +43,7 @@ export function validateBackupDocument(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('ساختار فایل پشتیبان معتبر نیست.');
   }
-  if (value.format !== BACKUP_FORMAT || ![1, 2, BACKUP_VERSION].includes(value.version)) {
+  if (value.format !== BACKUP_FORMAT || ![1, 2, 3, BACKUP_VERSION].includes(value.version)) {
     throw new Error('نسخه یا قالب فایل پشتیبان پشتیبانی نمی‌شود.');
   }
   if (!value.userId || !value.projectUrl || !value.tables || typeof value.tables !== 'object') {
@@ -38,10 +53,19 @@ export function validateBackupDocument(value) {
     throw new Error('شناسهٔ فضای کاری در فایل پشتیبان وجود ندارد.');
   }
 
-  const compatibleTables = value.version === 1
-    ? { ...value.tables, financial_accounts: [], cash_transactions: [] }
-    : value.tables;
-  for (const table of value.version === 1 ? PRE_CASHBOOK_TABLES : BACKUP_TABLES) {
+  const requiredTables = value.version === 1
+    ? PRE_CASHBOOK_TABLES
+    : value.version === BACKUP_VERSION
+      ? BACKUP_TABLES
+      : PRE_INVENTORY_TABLES;
+  const compatibleTables = value.version === BACKUP_VERSION
+    ? value.tables
+    : {
+      ...Object.fromEntries(BACKUP_TABLES.map((table) => [table, []])),
+      ...value.tables,
+      ...(value.version === 1 ? { financial_accounts: [], cash_transactions: [] } : {}),
+    };
+  for (const table of requiredTables) {
     const rows = compatibleTables[table];
     if (!Array.isArray(rows)) throw new Error(`فهرست ${table} در فایل پشتیبان معتبر نیست.`);
     if (rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row) || row.id === undefined || row.id === null)) {

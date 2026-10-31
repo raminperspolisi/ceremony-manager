@@ -5,7 +5,19 @@ import { convertQuotationToInvoice, deleteSelectedDocuments, updateOfficialInvoi
 test('conversion creates a linked invoice when no invoice exists', async () => {
   let inserted;
   const result = await convertQuotationToInvoice(
-    { id: 12, customer_name: 'مشتری', total_price: 500, items_json: [{ title: 'کالا' }] },
+    {
+      id: 12,
+      customer_name: 'مشتری',
+      total_price: 500,
+      items_json: [{
+        title: 'کالای اجاره‌ای',
+        inventory_id: 81,
+        item_type: 'rent',
+        qty: 1,
+        rental_checkout_date: '2026-11-01',
+        rental_return_date: '2026-11-03',
+      }],
+    },
     {
       readTable: async () => ({ data: [], error: null }),
       insertRows: async (table, rows) => {
@@ -18,6 +30,14 @@ test('conversion creates a linked invoice when no invoice exists', async () => {
   assert.equal(result.alreadyConverted, false);
   assert.equal(inserted.table, 'invoices');
   assert.equal(inserted.row.quotation_id, '12');
+  assert.deepEqual(inserted.row.items_data, [{
+    title: 'کالای اجاره‌ای',
+    inventory_id: 81,
+    item_type: 'rent',
+    qty: 1,
+    rental_checkout_date: '2026-11-01',
+    rental_return_date: '2026-11-03',
+  }]);
 });
 
 test('conversion does not insert a duplicate invoice', async () => {

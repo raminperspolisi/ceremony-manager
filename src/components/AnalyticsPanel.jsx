@@ -277,8 +277,8 @@ export default function AnalyticsPanel() {
     return result;
   }, [dateBasis, filteredInvoices]);
 
-  const netProfit = report.costedSalesRevenue - report.costOfGoods;
-  const margin = report.costedSalesRevenue > 0 ? (netProfit / report.costedSalesRevenue) * 100 : 0;
+  const grossProfit = report.costedSalesRevenue - report.costOfGoods;
+  const margin = report.costedSalesRevenue > 0 ? (grossProfit / report.costedSalesRevenue) * 100 : 0;
   const topItems = Object.values(report.items).filter((item) => !item.isRent).sort((a, b) => b.profit - a.profit).slice(0, 5);
   const chartMonths = Object.entries(report.months).sort(([a], [b]) => a.localeCompare(b)).slice(-6);
   const chartMax = Math.max(...chartMonths.map(([, values]) => Math.max(values.salesRevenue, values.costs, Math.abs(values.net))), 1);
@@ -345,15 +345,15 @@ export default function AnalyticsPanel() {
               <h3>{formatMoney(report.salesRevenue)}</h3>
               <span>بدون احتساب درآمد اجاره</span>
             </article>
-            <article className={`analytics-stat-card ${netProfit < 0 ? 'loss' : 'net'}`}>
-              <p>سود خالص فروش{report.missingCostCount > 0 || report.missingItemInvoiceCount > 0 ? ' (ناقص)' : ''}</p>
-              <h3>{formatMoney(netProfit)}</h3>
+            <article className={`analytics-stat-card ${grossProfit < 0 ? 'loss' : 'net'}`}>
+              <p>سود ناخالص فروش{report.missingCostCount > 0 || report.missingItemInvoiceCount > 0 ? ' (ناقص)' : ''}</p>
+              <h3>{formatMoney(grossProfit)}</h3>
               <span>حاشیه سود فروش: {margin.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪</span>
             </article>
             <article className="analytics-stat-card">
               <p>درآمد اجاره (جدا از سود فروش)</p>
               <h3>{formatMoney(report.rentRevenue)}</h3>
-              <span>در محاسبهٔ سود خالص فروش وارد نمی‌شود</span>
+              <span>در محاسبهٔ سود ناخالص فروش وارد نمی‌شود</span>
             </article>
             <article className="analytics-stat-card receivables">
               <p>مطالبات باقی‌مانده</p>
@@ -364,7 +364,7 @@ export default function AnalyticsPanel() {
 
           {(report.missingCostCount > 0 || report.missingItemInvoiceCount > 0) && (
             <div className="analytics-warning" role="status">
-              {report.missingCostCount > 0 && <>بهای خرید {report.missingCostCount.toLocaleString('fa-IR')} ردیف فروش پیدا نشد؛ این ردیف‌ها در محاسبهٔ عدد سود وارد نشده‌اند، پس مبلغ سود خالص ناقص است. </>}
+              {report.missingCostCount > 0 && <>بهای خرید {report.missingCostCount.toLocaleString('fa-IR')} ردیف فروش پیدا نشد؛ این ردیف‌ها در محاسبهٔ سود وارد نشده‌اند، پس مبلغ سود ناخالص ناقص است. </>}
               {report.missingItemInvoiceCount > 0 && <>جزئیات اقلام {report.missingItemInvoiceCount.toLocaleString('fa-IR')} فاکتور موجود نیست و در سود فروش لحاظ نشده است. </>}
               بهای خرید کالاها را در انبار و اقلام فاکتورها بررسی کنید.
             </div>
@@ -382,12 +382,12 @@ export default function AnalyticsPanel() {
                     <tr><td>۱</td><th scope="row">کل فروش اقلام فروخته‌شده</th><td>{formatMoney(report.salesRevenue)}</td></tr>
                     <tr><td>۲</td><th scope="row">فروش دارای بهای خرید ثبت‌شده</th><td>{formatMoney(report.costedSalesRevenue)}</td></tr>
                     <tr><td>۳</td><th scope="row">بهای خرید اقلام فروخته‌شده</th><td>− {formatMoney(report.costOfGoods)}</td></tr>
-                    <tr className="statement-total"><td>۴</td><th scope="row">سود خالص فروش</th><td>{formatMoney(netProfit)}</td></tr>
+                    <tr className="statement-total"><td>۴</td><th scope="row">سود ناخالص فروش</th><td>{formatMoney(grossProfit)}</td></tr>
                     <tr className="statement-rent"><td>۵</td><th scope="row">درآمد اجاره (جدا از سود فروش)</th><td>{formatMoney(report.rentRevenue)}</td></tr>
                   </tbody>
                 </table>
               </div>
-              <p className="analytics-footnote">سود خالص این گزارش فقط از فروش کالاها محاسبه می‌شود: مبلغ فروش منهای بهای خرید ثبت‌شده. اجاره جدا گزارش می‌شود و وارد این سود نمی‌شود.</p>
+              <p className="analytics-footnote">سود ناخالص این گزارش فقط از فروش کالاها محاسبه می‌شود: مبلغ فروش منهای بهای خرید ثبت‌شده. هزینه‌های عملیاتی و استهلاک اقلام اجاره‌ای از آن کسر نشده‌اند و درآمد اجاره جدا گزارش می‌شود.</p>
             </article>
 
             <article className="analytics-items-card">
@@ -448,7 +448,7 @@ export default function AnalyticsPanel() {
                       <th>مبلغ کل فاکتور</th>
                       <th>فروش اقلام فروشی</th>
                       <th>بهای خرید</th>
-                      <th>سود خالص فروش</th>
+                      <th>سود ناخالص فروش</th>
                       <th>درآمد اجاره</th>
                       <th>جزئیات</th>
                     </tr>
@@ -496,7 +496,7 @@ export default function AnalyticsPanel() {
                                       <div className="overflow-x-auto">
                                         <table className="analytics-table analytics-item-detail-table">
                                           <thead>
-                                            <tr><th>ردیف</th><th>نام کالا / خدمت</th><th>نوع</th><th>تعداد</th><th>قیمت واحد</th><th>بهای خرید واحد</th><th>فروش ردیف</th><th>بهای خرید کل</th><th>سود خالص ردیف</th></tr>
+                                            <tr><th>ردیف</th><th>نام کالا / خدمت</th><th>نوع</th><th>تعداد</th><th>قیمت واحد</th><th>بهای خرید واحد</th><th>فروش ردیف</th><th>بهای خرید کل</th><th>سود ناخالص ردیف</th></tr>
                                           </thead>
                                           <tbody>
                                             {details.items.map((item, index) => (
@@ -520,7 +520,7 @@ export default function AnalyticsPanel() {
                                       <div className="analytics-invoice-detail-totals">
                                         <span>فروش دارای بهای خرید: <strong>{formatMoney(details.costedSalesRevenue)}</strong></span>
                                         <span>بهای خرید فروش: <strong>{formatMoney(details.costOfGoods)}</strong></span>
-                                        <span>سود خالص فروش: <strong>{details.missingCostCount ? 'ناقص؛ بعضی بهاها ثبت نشده' : formatMoney(details.profit)}</strong></span>
+                                        <span>سود ناخالص فروش: <strong>{details.missingCostCount ? 'ناقص؛ بعضی بهاها ثبت نشده' : formatMoney(details.profit)}</strong></span>
                                         <span>درآمد اجاره (جدا): <strong>{formatMoney(details.rentRevenue)}</strong></span>
                                       </div>
                                     </>
@@ -540,13 +540,13 @@ export default function AnalyticsPanel() {
           </section>
 
           <section className="analytics-items-card">
-            <h3>اقلام فروشی با بیشترین سود خالص</h3>
+            <h3>اقلام فروشی با بیشترین سود ناخالص</h3>
             {topItems.length === 0 ? (
               <p className="analytics-empty">دادهٔ اقلام فاکتور برای این بازه ثبت نشده است.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="analytics-table">
-                  <thead><tr><th>کالا / خدمت</th><th>تعداد</th><th>فروش</th><th>سود خالص فروش</th></tr></thead>
+                  <thead><tr><th>کالا / خدمت</th><th>تعداد</th><th>فروش</th><th>سود ناخالص فروش</th></tr></thead>
                   <tbody>
                     {topItems.map((item) => (
                       <tr key={item.key}>

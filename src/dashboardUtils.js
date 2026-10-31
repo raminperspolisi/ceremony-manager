@@ -3,7 +3,7 @@ import moment from 'jalali-moment';
 const formatPersianDigits = (value) => String(value ?? '')
   .replace(/\d/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'[Number(digit)]);
 
-const normalizeDigits = (value) => String(value || '')
+const normalizeDigits = (value) => String(value ?? '')
   .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))
   .replace(/[٠-٩]/g, (digit) => '٠١٢٣٤٥٦٧٨٩'.indexOf(digit));
 
