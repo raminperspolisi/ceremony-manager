@@ -17,6 +17,7 @@ import DashboardPanel from './components/DashboardPanel';
 import BotOrdersPanel from './components/BotOrdersPanel';
 import OrganizationManagementPanel from './components/OrganizationManagementPanel';
 import { formatDisplay } from './styles';
+import { getProfileSocialLinks, normalizeProfileLinks } from './profileLinks';
 import {
   getOfflineSyncStatus,
   readTable,
@@ -76,6 +77,24 @@ const GLOBAL_SEARCH_TABLES = [
   { table: 'quotations', section: 'quotations', label: 'پیش‌فاکتور' },
   { table: 'invoices', section: 'official', label: 'فاکتور رسمی' },
 ];
+const SECTION_THEME_ICONS = {
+  dashboard: '📊',
+  customers: '👥',
+  inventory: '📦',
+  'bot-orders': '🤖',
+  quotations: '🧾',
+  official: '📄',
+  reports: '📈',
+  analytics: '💹',
+  calendar: '📅',
+  reminders: '🔔',
+  tutorial: '🎓',
+  backup: '💾',
+  cashbook: '🏦',
+  'organization-management': '👤',
+  'organization-creation': '🏢',
+  contact: '💬',
+};
 
 const normalizeSearchText = (value) => String(value ?? '')
   .toLocaleLowerCase('fa-IR')
@@ -152,12 +171,18 @@ export default function App() {
   const [removeProfileLogo, setRemoveProfileLogo] = useState(false);
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePassword, setProfilePassword] = useState('');
+  const [profileWebsite, setProfileWebsite] = useState('');
+  const [profileInstagram, setProfileInstagram] = useState('');
+  const [profileTelegram, setProfileTelegram] = useState('');
+  const [profileRubika, setProfileRubika] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileMessage, setProfileMessage] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [windowMode, setWindowMode] = useState('normal');
+  const windowRestoreModeRef = useRef('normal');
   const [activeSection, setActiveSection] = useState('dashboard');
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
@@ -199,6 +224,22 @@ export default function App() {
     || session?.user?.user_metadata?.business_name?.trim()
     || DEFAULT_BUSINESS_NAME;
   const logoUrl = getOrganizationLogoUrl(activeOrganization);
+  const profileMetadata = session?.user?.user_metadata || {};
+  let minimizedWebsiteUrl = '';
+  let minimizedWebsiteInvalid = false;
+  let minimizedSocialLinks = [];
+  try {
+    minimizedWebsiteUrl = normalizeProfileLinks({
+      website: profileMetadata.business_website || '',
+    }).website;
+  } catch {
+    minimizedWebsiteInvalid = true;
+  }
+  try {
+    minimizedSocialLinks = getProfileSocialLinks(profileMetadata);
+  } catch {
+    minimizedSocialLinks = [];
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -802,6 +843,10 @@ export default function App() {
 
   const handleOpenProfile = () => {
     setProfileName(session.user.user_metadata?.display_name || '');
+    setProfileWebsite(session.user.user_metadata?.business_website || '');
+    setProfileInstagram(session.user.user_metadata?.instagram_id || '');
+    setProfileTelegram(session.user.user_metadata?.telegram_id || '');
+    setProfileRubika(session.user.user_metadata?.rubika_id || '');
     setProfileLogoUrl(logoUrl);
     setProfileLogoPreview(logoUrl);
     setProfileLogoFile(null);
@@ -844,10 +889,23 @@ export default function App() {
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
-    setProfileLoading(true);
     setProfileError('');
     setProfileMessage('');
 
+    let profileLinks;
+    try {
+      profileLinks = normalizeProfileLinks({
+        website: profileWebsite,
+        instagram: profileInstagram,
+        telegram: profileTelegram,
+        rubika: profileRubika,
+      });
+    } catch (error) {
+      setProfileError(error.message);
+      return;
+    }
+
+    setProfileLoading(true);
     const emailChanged = profileEmail.trim() !== (session.user.email || '');
     try {
       let updatedOrganization = activeOrganization;
@@ -892,6 +950,10 @@ export default function App() {
         data: {
           ...session.user.user_metadata,
           display_name: profileName.trim(),
+          business_website: profileLinks.website,
+          instagram_id: profileLinks.instagram,
+          telegram_id: profileLinks.telegram,
+          rubika_id: profileLinks.rubika,
         }
       };
       if (emailChanged) attributes.email = profileEmail.trim();
@@ -1028,17 +1090,57 @@ export default function App() {
   }
 
   return (
-    <main 
-      className="app-container" 
-      style={{ 
-        maxWidth: '1150px', 
-        margin: '20px auto', 
-        boxShadow: '0 4px 20px rgba(0,0,0,0.08)', 
-        borderRadius: '8px', 
-        overflow: 'visible',
-        backgroundColor: '#ffffff'
-      }}
-    >
+    <>
+      <main
+        className={`app-container window-${windowMode}`}
+        aria-hidden={windowMode === 'minimized' || windowMode === 'closed'}
+        inert={windowMode === 'minimized' || windowMode === 'closed'}
+      >
+        <div className="app-window-titlebar">
+          <div className="app-window-title">
+            <span className="app-window-title-icon" aria-hidden="true">✦</span>
+            <span>مدیریت {businessName}</span>
+          </div>
+          <div className="app-window-controls" role="group" aria-label="کنترل‌های پنجره">
+            <button
+              type="button"
+              className="app-window-control minimize"
+              aria-label="کوچک‌سازی"
+              title="کوچک‌سازی"
+              onClick={() => {
+                windowRestoreModeRef.current = windowMode === 'maximized' ? 'maximized' : 'normal';
+                setWindowMode('minimized');
+              }}
+            >
+              <span aria-hidden="true">−</span>
+            </button>
+            <button
+              type="button"
+              className="app-window-control maximize"
+              aria-label={windowMode === 'maximized' ? 'بازگردانی پنجره' : 'بزرگ‌نمایی'}
+              title={windowMode === 'maximized' ? 'بازگردانی' : 'بزرگ‌نمایی'}
+              onClick={() => {
+                const nextMode = windowMode === 'maximized' ? 'normal' : 'maximized';
+                windowRestoreModeRef.current = nextMode;
+                setWindowMode(nextMode);
+              }}
+            >
+              <span aria-hidden="true">{windowMode === 'maximized' ? '❐' : '□'}</span>
+            </button>
+            <button
+              type="button"
+              className="app-window-control close"
+              aria-label="بستن پنجره"
+              title="بستن پنجره"
+              onClick={() => {
+                windowRestoreModeRef.current = windowMode === 'maximized' ? 'maximized' : 'normal';
+                setWindowMode('closed');
+              }}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+        </div>
       <header className="app-header">
         <button
           type="button"
@@ -1130,7 +1232,7 @@ export default function App() {
           </span>
           <span className="status-dot" />
         </div>
-      </header>
+        </header>
       {botOrderNotification && (
         <div className="bot-order-notice" role="status" aria-live="polite">
           <span>
@@ -1206,6 +1308,46 @@ export default function App() {
               <label htmlFor="profile-business-name">نام مجموعه / برند روی فاکتورها</label>
               <input id="profile-business-name" type="text" value={businessName} readOnly />
               <p className="profile-password-hint">نام فضای کاری از بخش «مدیریت کاربران و دسترسی» تغییر می‌کند.</p>
+              <label htmlFor="profile-website">آدرس سایت مجموعه</label>
+              <input
+                id="profile-website"
+                type="text"
+                inputMode="url"
+                dir="ltr"
+                autoComplete="url"
+                value={profileWebsite}
+                onChange={(e) => setProfileWebsite(e.target.value)}
+                placeholder="example.com"
+              />
+              <p className="profile-password-hint">در حالت کوچک‌سازی، سایت در همین صفحه نمایش داده می‌شود؛ اگر سایت نمایش درون‌برنامه‌ای را مسدود کند، می‌توانید آن را در زبانهٔ جدید باز کنید.</p>
+              <label htmlFor="profile-instagram">آدرس پیج اینستاگرام</label>
+              <input
+                id="profile-instagram"
+                type="text"
+                inputMode="url"
+                dir="ltr"
+                value={profileInstagram}
+                onChange={(e) => setProfileInstagram(e.target.value)}
+                placeholder="@username یا instagram.com/username"
+              />
+              <label htmlFor="profile-telegram">آیدی تلگرام</label>
+              <input
+                id="profile-telegram"
+                type="text"
+                dir="ltr"
+                value={profileTelegram}
+                onChange={(e) => setProfileTelegram(e.target.value)}
+                placeholder="@username"
+              />
+              <label htmlFor="profile-rubika">آیدی روبیکا</label>
+              <input
+                id="profile-rubika"
+                type="text"
+                dir="ltr"
+                value={profileRubika}
+                onChange={(e) => setProfileRubika(e.target.value)}
+                placeholder="@username"
+              />
               <label htmlFor="profile-business-logo">لوگوی مجموعه</label>
               <div className="business-logo-settings">
                 <img src={profileLogoPreview} alt="پیش‌نمایش لوگوی مجموعه" />
@@ -1286,7 +1428,7 @@ export default function App() {
 
       {authError && <div role="alert" style={{ margin: '12px 20px', padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
 
-      <div className="app-layout">
+      <div className={`app-layout page-theme-${activeSection}`}>
         {mobileMenuOpen && (
           <button
             type="button"
@@ -1529,11 +1671,15 @@ export default function App() {
           </div>
         </aside>
 
-        <section className="main-content">
+        <section className={`main-content page-theme-${activeSection}`}>
           <div className="page-heading">
-            <div>
-              <p className="page-eyebrow">داشبورد مدیریت</p>
-              <h2>
+            <div className="page-heading-title">
+              <span className="page-heading-icon" aria-hidden="true">
+                {SECTION_THEME_ICONS[activeSection] || '✨'}
+              </span>
+              <div>
+                <p className="page-eyebrow">داشبورد مدیریت</p>
+                <h2>
                 {activeSection === "customers"
                   ? "مشتریان"
                   : activeSection === "dashboard"
@@ -1565,7 +1711,8 @@ export default function App() {
                   : activeSection === "organization-creation"
                   ? "ساخت فضای کاری جدید"
                   : "ارتباط با ما"}
-              </h2>
+                </h2>
+              </div>
             </div>
 
             <div className="page-heading-actions">
@@ -1634,6 +1781,74 @@ export default function App() {
           </div>
         </section>
       </div>
-    </main>
+      </main>
+      {windowMode === 'minimized' && (
+        <main className="minimized-site-view" dir="rtl">
+          <header className="minimized-site-toolbar">
+            <div className="minimized-site-brand">
+              <span className="app-window-launcher-icon" aria-hidden="true">✦</span>
+              <strong>{businessName}</strong>
+            </div>
+            <div className="minimized-site-actions">
+              {minimizedWebsiteUrl && (
+                <a href={minimizedWebsiteUrl} target="_blank" rel="noopener noreferrer">
+                  بازکردن سایت در زبانهٔ جدید
+                </a>
+              )}
+              <button type="button" onClick={() => setWindowMode(windowRestoreModeRef.current)}>
+                بازگردانی برنامه
+              </button>
+            </div>
+          </header>
+          {minimizedWebsiteUrl ? (
+            <iframe
+              className="minimized-site-frame"
+              src={minimizedWebsiteUrl}
+              title={`وب‌سایت ${businessName}`}
+              referrerPolicy="no-referrer"
+              sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+            />
+          ) : (
+            <section className="minimized-site-empty">
+              <span className="app-window-launcher-icon" aria-hidden="true">✦</span>
+              <h1>{minimizedWebsiteInvalid ? 'آدرس سایت معتبر نیست' : 'آدرس سایت ثبت نشده است'}</h1>
+              <p>
+                {minimizedWebsiteInvalid
+                  ? 'برای نمایش سایت، آدرس معتبر را در بخش ویرایش پروفایل وارد کنید.'
+                  : 'برای نمایش سایت مجموعه در این بخش، آدرس آن را در ویرایش پروفایل ثبت کنید.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setWindowMode(windowRestoreModeRef.current);
+                  handleOpenProfile();
+                }}
+              >
+                بازگردانی و ویرایش پروفایل
+              </button>
+            </section>
+          )}
+          {minimizedSocialLinks.length > 0 && (
+            <nav className="minimized-site-socials" aria-label="شبکه‌های اجتماعی مجموعه">
+              <span>شبکه‌های اجتماعی:</span>
+              {minimizedSocialLinks.map((link) => (
+                <a key={link.key} href={link.href} target="_blank" rel="noopener noreferrer">
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          )}
+        </main>
+      )}
+      {windowMode === 'closed' && (
+        <div className="app-window-launcher" role="status" aria-live="polite">
+          <span className="app-window-launcher-icon" aria-hidden="true">✦</span>
+          <span>برنامه بسته است</span>
+          <button type="button" onClick={() => setWindowMode(windowRestoreModeRef.current)}>
+            بازکردن برنامه
+          </button>
+        </div>
+      )}
+    </>
   );
 }
