@@ -257,6 +257,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
       const { error } = await insertRows("quotations", [
         { 
           customer_name: selectedCustomer["Full name"], 
+          customer_phone: selectedCustomer.phone || '',
           items_json: itemsPayload, 
           total_price: total1 
         }
@@ -392,6 +393,8 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
         ? 'این پیش‌فاکتور قبلاً از دستگاه دیگری به فاکتور رسمی تبدیل شده است؛ فهرست را تازه‌سازی کنید.'
         : /quotation_id.*(column|schema)/i.test(error.message || '')
           ? 'ارتباط پیش‌فاکتور و فاکتور نیاز به migration supabase/migrations/20261023190000_link_quotations_to_invoices.sql دارد.'
+        : (error.message || '').includes('این خروج موجودی با رزروهای فعال تداخل دارد')
+          ? 'برای ثبت کسریِ تأییدشدهٔ موجودی و صدور فاکتور، migration supabase/migrations/20261101192000_invoice_inventory_reconciliation.sql را در SQL Editor سوپابیس اجرا کنید.'
         : error.message;
       alert(`خطا در صدور فاکتور رسمی: ${detail}`);
     } finally {

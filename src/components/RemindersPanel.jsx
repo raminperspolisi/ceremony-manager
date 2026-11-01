@@ -3,6 +3,7 @@ import { readTable } from '../offlineSync';
 import moment from 'jalali-moment';
 import html2canvas from 'html2canvas';
 import { formatPersianDigits } from '../styles';
+import { attachCustomerPhones } from '../remindersUtils';
 
 const getInvoiceItems = (invoice) => (
   [invoice.items_data, invoice.items_json, invoice.items]
@@ -196,6 +197,7 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
   const [loading, setLoading] = useState(true);
   const [hasMoreInvoices, setHasMoreInvoices] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [customerLookupError, setCustomerLookupError] = useState('');
   const [shareStatus, setShareStatus] = useState('');
   const [sharingInvoiceId, setSharingInvoiceId] = useState(null);
   const [preparedInvoiceImage, setPreparedInvoiceImage] = useState(null);
@@ -205,16 +207,42 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
     try {
       setLoading(true);
       setLoadError('');
-      const { data, error } = await readTable('invoices', {
-        orderBy: 'created_at',
-        ascending: false,
-        offset,
-        limit: INVOICE_PAGE_SIZE,
-      });
+      const [invoiceResult, customerResult] = await Promise.all([
+        readTable('invoices', {
+          orderBy: 'created_at',
+          ascending: false,
+          offset,
+          limit: INVOICE_PAGE_SIZE,
+        }),
+        readTable('customers'),
+      ]);
 
-      if (error) throw error;
-      const invoices = data || [];
-      setUpcomingEvents((current) => append ? [...current, ...invoices] : invoices);
+      if (invoiceResult.error) throw invoiceResult.error;
+      const invoices = invoiceResult.data || [];
+      const quotationIds = [...new Set(invoices
+        .map((invoice) => invoice.quotation_id)
+        .filter((id) => id !== undefined && id !== null)
+        .map(String))];
+      const quotationResult = quotationIds.length
+        ? await readTable('quotations', {
+          filters: [{ column: 'id', operator: 'in', value: quotationIds }],
+        })
+        : { data: [], error: null };
+      const lookupErrors = [
+        customerResult.error && `مشتریان: ${customerResult.error.message}`,
+        quotationResult.error && `پیش‌فاکتورها: ${quotationResult.error.message}`,
+      ].filter(Boolean);
+      setCustomerLookupError(lookupErrors.length
+        ? `بازیابی شمارهٔ تماس کامل نیست؛ ${lookupErrors.join('؛ ')}`
+        : '');
+      const invoicesWithCustomerPhones = attachCustomerPhones(
+        invoices,
+        customerResult.error ? [] : customerResult.data || [],
+        quotationResult.error ? [] : quotationResult.data || [],
+      );
+      setUpcomingEvents((current) => append
+        ? [...current, ...invoicesWithCustomerPhones]
+        : invoicesWithCustomerPhones);
       setHasMoreInvoices(invoices.length === INVOICE_PAGE_SIZE);
     } catch (err) {
       setLoadError(`خطا در دریافت اطلاعات فاکتورها: ${err?.message || String(err)}`);
@@ -346,6 +374,11 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
       {loadError && (
         <div role="alert" style={{ background: '#fee2e2', color: '#b91c1c', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px' }}>
           {loadError}
+        </div>
+      )}
+      {customerLookupError && (
+        <div role="alert" style={{ background: '#fff7ed', color: '#9a3412', padding: '10px 14px', borderRadius: '8px', marginBottom: '16px' }}>
+          {customerLookupError}
         </div>
       )}
 

@@ -14,6 +14,7 @@ export async function convertQuotationToInvoice(quotation, { readTable, insertRo
   const { data, error } = await insertRows('invoices', [{
     quotation_id: String(quotation.id),
     customer_name: quotation.customer_name,
+    customer_phone: quotation.customer_phone || quotation.phone || '',
     total_price: quotation.total_price,
     items_data: quotation.items_json || quotation.items_data || [],
     is_official: true,
