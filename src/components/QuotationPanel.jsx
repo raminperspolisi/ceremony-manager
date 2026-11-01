@@ -10,42 +10,42 @@ const win95Style = {
   window: { 
     fontFamily: 'var(--font-main)',
     direction: 'rtl', 
-    backgroundColor: '#f8fafc',
-    padding: '15px', 
-    border: '1px solid #e2e8f0', 
-    borderRadius: '6px',
+    backgroundColor: '#f4f6f8',
+    padding: '18px',
+    border: '1px solid #dfe5eb',
+    borderRadius: '12px',
     color: '#1a1a2e',
     fontSize: '13px',
     width: '100%',
     boxSizing: 'border-box'
   },
   header: { 
-    backgroundColor: '#0ea5e9', 
+    backgroundColor: '#28645a',
     color: '#ffffff', 
     padding: '10px 12px', 
     fontWeight: 'bold', 
     fontSize: '14px', 
-    borderRadius: '6px',
+    borderRadius: '8px',
     marginBottom: '12px' 
   },
   input: { 
-    border: '1px solid #cbd5e1', 
+    border: '1px solid #d7dee5',
     background: '#fff', 
     padding: '6px 8px', 
     fontSize: '12px', 
-    borderRadius: '4px',
+    borderRadius: '6px',
     outline: 'none',
     boxSizing: 'border-box'
   },
   button: { 
-    backgroundColor: '#0ea5e9', 
+    backgroundColor: '#28645a',
     border: 'none', 
     padding: '7px 12px', 
     fontSize: '12px', 
     cursor: 'pointer',
     fontWeight: 'bold',
     color: '#ffffff',
-    borderRadius: '4px',
+    borderRadius: '6px',
     transition: 'all 0.2s ease'
   },
   tableHeader: { 
@@ -470,108 +470,113 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
   };
 
   return (
-    <div style={win95Style.window}>
-      <div style={win95Style.header}>مدیریت و صدور پیش‌فاکتور</div>
-      
-      {/* نمایش سرجمع سطوح قیمت */}
-      <div style={{ background: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '15px', display: 'flex', gap: '20px', fontSize: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div><strong>قیمت درجه ۱:</strong> <span style={{ color: '#0369a1', fontWeight: 'bold' }}>{total1.toLocaleString('fa-IR')} تومان</span></div>
-          <div><strong>قیمت درجه ۲:</strong> <span style={{ color: '#0369a1', fontWeight: 'bold' }}>{total2.toLocaleString('fa-IR')} تومان</span></div>
-          <div><strong>قیمت درجه ۳:</strong> <span style={{ color: '#0369a1', fontWeight: 'bold' }}>{total3.toLocaleString('fa-IR')} تومان</span></div>
-      </div>
+    <div className="quotation-panel" style={win95Style.window}>
+      <header className="quotation-heading">
+        <div>
+          <span className="quotation-heading-kicker">مدیریت اسناد فروش</span>
+          <h2>مدیریت و صدور پیش‌فاکتور</h2>
+          <p>اقلام را از انبار انتخاب کنید و پیش‌فاکتور مشتری را صادر کنید.</p>
+        </div>
+        <span className="quotation-document-badge">پیش‌فاکتور جدید</span>
+      </header>
 
-      {/* نوار جستجو و انتخاب مشتری */}
-      <div style={{ background: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '15px', display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div className="accounting-inline-field">
+      <div className="quotation-workspace">
+        <main className="quotation-editor">
+          <div className="quotation-customer-bar">
+            <div className="quotation-date-field">
               <label htmlFor="quotation-date">تاریخ صدور</label>
-              <input 
+              <input
                 id="quotation-date"
-                style={{ ...win95Style.input, width: '120px', textAlign: 'center' }} 
-                value={quotationDate} 
-                onChange={(e) => setQuotationDate(e.target.value)} 
+                style={{ ...win95Style.input, width: '120px', textAlign: 'center' }}
+                value={quotationDate}
+                onChange={(e) => setQuotationDate(e.target.value)}
               />
-          </div>
-          
-          <div className="accounting-inline-field" style={{ position: 'relative' }}>
+            </div>
+
+            <div className="quotation-customer-field">
               <label htmlFor="quotation-customer-search">مشتری</label>
-              <input 
+              <input
                 id="quotation-customer-search"
-                style={{ ...win95Style.input, width: '220px' }} 
-                placeholder="جستجوی نام مشتری..." 
-                value={searchTerm} 
-                onChange={(e) => { 
-                  setSearchTerm(e.target.value); 
-                  setIsSearching(true); 
-                }} 
+                style={{ ...win95Style.input, width: '220px' }}
+                placeholder="جستجوی نام مشتری..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setIsSearching(true);
+                }}
               />
-              <button 
-                style={win95Style.button} 
+              <button
+                style={win95Style.button}
                 onClick={() => setShowAddCustomerForm(!showAddCustomerForm)}>
-                {showAddCustomerForm ? "بستن فرم" : "+ مشتری جدید"}
+                {showAddCustomerForm ? 'بستن فرم' : '+ مشتری جدید'}
               </button>
-          </div>
-          
-          <button 
-            onClick={() => setShowBuyingPrice(!showBuyingPrice)} 
-            style={{ ...win95Style.button, backgroundColor: '#64748b' }}>
-            {showBuyingPrice ? "مخفی کردن قیمت خرید" : "نمایش قیمت خرید"}
-          </button>
-      </div>
+            </div>
 
-      {/* فرم افزودن مشتری جدید */}
-      {showAddCustomerForm && (
-        <div className="accounting-form-grid" style={{ background: '#ffffff', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '6px', marginBottom: '15px' }}>
-            <div className="accounting-field">
-            <label htmlFor="quotation-new-customer-name">نام و نام خانوادگی</label>
-            <input 
-              id="quotation-new-customer-name"
-              style={win95Style.input}
-              placeholder="نام مشتری"
-              value={newCustomerName} 
-              onChange={(e) => setNewCustomerName(e.target.value)} 
-            />
-            </div>
-            <div className="accounting-field">
-            <label htmlFor="quotation-new-customer-phone">شماره تماس</label>
-            <input 
-              id="quotation-new-customer-phone"
-              style={win95Style.input}
-              type="tel"
-              inputMode="tel"
-              placeholder="مثلاً 09123456789"
-              value={newCustomerPhone} 
-              onChange={(e) => setNewCustomerPhone(e.target.value)} 
-            />
-            </div>
-            <button 
-              style={{ ...win95Style.button, backgroundColor: '#10b981' }} 
-              onClick={handleAddNewCustomer}>
-              ذخیره مشتری
+            <button
+              className="quotation-buying-price-toggle"
+              onClick={() => setShowBuyingPrice(!showBuyingPrice)}>
+              {showBuyingPrice ? 'مخفی کردن قیمت خرید' : 'نمایش قیمت خرید'}
             </button>
-        </div>
-      )}
+          </div>
 
-      {/* لیست کشویی پیشنهاد نتایج جستجوی مشتری */}
-      {isSearching && searchTerm && (
-        <div style={{ position: 'relative', width: '100%', backgroundColor: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', zIndex: 20, maxHeight: '140px', overflowY: 'auto', marginBottom: '12px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-            {customers.filter(c => (c["Full name"] || '').toLowerCase().includes(searchTerm.toLowerCase())).map((c) => (
-              <div 
-                key={c.id || c["Full name"]} 
-                style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '12px' }} 
-                onClick={() => { 
-                  setSelectedCustomer(c); 
-                  setSearchTerm(c["Full name"]); 
-                  setIsSearching(false); 
-                }}>
-                <strong>{c["Full name"]}</strong> {c.phone ? `(${formatPersianDigits(c.phone)})` : '(بدون تلفن)'}
+          {showAddCustomerForm && (
+            <div className="quotation-new-customer-form">
+              <div className="accounting-field">
+                <label htmlFor="quotation-new-customer-name">نام و نام خانوادگی</label>
+                <input
+                  id="quotation-new-customer-name"
+                  style={win95Style.input}
+                  placeholder="نام مشتری"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                />
               </div>
-            ))}
-        </div>
-      )}
+              <div className="accounting-field">
+                <label htmlFor="quotation-new-customer-phone">شماره تماس</label>
+                <input
+                  id="quotation-new-customer-phone"
+                  style={win95Style.input}
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="مثلاً 09123456789"
+                  value={newCustomerPhone}
+                  onChange={(e) => setNewCustomerPhone(e.target.value)}
+                />
+              </div>
+              <button
+                className="quotation-add-customer-submit"
+                style={{ ...win95Style.button, backgroundColor: '#10b981' }}
+                onClick={handleAddNewCustomer}>
+                ذخیره مشتری
+              </button>
+            </div>
+          )}
 
-      {/* جدول اقلام انتخاب‌شده */}
-      <div style={{ background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: '15px' }}>
-        <div className="quotation-items-table-wrap" style={{ overflowX: 'auto' }}>
+          {isSearching && searchTerm && (
+            <div className="quotation-customer-suggestions">
+              {customers.filter(c => (c['Full name'] || '').toLowerCase().includes(searchTerm.toLowerCase())).map((c) => (
+                <div
+                  key={c.id || c['Full name']}
+                  onClick={() => {
+                    setSelectedCustomer(c);
+                    setSearchTerm(c['Full name']);
+                    setIsSearching(false);
+                  }}>
+                  <strong>{c['Full name']}</strong> {c.phone ? `(${formatPersianDigits(c.phone)})` : '(بدون تلفن)'}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <section className="quotation-table-card">
+            <div className="quotation-section-heading">
+              <div>
+                <h3>اقلام پیش‌فاکتور</h3>
+                <span>برای افزودن کالا، از بخش انبار استفاده کنید.</span>
+              </div>
+              <span className="quotation-items-count">{formatDisplay(items.length)} قلم</span>
+            </div>
+            <div className="quotation-items-table-wrap">
           <table className="quotation-items-table" style={{ width: "100%", borderCollapse: "collapse", textAlign: "right", fontSize: '12px' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
@@ -666,16 +671,44 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+            </div>
+          </section>
+        </main>
 
-      {/* دکمه چاپ و ذخیره پیش‌فاکتور */}
-      <button 
-        onClick={handleSaveAndPrint} 
-        disabled={isSaving} 
-        style={{ ...win95Style.button, backgroundColor: '#10b981', padding: '10px 20px', fontSize: '13px' }}>
-        {isSaving ? "در حال ذخیره‌سازی..." : "💾 چاپ و ذخیره پیش‌فاکتور"}
-      </button>
+        <aside className="quotation-summary-panel">
+          <div className="quotation-summary-heading">
+            <span>خلاصه پیش‌فاکتور</span>
+            <span className="quotation-summary-dot" />
+          </div>
+          <div className="quotation-summary-customer">
+            <span>مشتری</span>
+            <strong>{selectedCustomer?.['Full name'] || 'انتخاب نشده'}</strong>
+          </div>
+          <div className="quotation-total-list">
+            <div className="quotation-total-row">
+              <span>مجموع کل · درجه ۱</span>
+              <strong>{total1.toLocaleString('fa-IR')} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row">
+              <span>مجموع کل · درجه ۲</span>
+              <strong>{total2.toLocaleString('fa-IR')} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row">
+              <span>مجموع کل · درجه ۳</span>
+              <strong>{total3.toLocaleString('fa-IR')} <small>تومان</small></strong>
+            </div>
+          </div>
+          <p className="quotation-summary-note">
+            {items.length ? `${formatDisplay(items.length)} قلم کالا در این پیش‌فاکتور ثبت شده است.` : 'هنوز کالایی به پیش‌فاکتور اضافه نشده است.'}
+          </p>
+          <button
+            className="quotation-save-button"
+            onClick={handleSaveAndPrint}
+            disabled={isSaving}>
+            {isSaving ? 'در حال ذخیره‌سازی...' : 'چاپ و ذخیره پیش‌فاکتور'}
+          </button>
+        </aside>
+      </div>
 
       {/* بخش فاکتورهای اخیر */}
       <div className="recent-invoices" dir="rtl">

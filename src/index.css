@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "IRANSans";
+  src: url("https://cdn.fontcdn.ir/Font/Persian/IRANSans/IRANSans.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 /* ۲. ریست کردن استایل‌های پیش‌فرض مرورگر */
 * {
   margin: 0;
@@ -14,7 +22,7 @@
   --background-color: #f8fafc;
   --text-color: #1e293b;
   --border-color: #e2e8f0;
-  --font-main: 'Vazirmatn', sans-serif;
+  --font-main: 'IRANSans', Tahoma, sans-serif;
 }
 
 /* ۴. تنظیمات اصلی بدنه سایت */
@@ -49,6 +57,16 @@ th {
 input, select, textarea, button {
   font-family: var(--font-main);
   font-size: 14px;
+}
+
+html,
+body,
+#root,
+button,
+input,
+select,
+textarea {
+  font-family: "IRANSans", Tahoma, sans-serif;
 }
 
 input, select, textarea {

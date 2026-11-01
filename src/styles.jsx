@@ -4,7 +4,7 @@ export const styles = {
     backgroundColor: '#d4d0c8',
     border: '2px solid #808080',
     padding: '2px',
-    fontFamily: 'Tahoma, sans-serif',
+    fontFamily: '"IRANSans", Tahoma, sans-serif',
     fontSize: '12px',
     color: '#000'
   },

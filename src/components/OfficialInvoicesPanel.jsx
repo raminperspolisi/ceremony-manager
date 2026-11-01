@@ -3,7 +3,7 @@ import { deleteRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
-import { updateOfficialInvoice } from '../quotationInvoice';
+import { getInvoiceDeletionErrorMessage, updateOfficialInvoice } from '../quotationInvoice';
 import { getInvoicePaymentStatus } from '../cashbookUtils';
 import { formatPersianDate } from '../dateUtils';
 
@@ -159,7 +159,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
 
     const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'in', value: selectedIds }]);
     if (error) {
-      alert("خطا در حذف گروهی فاکتورها: " + error.message);
+      alert("خطا در حذف گروهی فاکتورها: " + getInvoiceDeletionErrorMessage(error));
     } else {
       fetchOfficialInvoices();
     }
@@ -175,7 +175,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     if (action === 'delete') {
       if (!window.confirm(`آیا از حذف فاکتور #${formatPersianDigits(invoice.id)} اطمینان دارید؟`)) return;
       const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'eq', value: invoice.id }]);
-      if (error) alert('خطا در حذف فاکتور: ' + error.message);
+      if (error) alert('خطا در حذف فاکتور: ' + getInvoiceDeletionErrorMessage(error));
       else fetchOfficialInvoices();
       return;
     }
@@ -484,8 +484,9 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       <html dir="rtl">
         <head>
           <style>
+            @font-face { font-family: 'IRANSans'; src: url('https://cdn.fontcdn.ir/Font/Persian/IRANSans/IRANSans.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
             @page { size: A4; margin: 15mm; }
-            body { font-family: Tahoma, sans-serif; padding: 30px; direction: rtl; }
+            body { font-family: 'IRANSans', Tahoma, sans-serif; padding: 30px; direction: rtl; }
             .header-container { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 2px solid #334155; padding-bottom: 10px; margin-bottom: 15px; }
             .company-logo { width: 72px; height: 94px; object-fit: contain; }
             h2 { margin: 0; font-size: 18px; color: #1e293b; }

@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { convertQuotationToInvoice, deleteSelectedDocuments, updateOfficialInvoice } from '../src/quotationInvoice.js';
+import {
+  convertQuotationToInvoice,
+  deleteSelectedDocuments,
+  getInvoiceDeletionErrorMessage,
+  updateOfficialInvoice,
+} from '../src/quotationInvoice.js';
 
 test('conversion creates a linked invoice when no invoice exists', async () => {
   let inserted;
@@ -94,5 +99,23 @@ test('bulk deletion reports a partial result when the second table fails', async
       { deleteRows: async (table) => ({ error: table === 'invoices' ? { message: 'خطای سرور' } : null }) },
     ),
     (error) => error.partial === true && error.message === 'خطای سرور',
+  );
+});
+
+test('invoice deletion explains how to preserve cash transactions', () => {
+  const message = getInvoiceDeletionErrorMessage({
+    code: '23503',
+    message: 'update or delete on table "invoices" violates foreign key constraint "cash_transactions_invoice_id_fkey"',
+  });
+
+  assert.match(message, /گردش صندوق یا بانک/);
+  assert.match(message, /20261101120000_invoice_cash_transaction_set_null\.sql/);
+  assert.match(message, /گردش‌ها باقی می‌مانند/);
+});
+
+test('unrelated invoice deletion errors retain their original message', () => {
+  assert.equal(
+    getInvoiceDeletionErrorMessage({ code: '42501', message: 'اجازه حذف ندارید.' }),
+    'اجازه حذف ندارید.',
   );
 });

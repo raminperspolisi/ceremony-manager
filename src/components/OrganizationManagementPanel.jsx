@@ -235,16 +235,18 @@ export default function OrganizationManagementPanel({
       <section className="organization-management" dir="rtl">
         <h3>ساخت فضای کاری</h3>
         <p>برای شروع، فضای کاری کسب‌وکار خود را بسازید. اطلاعات و اعضای هر فضا از فضاهای دیگر جدا هستند.</p>
-        <form onSubmit={createOrganization}>
-          <label htmlFor="new-organization-name">نام کسب‌وکار</label>
-          <input
-            id="new-organization-name"
-            value={organizationName}
-            onChange={(event) => setOrganizationName(event.target.value)}
-            maxLength={120}
-            required
-            disabled={busy}
-          />
+        <form className="organization-name-form" onSubmit={createOrganization}>
+          <label className="organization-form-field" htmlFor="new-organization-name">
+            نام کسب‌وکار
+            <input
+              id="new-organization-name"
+              value={organizationName}
+              onChange={(event) => setOrganizationName(event.target.value)}
+              maxLength={120}
+              required
+              disabled={busy}
+            />
+          </label>
           <button type="submit" disabled={busy || !organizationName.trim()}>
             {busy ? 'در حال ساخت…' : 'ساخت فضای کاری'}
           </button>
@@ -264,16 +266,18 @@ export default function OrganizationManagementPanel({
       )}
 
       {isAdmin && (
-        <form onSubmit={saveOrganizationName}>
-          <label htmlFor="organization-name">نام فضای کاری</label>
-          <input
-            id="organization-name"
-            value={organizationName}
-            onChange={(event) => setOrganizationName(event.target.value)}
-            maxLength={120}
-            required
-            disabled={busy}
-          />
+        <form className="organization-name-form" onSubmit={saveOrganizationName}>
+          <label className="organization-form-field" htmlFor="organization-name">
+            نام فضای کاری
+            <input
+              id="organization-name"
+              value={organizationName}
+              onChange={(event) => setOrganizationName(event.target.value)}
+              maxLength={120}
+              required
+              disabled={busy}
+            />
+          </label>
           <button type="submit" disabled={busy || !organizationName.trim()}>
             ذخیرهٔ نام
           </button>
@@ -284,19 +288,21 @@ export default function OrganizationManagementPanel({
         <>
           <h4>دعوت کاربر</h4>
           <p>برای حفظ امنیت، ارسال دعوت‌نامه از Edge Function سمت سرور انجام می‌شود؛ کلید Service Role در مرورگر قرار نمی‌گیرد.</p>
-          <form onSubmit={inviteMember}>
-            <label htmlFor="organization-invite-email">ایمیل کاربر</label>
-            <input
-              id="organization-invite-email"
-              type="email"
-              autoComplete="email"
-              value={inviteEmail}
-              onChange={(event) => setInviteEmail(event.target.value)}
-              required
-              disabled={busy}
-            />
+          <form className="organization-invite-form" onSubmit={inviteMember}>
+            <label className="organization-form-field" htmlFor="organization-invite-email">
+              ایمیل کاربر
+              <input
+                id="organization-invite-email"
+                type="email"
+                autoComplete="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                required
+                disabled={busy}
+              />
+            </label>
             {membership.role === 'owner' && (
-              <label>
+              <label className="organization-form-field">
                 نقش
                 <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} disabled={busy}>
                   <option value="member">کاربر با دسترسی‌های انتخابی</option>
@@ -304,10 +310,10 @@ export default function OrganizationManagementPanel({
                 </select>
               </label>
             )}
-            {inviteRole === 'member' && <fieldset disabled={busy}>
+            {inviteRole === 'member' && <fieldset className="organization-permission-fieldset" disabled={busy}>
               <legend>بخش‌های مجاز</legend>
               {SECTIONS.map(([key, label]) => (
-                <label key={key}>
+                <label className="organization-permission-option" key={key}>
                   <input
                     type="checkbox"
                     checked={Boolean(invitePermissions[key])}
@@ -336,7 +342,7 @@ export default function OrganizationManagementPanel({
                 <>
                   <div className="organization-member-permissions">
                     {SECTIONS.map(([key, label]) => (
-                      <label key={key}>
+                      <label className="organization-permission-option" key={key}>
                         <input
                           type="checkbox"
                           checked={Boolean(member.section_permissions?.[key])}

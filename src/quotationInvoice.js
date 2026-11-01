@@ -22,6 +22,17 @@ export async function convertQuotationToInvoice(quotation, { readTable, insertRo
   return { alreadyConverted: false, invoice: data?.[0] || null };
 }
 
+export function getInvoiceDeletionErrorMessage(error) {
+  const message = error?.message || 'خطای نامشخص';
+  if (
+    error?.code === '23503'
+    && message.includes('cash_transactions_invoice_id_fkey')
+  ) {
+    return 'این فاکتور به گردش صندوق یا بانک متصل است. برای حفظ گردش‌های مالی و امکان حذف فاکتور، migration فایل supabase/migrations/20261101120000_invoice_cash_transaction_set_null.sql را در SQL Editor سوپابیس اجرا کنید؛ گردش‌ها باقی می‌مانند و فقط اتصالشان به فاکتور حذف‌شده پاک می‌شود.';
+  }
+  return message;
+}
+
 export async function deleteSelectedDocuments(selectedIds, documents, { deleteRows }) {
   const selected = new Set(selectedIds);
   const quotationIds = documents
@@ -40,7 +51,7 @@ export async function deleteSelectedDocuments(selectedIds, documents, { deleteRo
   if (invoiceIds.length) {
     const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'in', value: invoiceIds }]);
     if (error) {
-      const partialError = new Error(error.message);
+      const partialError = new Error(getInvoiceDeletionErrorMessage(error));
       partialError.partial = deletedQuotations;
       throw partialError;
     }

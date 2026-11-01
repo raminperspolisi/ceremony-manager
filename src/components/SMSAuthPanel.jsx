@@ -221,7 +221,7 @@ export default function SMSAuthPanel({
         background: '#fff',
         borderRadius: 12,
         boxShadow: '0 8px 30px rgba(15, 23, 42, 0.1)',
-        fontFamily: 'Vazirmatn, Tahoma, sans-serif',
+        fontFamily: '"IRANSans", Tahoma, sans-serif',
       }}
     >
       <img

@@ -171,7 +171,8 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
         <meta charset="UTF-8">
         <title>فاکتور رسمی ${safeBusinessName} - #${formatNumber(invoiceNumber)}</title>
         <style>
-          body { font-family: Tahoma, sans-serif; direction: rtl; padding: 20px; color: #1e293b; background: #fff; }
+          @font-face { font-family: 'IRANSans'; src: url('https://cdn.fontcdn.ir/Font/Persian/IRANSans/IRANSans.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
+          body { font-family: 'IRANSans', Tahoma, sans-serif; direction: rtl; padding: 20px; color: #1e293b; background: #fff; }
           .header { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px; }
           .company-logo { width: 72px; height: 94px; object-fit: contain; }
           .title { font-size: 20px; font-weight: bold; color: #0f172a; }
@@ -301,7 +302,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     .slice(0, 5);
 
   return (
-    <div style={{ background: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', fontFamily: 'Tahoma, sans-serif', direction: 'rtl' }}>
+    <div style={{ background: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', fontFamily: '"IRANSans", Tahoma, sans-serif', direction: 'rtl' }}>
       <h3 style={{ margin: '0 0 15px 0', color: '#1e293b', fontSize: '16px' }}>گزارش مالی و تحلیل پیشرفته تشریفات</h3>
       {loadError && <p role="alert" style={{ color: '#b91c1c' }}>{loadError}</p>}
 

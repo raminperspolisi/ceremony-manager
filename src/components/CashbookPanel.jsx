@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { insertRows, readTable, recordCashTransaction, updateRows } from '../offlineSync';
 import FormattedNumberInput from './FormattedNumberInput';
+import PersianDateInput from './PersianDateInput';
 import { formatPersianDigits } from '../styles';
 import {
   calculateAccountBalances,
@@ -80,6 +81,7 @@ export default function CashbookPanel() {
   const [dateFrom, setDateFrom] = useState(monthStartIso);
   const [dateTo, setDateTo] = useState(() => localIsoDate(new Date()));
   const [ledgerSearch, setLedgerSearch] = useState('');
+  const [periodDetailsType, setPeriodDetailsType] = useState(null);
 
   const balances = useMemo(
     () => calculateAccountBalances(accounts, transactions),
@@ -95,6 +97,29 @@ export default function CashbookPanel() {
     () => summarizeCashTransactions(transactions, dateFrom, dateTo),
     [transactions, dateFrom, dateTo],
   );
+  const periodTransactions = useMemo(() => transactions
+    .filter((transaction) => transaction.transaction_date >= dateFrom
+      && transaction.transaction_date <= dateTo)
+    .sort((first, second) => (
+      String(second.transaction_date).localeCompare(String(first.transaction_date))
+      || Number(second.id || 0) - Number(first.id || 0)
+    )), [transactions, dateFrom, dateTo]);
+  const periodDetailsTransactions = periodDetailsType === 'income'
+    ? periodTransactions.filter((transaction) => transaction.transaction_type === 'income')
+    : periodDetailsType === 'expense'
+      ? periodTransactions.filter((transaction) => transaction.transaction_type === 'expense')
+      : periodTransactions;
+  const periodDetailsTitle = periodDetailsType === 'income'
+    ? 'جزئیات دریافتی‌های دوره'
+    : periodDetailsType === 'expense'
+      ? 'جزئیات هزینه‌های دوره'
+      : 'جزئیات گردش‌های دوره';
+  const periodDetailsTotal = periodDetailsType === 'all'
+    ? periodSummary.income - periodSummary.expenses
+    : periodDetailsTransactions.reduce(
+      (total, transaction) => total + Number(transaction.amount || 0),
+      0,
+    );
   const outstandingInvoices = invoices
     .map((invoice) => ({
       ...invoice,
@@ -103,6 +128,15 @@ export default function CashbookPanel() {
     }))
     .filter((invoice) => invoice.total > invoice.paid)
     .sort((first, second) => (second.total - second.paid) - (first.total - first.paid));
+
+  const handleDateFromChange = (value) => {
+    setDateFrom(value);
+    if (value && value > dateTo) setDateTo(value);
+  };
+  const handleDateToChange = (value) => {
+    setDateTo(value);
+    if (value && value < dateFrom) setDateFrom(value);
+  };
 
   const refreshData = async () => {
     setLoading(true);
@@ -132,6 +166,24 @@ export default function CashbookPanel() {
       window.removeEventListener('offline-data-updated', handleDataUpdate);
     };
   }, []);
+
+  useEffect(() => {
+    const handleAppEscape = (event) => {
+      if (!periodDetailsType) return;
+      event.preventDefault();
+      setPeriodDetailsType(null);
+    };
+    window.addEventListener('app-escape', handleAppEscape);
+    return () => window.removeEventListener('app-escape', handleAppEscape);
+  }, [periodDetailsType]);
+
+  const openPeriodDetails = (type) => setPeriodDetailsType(type);
+  const handlePeriodCardKeyDown = (event, type) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openPeriodDetails(type);
+    }
+  };
 
   const visibleTransactions = transactions.filter((transaction) => (
     (accountFilter === 'all'
@@ -174,6 +226,13 @@ export default function CashbookPanel() {
       return;
     }
 
+    const initialBalance = Number(openingBalance || 0);
+    if (!Number.isSafeInteger(initialBalance) || initialBalance < 0) {
+      setErrorMessage('موجودی اولیه باید عدد صحیح و صفر یا بیشتر باشد.');
+      setBusy(false);
+      return;
+    }
+
     const accountDate = editingAccountId ? null : parseJalaliDate(openingDate);
     if (!editingAccountId && !accountDate) {
       setErrorMessage('تاریخ شمسی افتتاح حساب معتبر نیست.');
@@ -187,6 +246,7 @@ export default function CashbookPanel() {
         bank_name: accountType === 'bank' ? bankName.trim() : null,
         holder_name: accountType === 'bank' ? holderName.trim() || null : null,
         card_number: accountType === 'bank' ? normalizedCardNumber : null,
+        opening_balance: initialBalance,
       }, [
         { column: 'id', operator: 'eq', value: editingAccountId },
       ])
@@ -224,6 +284,7 @@ export default function CashbookPanel() {
     setBankName(account.bank_name || '');
     setHolderName(account.holder_name || '');
     setCardNumber(account.card_number || '');
+    setOpeningBalance(String(account.opening_balance ?? 0));
     setAccountFormOpen(true);
   };
 
@@ -375,19 +436,167 @@ export default function CashbookPanel() {
           </div>
           <div className="cashbook-date-range">
             <label>از تاریخ
-              <input type="date" value={dateFrom} max={dateTo} onChange={(event) => setDateFrom(event.target.value)} />
+              <PersianDateInput value={dateFrom} onChange={handleDateFromChange} />
             </label>
             <label>تا تاریخ
-              <input type="date" value={dateTo} min={dateFrom} onChange={(event) => setDateTo(event.target.value)} />
+              <PersianDateInput value={dateTo} onChange={handleDateToChange} />
             </label>
           </div>
         </div>
         <div className="cashbook-period-grid">
-          <article className="cashbook-period-income"><span>دریافتی دوره</span><strong>{money(periodSummary.income)}</strong></article>
-          <article className="cashbook-period-expense"><span>هزینهٔ دوره</span><strong>{money(periodSummary.expenses)}</strong></article>
-          <article className="cashbook-period-net"><span>خالص گردش دوره</span><strong>{money(periodSummary.income - periodSummary.expenses)}</strong></article>
+          <article
+            className="cashbook-period-income cashbook-period-card"
+            role="button"
+            tabIndex={0}
+            aria-label="نمایش جزئیات دریافتی‌های دوره؛ دوبار کلیک کنید"
+            title="برای مشاهدهٔ جزئیات دوبار کلیک کنید"
+            onDoubleClick={() => openPeriodDetails('income')}
+            onKeyDown={(event) => handlePeriodCardKeyDown(event, 'income')}
+          >
+            <span>دریافتی دوره</span><strong>{money(periodSummary.income)}</strong>
+            <small>برای جزئیات دوبار کلیک کنید</small>
+          </article>
+          <article
+            className="cashbook-period-expense cashbook-period-card"
+            role="button"
+            tabIndex={0}
+            aria-label="نمایش جزئیات هزینه‌های دوره؛ دوبار کلیک کنید"
+            title="برای مشاهدهٔ جزئیات دوبار کلیک کنید"
+            onDoubleClick={() => openPeriodDetails('expense')}
+            onKeyDown={(event) => handlePeriodCardKeyDown(event, 'expense')}
+          >
+            <span>هزینهٔ دوره</span><strong>{money(periodSummary.expenses)}</strong>
+            <small>برای جزئیات دوبار کلیک کنید</small>
+          </article>
+          <article
+            className="cashbook-period-net cashbook-period-card"
+            role="button"
+            tabIndex={0}
+            aria-label="نمایش جزئیات همهٔ گردش‌های دوره؛ دوبار کلیک کنید"
+            title="برای مشاهدهٔ جزئیات دوبار کلیک کنید"
+            onDoubleClick={() => openPeriodDetails('all')}
+            onKeyDown={(event) => handlePeriodCardKeyDown(event, 'all')}
+          >
+            <span>خالص گردش دوره</span><strong>{money(periodSummary.income - periodSummary.expenses)}</strong>
+            <small>برای جزئیات دوبار کلیک کنید</small>
+          </article>
         </div>
       </section>
+
+      {periodDetailsType && (
+        <div
+          className="cashbook-period-details-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPeriodDetailsType(null);
+          }}
+        >
+          <section
+            className="cashbook-period-details-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cashbook-period-details-title"
+            dir="rtl"
+          >
+            <header className="cashbook-period-details-header">
+              <div>
+                <h3 id="cashbook-period-details-title">{periodDetailsTitle}</h3>
+                <p>{formatJalaliDate(dateFrom)} تا {formatJalaliDate(dateTo)}</p>
+              </div>
+              <button
+                type="button"
+                aria-label="بستن جزئیات"
+                onClick={() => setPeriodDetailsType(null)}
+              >
+                ×
+              </button>
+            </header>
+            <div className="cashbook-period-details-summary">
+              <span>
+                {periodDetailsType === 'all' ? 'خالص دوره' : `${formatPersianDigits(periodDetailsTransactions.length)} گردش`}
+              </span>
+              <strong>{money(periodDetailsTotal)}</strong>
+            </div>
+            {periodDetailsTransactions.length === 0 ? (
+              <p className="cashbook-empty">در این بازه گردش ثبت‌شده‌ای وجود ندارد.</p>
+            ) : (
+              <div className="cashbook-period-details-list">
+                {periodDetailsTransactions.map((transaction) => {
+                  const sourceAccount = accounts.find(
+                    (account) => String(account.id) === String(transaction.account_id),
+                  );
+                  const destinationAccount = accounts.find(
+                    (account) => String(account.id) === String(transaction.transfer_to_account_id),
+                  );
+                  const invoice = invoices.find(
+                    (item) => String(item.id) === String(transaction.invoice_id),
+                  );
+                  const typeLabel = TRANSACTION_TYPES.find(
+                    (type) => type.value === transaction.transaction_type,
+                  )?.label || transaction.transaction_type;
+                  return (
+                    <article className="cashbook-period-detail" key={transaction.id}>
+                      <div className="cashbook-period-detail-heading">
+                        <span className={`cashbook-type-badge cashbook-type-${transaction.transaction_type}`}>
+                          {typeLabel}
+                        </span>
+                        <strong className={`cashbook-amount cashbook-amount-${transaction.transaction_type}`}>
+                          {money(transaction.amount)}
+                        </strong>
+                      </div>
+                      <dl>
+                        <div>
+                          <dt>تاریخ</dt>
+                          <dd>{formatJalaliDate(transaction.transaction_date)}</dd>
+                        </div>
+                        <div>
+                          <dt>{transaction.transaction_type === 'transfer' ? 'حساب مبدا' : 'حساب'}</dt>
+                          <dd>{sourceAccount?.account_name || 'حساب حذف‌شده'}</dd>
+                        </div>
+                        {transaction.transaction_type === 'transfer' && (
+                          <div>
+                            <dt>حساب مقصد</dt>
+                            <dd>{destinationAccount?.account_name || 'حساب حذف‌شده'}</dd>
+                          </div>
+                        )}
+                        {transaction.category && (
+                          <div>
+                            <dt>دسته‌بندی</dt>
+                            <dd>{transaction.category}</dd>
+                          </div>
+                        )}
+                        {invoice && (
+                          <>
+                            <div>
+                              <dt>فاکتور</dt>
+                              <dd>#{invoiceDisplayNumber(invoice)} · {invoice.customer_name || 'مشتری بدون نام'}</dd>
+                            </div>
+                            <div>
+                              <dt>مبلغ کل فاکتور</dt>
+                              <dd>{money(invoice.total_price || invoice.total_amount)}</dd>
+                            </div>
+                          </>
+                        )}
+                        <div className="cashbook-period-detail-wide">
+                          <dt>شرح</dt>
+                          <dd>{transaction.description || 'ثبت نشده'}</dd>
+                        </div>
+                        <div className="cashbook-period-detail-wide">
+                          <dt>یادداشت رسید</dt>
+                          <dd>{transaction.receipt_note || 'ثبت نشده'}</dd>
+                        </div>
+                        <div>
+                          <dt>شمارهٔ پیگیری / رسید</dt>
+                          <dd>{transaction.reference_number || 'ثبت نشده'}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
       <section className="cashbook-invoice-followup" aria-label="فاکتورهای دارای مانده">
         <div className="cashbook-section-title">
@@ -466,12 +675,23 @@ export default function CashbookPanel() {
               </label>
             </>
           )}
+          <label>
+            موجودی اولیه (تومان)
+            <FormattedNumberInput
+              value={openingBalance}
+              onValueChange={setOpeningBalance}
+              allowDecimal={false}
+              inputMode="numeric"
+              required
+            />
+            {editingAccountId && (
+              <small className="cashbook-sensitive-note">
+                ماندهٔ فعلی از موجودی اولیه و گردش‌های ثبت‌شده محاسبه می‌شود؛ تغییر این مقدار، گردش‌ها را حذف یا ویرایش نمی‌کند.
+              </small>
+            )}
+          </label>
           {!editingAccountId && (
             <>
-              <label>
-                موجودی اولیه (تومان)
-                <FormattedNumberInput value={openingBalance} onValueChange={setOpeningBalance} allowDecimal={false} inputMode="numeric" />
-              </label>
               <label>
                 تاریخ افتتاح (شمسی)
                 <input value={openingDate} onChange={(event) => setOpeningDate(event.target.value)} placeholder="۱۴۰۵/۰۷/۰۱" required />

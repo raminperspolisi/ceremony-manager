@@ -100,7 +100,7 @@ const createInvoiceImageMarkup = (invoice, businessName, logoUrl) => {
     : '<tr><td colspan="6">اقلام فاکتور ثبت نشده است.</td></tr>';
 
   return `
-    <div style="box-sizing:border-box;width:900px;padding:38px;background:#fff;color:#1e293b;direction:rtl;font-family:Vazirmatn,Tahoma,sans-serif;">
+    <div style="box-sizing:border-box;width:900px;padding:38px;background:#fff;color:#1e293b;direction:rtl;font-family:IRANSans,Tahoma,sans-serif;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:18px;padding-bottom:18px;border-bottom:3px solid #0f766e;">
         <div>
           <div style="font-size:25px;font-weight:800;color:#0f172a;">فاکتور رسمی فروش و اجاره ${escapeHtml(businessName)}</div>
@@ -321,7 +321,7 @@ export default function RemindersPanel({ businessName = 'تشریفات آژو',
   };
 
   return (
-    <div className="reminders-panel" style={{ padding: '20px', fontFamily: 'IRANSans, Tahoma, sans-serif', direction: 'rtl', background: '#f9fafb', borderRadius: '12px' }}>
+    <div className="reminders-panel" style={{ padding: '20px', fontFamily: '"IRANSans", Tahoma, sans-serif', direction: 'rtl', background: '#f9fafb', borderRadius: '12px' }}>
       <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '8px', color: '#1f2937' }}>
         🔔 یادآوری‌ها و مراسم‌های پیش‌رو (پیگیری و تسویه)
       </h2>

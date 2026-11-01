@@ -27,8 +27,9 @@ If you are developing a production application, we recommend using TypeScript wi
 4. برای افزودن صندوق و بانک، محتوای `supabase/migrations/20261023200000_cashbook_accounts_and_transactions.sql` را اجرا کنید. این migration جدول‌های حساب و گردش، دسترسی‌های RLS و RPC اتمی ثبت گردش/تسویهٔ فاکتور را می‌سازد. اگر migration Realtime قبلی را قبلاً اجرا کرده‌اید، migration جدید خودش جدول‌های مالی را به publication اضافه می‌کند.
 5. برای ذخیرهٔ نام بانک و شمارهٔ کارت حساب‌های بانکی، migration `supabase/migrations/20261023233000_cashbook_bank_account_details.sql` را اجرا کنید. شمارهٔ کامل کارت در پایگاه داده و حافظهٔ آفلاین همان دستگاه ذخیره می‌شود؛ در رابط فقط چهار رقم پایانی نمایش داده می‌شود. فایل پشتیبان شامل این اطلاعات است و باید محرمانه نگهداری شود.
 6. برای افزودن شمارهٔ پیگیری و یادداشت رسید به گردش‌ها و ثبت آن‌ها در RPC، migration `supabase/migrations/20261023234000_cash_transaction_receipt_details.sql` را اجرا کنید.
-7. سیاست‌های RLS جدول‌های `customers`, `ceremonies`, `events`, `inventory`, `quotations` و `invoices` را بررسی کنید. کاربر واردشده باید مجوزهای لازم برای `SELECT`, `INSERT`, `UPDATE` و `DELETE` را داشته باشد. درج‌های آفلاین هنگام همگام‌سازی با `upsert` انجام می‌شوند؛ بنابراین سیاست‌های درج/به‌روزرسانی و دسترسی خواندن نیز باید با این روش سازگار باشند.
-8. نسخهٔ production را روی دامنهٔ **HTTPS** منتشر کنید. Service Worker و نصب PWA روی دامنهٔ امن کار می‌کنند؛ `localhost` برای آزمایش محلی استثناست.
+7. برای حذف فاکتوری که گردش صندوق یا بانک دارد، migration `supabase/migrations/20261101120000_invoice_cash_transaction_set_null.sql` را اجرا کنید. این migration سوابق گردش را نگه می‌دارد و فقط اتصال آن‌ها به فاکتور حذف‌شده را پاک می‌کند.
+8. سیاست‌های RLS جدول‌های `customers`, `ceremonies`, `events`, `inventory`, `quotations` و `invoices` را بررسی کنید. کاربر واردشده باید مجوزهای لازم برای `SELECT`, `INSERT`, `UPDATE` و `DELETE` را داشته باشد. درج‌های آفلاین هنگام همگام‌سازی با `upsert` انجام می‌شوند؛ بنابراین سیاست‌های درج/به‌روزرسانی و دسترسی خواندن نیز باید با این روش سازگار باشند.
+9. نسخهٔ production را روی دامنهٔ **HTTPS** منتشر کنید. Service Worker و نصب PWA روی دامنهٔ امن کار می‌کنند؛ `localhost` برای آزمایش محلی استثناست.
 
 ## سازمان‌ها، اعضا و دسترسی بخش‌محور
 

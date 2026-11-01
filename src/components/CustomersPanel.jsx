@@ -280,7 +280,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   const fmt = (n) => n ? Number(n).toLocaleString('fa-IR') : '—';
 
   const styles = {
-    container: { padding: '8px', direction: 'rtl', fontFamily: "'Vazirmatn', Tahoma, sans-serif", maxWidth: '900px', margin: '0 auto', boxSizing: 'border-box' },
+    container: { padding: '8px', direction: 'rtl', fontFamily: '"IRANSans", Tahoma, sans-serif', maxWidth: '900px', margin: '0 auto', boxSizing: 'border-box' },
     headerTitle: { textAlign: 'center', color: 'var(--app-primary)', fontSize: '15px', fontWeight: '700', marginBottom: '8px' },
     cardBox: { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', marginBottom: '10px' },
     sectionTitle: { fontSize: '12px', color: '#1e293b', marginBottom: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', fontWeight: '600' },
