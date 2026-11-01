@@ -6,6 +6,7 @@ import PersianDateInput from './PersianDateInput';
 import { getInvoiceDeletionErrorMessage, updateOfficialInvoice } from '../quotationInvoice';
 import { getInvoicePaymentStatus } from '../cashbookUtils';
 import { formatPersianDate } from '../dateUtils';
+import { renderBusinessContactHtml } from '../profileLinks';
 
 // مقادیر مجاز وضعیت پرداخت
 const PAYMENT_STATUSES = [
@@ -17,7 +18,7 @@ const PAYMENT_STATUSES = [
 const getStatusMeta = (status) =>
   PAYMENT_STATUSES.find(s => s.value === status) || PAYMENT_STATUSES[0];
 
-export default function OfficialInvoicesPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
+export default function OfficialInvoicesPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkAction, setBulkAction] = useState('');
@@ -503,6 +504,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
             .total { margin-top: 20px; font-weight: bold; font-size: 14px; text-align: left; line-height: 1.8; }
             .signature-section { margin-top: 60px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 13px; }
             .signature-box { text-align: center; width: 45%; border-top: 1px dashed #334155; padding-top: 10px; color: #334155; font-weight: bold; }
+            .business-contact { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 24px; padding-top: 10px; border-top: 1px dashed #cbd5e1; font-size: 11px; color: #475569; }
+            .business-contact a { color: #28645a; text-decoration: none; }
           </style>
         </head>
         <body>
@@ -571,6 +574,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
             <div class="signature-box">امضای مشتری</div>
           </div>
 
+          ${renderBusinessContactHtml(businessContact)}
           ${autoPrint ? '<script>window.onload = function() { window.print(); window.close(); };</script>' : ''}
         </body>
       </html>

@@ -3,6 +3,7 @@ import moment from 'jalali-moment';
 import { readTable } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import { formatDashboardDate, toDashboardIsoDate } from '../dashboardUtils';
+import BusinessContactCard from './BusinessContactCard';
 
 const PAGE_SIZE = 1000;
 const money = (value) => `${formatDisplay(Math.round(Number(value) || 0))} تومان`;
@@ -17,7 +18,7 @@ async function readAllRows(table, orderBy) {
   }
 }
 
-export default function DashboardPanel({ onNavigate }) {
+export default function DashboardPanel({ onNavigate, businessName, businessContact, onEditProfile }) {
   const [invoices, setInvoices] = useState([]);
   const [ceremonies, setCeremonies] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -205,6 +206,12 @@ export default function DashboardPanel({ onNavigate }) {
           <button type="button" onClick={() => navigate('quotations')}>ساخت پیش‌فاکتور</button>
         </div>
       </section>
+
+      <BusinessContactCard
+        businessName={businessName}
+        contact={businessContact}
+        onEdit={onEditProfile}
+      />
     </div>
   );
 }

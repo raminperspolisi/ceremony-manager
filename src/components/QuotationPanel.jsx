@@ -5,6 +5,7 @@ import { formatPersianDate } from '../dateUtils';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
 import { convertQuotationToInvoice, deleteSelectedDocuments } from '../quotationInvoice';
+import { renderBusinessContactHtml } from '../profileLinks';
 
 const win95Style = {
   window: { 
@@ -72,7 +73,7 @@ const hasInventoryReference = (value) => (
   && !String(value).startsWith('restored-')
 );
 
-export default function QuotationPanel({ selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
+export default function QuotationPanel({ selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
   const items = selectedItems || [];
   const [customers, setCustomers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -290,6 +291,8 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                 .totals { margin-top: 25px; font-weight: bold; font-size: 15px; background: #fafafa; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
                 .totals p { margin: 6px 0; }
                 .footer-text { margin-top: 40px; font-size: 12px; text-align: center; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
+                .business-contact { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #475569; }
+                .business-contact a { color: #28645a; text-decoration: none; }
               </style>
             </head>
             <body>
@@ -338,6 +341,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                 <p>مجموع کل (درجه ۳): ${Number(total3).toLocaleString('fa-IR')} تومان</p>
               </div>
               <p class="footer-text">این پیش‌فاکتور صرفاً جهت برآورد هزینه و اطلاع مشتری صادر شده و فاقد جنبه پرداخت قطعی می‌باشد.</p>
+              ${renderBusinessContactHtml(businessContact)}
               <script>
                 window.onload = function() { 
                   window.print(); 

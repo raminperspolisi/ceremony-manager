@@ -6749,6 +6749,139 @@ textarea:focus-visible {
   flex: 0 0 150px;
 }
 
+.business-contact-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #dfe9e5;
+  border-radius: 17px;
+  background: linear-gradient(120deg, #f1faf6, #fff 78%);
+  box-shadow: 0 8px 22px rgb(26 45 66 / 5%);
+}
+
+.business-contact-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.business-contact-card-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.business-contact-card-heading > div > span {
+  color: #638078;
+  font-size: 11px;
+}
+
+.business-contact-card-heading h4 {
+  margin: 0;
+  color: #263d3b;
+  font-size: 16px;
+}
+
+.business-contact-card-heading button {
+  min-height: 36px;
+  padding: 6px 11px;
+  border: 1px solid #cfe2da;
+  border-radius: 9px;
+  background: #fff;
+  color: #28645a;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.business-contact-card-heading button:hover {
+  background: #edf8f3;
+}
+
+.business-contact-card-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 9px;
+}
+
+.business-contact-card-links > a {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e6eeeb;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 85%);
+  color: #28645a;
+  text-decoration: none;
+}
+
+.business-contact-card-links > a:hover {
+  border-color: #b8d5ca;
+  background: #fff;
+}
+
+.business-contact-card-links > a > span:first-child {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e7f4ed;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.business-contact-card-links > a > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.business-contact-card-links strong {
+  color: #344a45;
+  font-size: 11px;
+}
+
+.business-contact-card-links small {
+  overflow: hidden;
+  color: #668078;
+  direction: ltr;
+  font-size: 10px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.business-contact-card-empty {
+  margin: 0;
+  color: #71817e;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+@media (max-width: 480px) {
+  .business-contact-card {
+    padding: 14px;
+  }
+
+  .business-contact-card-heading {
+    align-items: flex-start;
+  }
+
+  .business-contact-card-heading h4 {
+    font-size: 14px;
+  }
+
+  .business-contact-card-heading button {
+    padding-inline: 8px;
+    font-size: 10px;
+  }
+}
+
 .customer-referral-value-field {
   width: min(100%, 280px);
   flex: 0 1 280px;

@@ -17,7 +17,7 @@ import DashboardPanel from './components/DashboardPanel';
 import BotOrdersPanel from './components/BotOrdersPanel';
 import OrganizationManagementPanel from './components/OrganizationManagementPanel';
 import { formatDisplay } from './styles';
-import { getProfileSocialLinks, normalizeProfileLinks } from './profileLinks';
+import { getBusinessContact, normalizeProfileLinks } from './profileLinks';
 import {
   getOfflineSyncStatus,
   readTable,
@@ -172,6 +172,7 @@ export default function App() {
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePassword, setProfilePassword] = useState('');
   const [profileWebsite, setProfileWebsite] = useState('');
+  const [profileBusinessEmail, setProfileBusinessEmail] = useState('');
   const [profileInstagram, setProfileInstagram] = useState('');
   const [profileTelegram, setProfileTelegram] = useState('');
   const [profileRubika, setProfileRubika] = useState('');
@@ -225,25 +226,16 @@ export default function App() {
     || DEFAULT_BUSINESS_NAME;
   const logoUrl = getOrganizationLogoUrl(activeOrganization);
   const profileMetadata = session?.user?.user_metadata || {};
-  let minimizedWebsiteUrl = '';
-  let minimizedWebsiteInvalid = false;
-  let minimizedSocialLinks = [];
-  try {
-    minimizedWebsiteUrl = normalizeProfileLinks({
-      website: profileMetadata.business_website || '',
-    }).website;
-  } catch {
-    minimizedWebsiteInvalid = true;
-  }
-  try {
-    minimizedSocialLinks = getProfileSocialLinks(profileMetadata);
-  } catch {
-    minimizedSocialLinks = [];
-  }
+  const businessContact = getBusinessContact(profileMetadata);
+  const minimizedWebsiteUrl = businessContact.website;
+  const minimizedSocialLinks = businessContact.socialLinks;
+  const minimizedWebsiteInvalid = Boolean(profileMetadata.business_website && !minimizedWebsiteUrl);
 
   useEffect(() => {
     let mounted = true;
+    let authStateChanged = false;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      authStateChanged = true;
       if (mounted) {
         setSession(nextSession);
         setOfflineUser(nextSession?.user?.id);
@@ -260,7 +252,7 @@ export default function App() {
     });
 
     supabase.auth.getSession().then(({ data, error }) => {
-      if (!mounted) return;
+      if (!mounted || authStateChanged) return;
       if (error) setAuthError('خطا در بررسی ورود: ' + error.message);
       setSession(data?.session ?? null);
       setOfflineUser(data?.session?.user?.id);
@@ -844,6 +836,7 @@ export default function App() {
   const handleOpenProfile = () => {
     setProfileName(session.user.user_metadata?.display_name || '');
     setProfileWebsite(session.user.user_metadata?.business_website || '');
+    setProfileBusinessEmail(session.user.user_metadata?.business_email || '');
     setProfileInstagram(session.user.user_metadata?.instagram_id || '');
     setProfileTelegram(session.user.user_metadata?.telegram_id || '');
     setProfileRubika(session.user.user_metadata?.rubika_id || '');
@@ -896,6 +889,7 @@ export default function App() {
     try {
       profileLinks = normalizeProfileLinks({
         website: profileWebsite,
+        email: profileBusinessEmail,
         instagram: profileInstagram,
         telegram: profileTelegram,
         rubika: profileRubika,
@@ -906,8 +900,22 @@ export default function App() {
     }
 
     setProfileLoading(true);
-    const emailChanged = profileEmail.trim() !== (session.user.email || '');
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      let activeSession = sessionData.session;
+      if (!activeSession) {
+        const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) {
+          throw new Error('نشست ورود شما معتبر نیست. لطفاً دوباره وارد حساب شوید و سپس پروفایل را ذخیره کنید.');
+        }
+        activeSession = refreshedData.session;
+      }
+      if (!activeSession) {
+        throw new Error('نشست ورود شما معتبر نیست. لطفاً دوباره وارد حساب شوید و سپس پروفایل را ذخیره کنید.');
+      }
+
+      const emailChanged = profileEmail.trim() !== (activeSession.user.email || '');
       let updatedOrganization = activeOrganization;
       if (profileLogoFile || removeProfileLogo) {
         if (!isOrganizationAdmin || !activeOrganizationId) {
@@ -948,9 +956,10 @@ export default function App() {
 
       const attributes = {
         data: {
-          ...session.user.user_metadata,
+          ...activeSession.user.user_metadata,
           display_name: profileName.trim(),
           business_website: profileLinks.website,
+          business_email: profileLinks.email,
           instagram_id: profileLinks.instagram,
           telegram_id: profileLinks.telegram,
           rubika_id: profileLinks.rubika,
@@ -961,7 +970,7 @@ export default function App() {
       const { data, error } = await supabase.auth.updateUser(attributes);
       if (error) throw error;
       if (data.user) {
-        setSession((current) => current ? { ...current, user: data.user } : current);
+        setSession((current) => current ? { ...current, user: data.user } : activeSession);
       }
       setProfileLogoUrl(getOrganizationLogoUrl(updatedOrganization));
       setProfileLogoPreview(getOrganizationLogoUrl(updatedOrganization));
@@ -1308,6 +1317,17 @@ export default function App() {
               <label htmlFor="profile-business-name">نام مجموعه / برند روی فاکتورها</label>
               <input id="profile-business-name" type="text" value={businessName} readOnly />
               <p className="profile-password-hint">نام فضای کاری از بخش «مدیریت کاربران و دسترسی» تغییر می‌کند.</p>
+              <label htmlFor="profile-business-email">ایمیل مجموعه</label>
+              <input
+                id="profile-business-email"
+                type="email"
+                autoComplete="email"
+                dir="ltr"
+                value={profileBusinessEmail}
+                onChange={(e) => setProfileBusinessEmail(e.target.value)}
+                placeholder="info@example.com"
+              />
+              <p className="profile-password-hint">این ایمیل برای نمایش در کارت ارتباط و فاکتورهاست و با ایمیل ورود شما جداست.</p>
               <label htmlFor="profile-website">آدرس سایت مجموعه</label>
               <input
                 id="profile-website"
@@ -1742,7 +1762,14 @@ export default function App() {
               />
             ) : hasSectionAccess(activeSection) ? (
               <>
-                {activeSection === "dashboard" && <DashboardPanel onNavigate={handleSectionChange} />}
+                {activeSection === "dashboard" && (
+                  <DashboardPanel
+                    onNavigate={handleSectionChange}
+                    businessName={businessName}
+                    businessContact={businessContact}
+                    onEditProfile={handleOpenProfile}
+                  />
+                )}
                 {activeSection === "customers" && <CustomersPanel businessName={businessName} />}
                 {activeSection === "inventory" && (
                   <InventoryPanel
@@ -1754,8 +1781,8 @@ export default function App() {
                   />
                 )}
                 {activeSection === "bot-orders" && <BotOrdersPanel />}
-                {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} businessName={businessName} logoUrl={logoUrl} />}
-                {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} />}
+                {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} businessName={businessName} logoUrl={logoUrl} businessContact={businessContact} />}
+                {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} businessContact={businessContact} />}
                 {activeSection === "backup" && (
                   <BackupPanel userId={sessionUserId} organizationId={activeOrganizationId} />
                 )}
@@ -1828,9 +1855,12 @@ export default function App() {
               </button>
             </section>
           )}
-          {minimizedSocialLinks.length > 0 && (
+          {(minimizedSocialLinks.length > 0 || businessContact.email) && (
             <nav className="minimized-site-socials" aria-label="شبکه‌های اجتماعی مجموعه">
-              <span>شبکه‌های اجتماعی:</span>
+              <span>راه‌های ارتباطی:</span>
+              {businessContact.email && (
+                <a href={`mailto:${encodeURIComponent(businessContact.email)}`}>ایمیل مجموعه</a>
+              )}
               {minimizedSocialLinks.map((link) => (
                 <a key={link.key} href={link.href} target="_blank" rel="noopener noreferrer">
                   {link.label}
