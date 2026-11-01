@@ -153,9 +153,11 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
     const loadTimer = window.setTimeout(refresh, 0);
     const handleOfflineUpdate = () => refresh();
     window.addEventListener('offline-data-updated', handleOfflineUpdate);
+    window.addEventListener('inventory-data-updated', handleOfflineUpdate);
     return () => {
       window.clearTimeout(loadTimer);
       window.removeEventListener('offline-data-updated', handleOfflineUpdate);
+      window.removeEventListener('inventory-data-updated', handleOfflineUpdate);
     };
   }, [refresh, organizationId]);
 
@@ -216,6 +218,7 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
     await runOnlineAction(async () => {
       await insertOnline('inventory_warehouses', { name });
       setWarehouseName('');
+      window.dispatchEvent(new Event('inventory-data-updated'));
     }, 'انبار جدید ثبت شد.');
   };
 
@@ -412,15 +415,52 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
     if (error) throw error;
   }, 'انبار اصلی تغییر کرد؛ سفارش‌های بات در این انبار رزرو می‌شوند.');
 
-  const cancelReservation = async (reservation) => runOnlineAction(async () => {
-    const { error } = await supabase.from('inventory_reservations')
-      .update({ status: 'cancelled' })
-      .eq('id', reservation.id)
-      .eq('organization_id', organizationId)
-      .select('id')
-      .single();
-    if (error) throw error;
-  }, 'رزرو لغو و موجودی آزاد شد.');
+  const cancelReservation = async (reservation) => {
+    if (!window.confirm(`رزرو «${nameForItem(reservation.inventory_id)}» به تعداد ${quantityText(reservation.quantity)} لغو و موجودی آن آزاد شود؟`)) {
+      return;
+    }
+    if (!organizationId) {
+      setErrorMessage('فضای کاری فعال مشخص نیست.');
+      return;
+    }
+    if (!navigator.onLine) {
+      setErrorMessage('برای لغو رزرو باید به اینترنت متصل شوید.');
+      return;
+    }
+
+    setBusy(true);
+    setErrorMessage('');
+    setFeedback('');
+    try {
+      const { data: currentReservation, error: readError } = await supabase
+        .from('inventory_reservations')
+        .select('id,status')
+        .eq('id', reservation.id)
+        .eq('organization_id', organizationId)
+        .maybeSingle();
+      if (readError) throw readError;
+      if (!currentReservation || currentReservation.status !== 'reserved') {
+        throw new Error('این رزرو دیگر فعال نیست؛ فهرست رزروها را تازه کنید.');
+      }
+
+      const { data, error } = await supabase.from('inventory_reservations')
+        .update({ status: 'cancelled' })
+        .eq('id', reservation.id)
+        .eq('organization_id', organizationId)
+        .eq('status', 'reserved')
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('رزرو لغو نشد؛ ممکن است وضعیت آن هم‌زمان تغییر کرده باشد.');
+
+      await refresh();
+      setFeedback('رزرو لغو شد و موجودی آزاد شد.');
+    } catch (error) {
+      setErrorMessage(`لغو رزرو ناموفق بود: ${error.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const issueReservation = async (reservation) => runOnlineAction(async () => {
     await insertOnline('inventory_stock_movements', {
@@ -632,7 +672,7 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
         <h4>مانده و کمبود موجودی — {nameForWarehouse(activeWarehouseId)}</h4>
         <div className="inventory-ops-table-wrap">
           <table>
-            <thead><tr><th>کالا</th><th>موجودی نهایی</th><th>رزرو فعال</th><th>حداقل</th><th>وضعیت</th></tr></thead>
+            <thead><tr><th>کالا</th><th>موجودی نهایی</th><th>قیمت خرید</th><th>رزرو فعال</th><th>حداقل</th><th>وضعیت</th></tr></thead>
             <tbody>
               {activeItems.map((item) => {
                 const onHand = stockFor(item.id, activeWarehouseId);
@@ -662,13 +702,14 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
                         </button>
                       </div>
                     </td>
+                    <td>{Number(item.base_cost) > 0 ? formatMoney(item.base_cost) : '—'}</td>
                     <td>{quantityText(reserved)}</td>
                     <td>{quantityText(threshold)}</td>
                     <td className={low ? 'is-low' : ''}>{low ? 'کمتر از حداقل' : 'عادی'}</td>
                   </tr>
                 );
               })}
-              {activeItems.length === 0 && <tr><td colSpan="5">هنوز کالایی ثبت نشده است.</td></tr>}
+              {activeItems.length === 0 && <tr><td colSpan="6">هنوز کالایی ثبت نشده است.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -700,7 +741,15 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
                     {reservation.status === 'reserved' && (
                       <>
                         <button type="button" disabled={busy || offlineData} onClick={() => issueReservation(reservation)}>ثبت تحویل</button>
-                        <button type="button" disabled={busy || offlineData} onClick={() => cancelReservation(reservation)}>لغو</button>
+                        <button
+                          type="button"
+                          className="inventory-reservation-cancel"
+                          disabled={busy}
+                          onClick={() => cancelReservation(reservation)}
+                          title="لغو رزرو و آزاد کردن موجودی"
+                        >
+                          لغو رزرو
+                        </button>
                       </>
                     )}
                     {reservation.status === 'issued' && reservation.reservation_type === 'rent' && (
@@ -719,7 +768,7 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
         <summary>گردش‌های اخیر ({formatNumber(movements.length)})</summary>
         <div className="inventory-ops-table-wrap">
           <table>
-            <thead><tr><th>زمان</th><th>کالا</th><th>انبار</th><th>نوع</th><th>تغییر</th><th>توضیحات</th></tr></thead>
+            <thead><tr><th>زمان</th><th>کالا</th><th>انبار</th><th>نوع</th><th>تغییر</th><th>بهای واحد</th><th>توضیحات</th></tr></thead>
             <tbody>
               {movements.slice(0, 100).map((movement) => (
                 <tr key={movement.id}>
@@ -728,10 +777,11 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
                   <td>{nameForWarehouse(movement.warehouse_id)}</td>
                   <td>{movementTypeLabel(movement.movement_type)}</td>
                   <td>{quantityText(movement.quantity_delta)}</td>
+                  <td>{movement.unit_cost == null ? '—' : formatMoney(movement.unit_cost)}</td>
                   <td>{movement.note || movement.source_type}</td>
                 </tr>
               ))}
-              {movements.length === 0 && <tr><td colSpan="6">گردشی ثبت نشده است.</td></tr>}
+              {movements.length === 0 && <tr><td colSpan="7">گردشی ثبت نشده است.</td></tr>}
             </tbody>
           </table>
         </div>

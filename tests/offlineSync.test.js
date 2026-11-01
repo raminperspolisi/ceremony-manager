@@ -132,6 +132,7 @@ test('warmOfflineCache stores bot orders and inventory operations for offline ac
 
   await warmOfflineCache();
   assert.ok(requestedTables.has('bot_orders'));
+  assert.ok(requestedTables.has('event_tasks'));
   assert.ok(requestedTables.has('inventory_warehouses'));
   assert.ok(requestedTables.has('inventory_stock_movements'));
   assert.ok(requestedTables.has('inventory_reservations'));
@@ -188,6 +189,43 @@ test('offline stock movements remap warehouse IDs before synchronization', async
     globalThis.fetch = previousFetch;
     globalThis.navigator.onLine = false;
   }
+});
+
+test('offline event tasks remap their event reference before synchronization', async () => {
+  setOfflineUser('offline-event-task-test-user');
+  setOfflineOrganization('offline-event-task-test-organization');
+  globalThis.navigator.onLine = false;
+  const event = await insertRows('events', [{ customer_name: 'مشتری مراسم' }]);
+  const eventId = event.data[0].id;
+  const task = await insertRows('event_tasks', [{
+    event_id: eventId,
+    title: 'هماهنگی',
+    completed: false,
+  }]);
+  assert.equal(event.offline, true);
+  assert.equal(task.offline, true);
+
+  const insertedRows = new Map();
+  globalThis.fetch = async (input, init = {}) => {
+    const table = new URL(input).pathname.split('/').pop();
+    assert.equal(init.method, 'POST');
+    const payload = JSON.parse(init.body)[0];
+    insertedRows.set(table, payload);
+    const id = table === 'events' ? 901 : 902;
+    return new Response(JSON.stringify([{ ...payload, id }]), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  globalThis.navigator.onLine = true;
+  await syncPendingMutations();
+
+  assert.equal(insertedRows.get('event_tasks').event_id, 901);
+  assert.equal(insertedRows.get('event_tasks').organization_id, 'offline-event-task-test-organization');
+  globalThis.navigator.onLine = false;
+  const cachedTasks = await readTable('event_tasks');
+  assert.equal(cachedTasks.data[0].id, task.data[0].id);
+  assert.equal(cachedTasks.data[0].event_id, eventId);
 });
 
 test('offline quotation and invoice items remap their inventory references', async () => {

@@ -11,13 +11,22 @@ test('backup document has a version and all supported tables', () => {
     organizationId: 'organization-1',
   });
 
-  assert.equal(document.version, 4);
+  assert.equal(document.version, 6);
   assert.deepEqual(Object.keys(document.tables), BACKUP_TABLES);
   assert.deepEqual(validateBackupDocument(document), document);
 });
 
 test('version 3 backups are upgraded with empty inventory-operation tables', () => {
-  const legacyTables = Object.fromEntries(BACKUP_TABLES.slice(0, 8).map((table) => [table, []]));
+  const legacyTables = Object.fromEntries([
+    'customers',
+    'ceremonies',
+    'events',
+    'inventory',
+    'quotations',
+    'invoices',
+    'financial_accounts',
+    'cash_transactions',
+  ].map((table) => [table, []]));
   const backup = validateBackupDocument({
     format: 'ceremony-manager-backup',
     version: 3,
@@ -26,8 +35,44 @@ test('version 3 backups are upgraded with empty inventory-operation tables', () 
     tables: legacyTables,
   });
 
-  assert.equal(backup.version, 4);
-  assert.ok(BACKUP_TABLES.slice(8).every((table) => Array.isArray(backup.tables[table])));
+  assert.equal(backup.version, 6);
+  assert.ok(BACKUP_TABLES
+    .filter((table) => !Object.hasOwn(legacyTables, table))
+    .every((table) => Array.isArray(backup.tables[table])));
+});
+
+test('version 4 backups are upgraded with an empty invoice-expense table', () => {
+  const legacyTables = Object.fromEntries(BACKUP_TABLES
+    .filter((table) => !['invoice_expenses', 'event_tasks'].includes(table))
+    .map((table) => [table, []]));
+  const backup = validateBackupDocument({
+    format: 'ceremony-manager-backup',
+    version: 4,
+    userId: 'user-1',
+    projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
+    tables: legacyTables,
+  });
+
+  assert.equal(backup.version, 6);
+  assert.deepEqual(backup.tables.invoice_expenses, []);
+});
+
+test('version 5 backups are upgraded with an empty event-task table', () => {
+  const legacyTables = Object.fromEntries(BACKUP_TABLES
+    .filter((table) => table !== 'event_tasks')
+    .map((table) => [table, []]));
+  const backup = validateBackupDocument({
+    format: 'ceremony-manager-backup',
+    version: 5,
+    userId: 'user-1',
+    projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
+    tables: legacyTables,
+  });
+
+  assert.equal(backup.version, 6);
+  assert.deepEqual(backup.tables.event_tasks, []);
 });
 
 test('generated purchase and transfer movements are rebuilt from their source records', () => {
@@ -47,6 +92,39 @@ test('generated purchase and transfer movements are rebuilt from their source re
   });
 
   assert.deepEqual(document.tables.inventory_stock_movements.map((row) => row.id), [3, 5]);
+});
+
+test('restore remaps event IDs before importing event tasks', async () => {
+  const tables = Object.fromEntries(BACKUP_TABLES.map((table) => [table, []]));
+  tables.events = [{ id: 'offline:event', event_type: 'عروسی' }];
+  tables.event_tasks = [{
+    id: 'offline:task',
+    event_id: 'offline:event',
+    title: 'هماهنگی',
+    completed: false,
+  }];
+  const backup = createBackupDocument(tables, {
+    exportedAt: '2026-10-23T00:00:00.000Z',
+    userId: 'user-1',
+    projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
+  });
+  const inserts = [];
+  await restoreBackupDocument(backup, {
+    userId: 'user-1',
+    organizationId: 'organization-1',
+    projectUrl: 'https://example.supabase.co',
+    readTable: async () => ({ data: [], error: null }),
+    updateRows: async () => ({ error: null }),
+    insertRows: async (table, rows) => {
+      inserts.push({ table, rows });
+      return { data: rows.map((row) => ({ ...row, id: table === 'events' ? 45 : 70 })), error: null };
+    },
+  });
+
+  const restoredTask = inserts.find((entry) => entry.table === 'event_tasks').rows[0];
+  assert.equal(restoredTask.event_id, 45);
+  assert.equal(restoredTask.id, undefined);
 });
 
 test('backup validation rejects unsupported and unidentifiable data', () => {
@@ -150,6 +228,61 @@ test('restore remaps offline account and invoice IDs before importing cash trans
   assert.equal(restoredTransaction.account_id, 10);
   assert.equal(restoredTransaction.invoice_id, 20);
   assert.equal(restoredTransaction.id, undefined);
+});
+
+test('restore remaps invoice expense account and cash transaction references', async () => {
+  const tables = Object.fromEntries(BACKUP_TABLES.map((table) => [table, []]));
+  tables.invoices = [{ id: 'offline:invoice', customer_name: 'مشتری', total_price: 1000 }];
+  tables.financial_accounts = [{ id: 'offline:account', account_name: 'صندوق', account_type: 'cash' }];
+  tables.cash_transactions = [{
+    id: 'offline:expense-transaction',
+    transaction_type: 'expense',
+    amount: 250,
+    account_id: 'offline:account',
+    invoice_id: null,
+    transfer_to_account_id: null,
+    category: 'حمل‌ونقل',
+    description: 'فاکتور رسمی',
+    transaction_date: '2026-09-23',
+    offline_sync_id: 'b6f299d8-f05b-4c8f-a12a-ddf30487a2fd',
+  }];
+  tables.invoice_expenses = [{
+    id: 'offline:invoice-expense',
+    invoice_id: 'offline:invoice',
+    category: 'حمل‌ونقل',
+    description: 'ارسال تجهیزات',
+    amount: 250,
+    expense_date: '2026-09-22',
+    is_paid: true,
+    payment_date: '2026-09-23',
+    account_id: 'offline:account',
+    cash_transaction_id: 'offline:expense-transaction',
+  }];
+  const backup = createBackupDocument(tables, {
+    exportedAt: '2026-10-23T00:00:00.000Z',
+    userId: 'user-1',
+    projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
+  });
+  const inserts = [];
+  const ids = { invoices: 20, financial_accounts: 10, cash_transactions: 30, invoice_expenses: 40 };
+
+  await restoreBackupDocument(backup, {
+    userId: 'user-1',
+    organizationId: 'organization-1',
+    projectUrl: 'https://example.supabase.co',
+    readTable: async () => ({ data: [], error: null }),
+    updateRows: async () => ({ error: null }),
+    insertRows: async (table, rows) => {
+      inserts.push({ table, rows });
+      return { data: rows.map((row, index) => ({ ...row, id: ids[table] + index })), error: null };
+    },
+  });
+
+  const restoredExpense = inserts.find((entry) => entry.table === 'invoice_expenses').rows[0];
+  assert.equal(restoredExpense.invoice_id, 20);
+  assert.equal(restoredExpense.account_id, 10);
+  assert.equal(restoredExpense.cash_transaction_id, 30);
 });
 
 test('restore applies stock records in dependency order and remaps warehouse references', async () => {

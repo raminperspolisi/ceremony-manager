@@ -31,6 +31,12 @@ export function getInvoiceDeletionErrorMessage(error) {
   ) {
     return 'این فاکتور به گردش صندوق یا بانک متصل است. برای حفظ گردش‌های مالی و امکان حذف فاکتور، migration فایل supabase/migrations/20261101120000_invoice_cash_transaction_set_null.sql را در SQL Editor سوپابیس اجرا کنید؛ گردش‌ها باقی می‌مانند و فقط اتصالشان به فاکتور حذف‌شده پاک می‌شود.';
   }
+  if (
+    error?.code === '23503'
+    && message.includes('invoice_expenses_cash_transaction_id_fkey')
+  ) {
+    return 'این فاکتور هزینهٔ پرداخت‌شده دارد که به گردش صندوق/بانک وصل است؛ برای حفظ سوابق مالی، ابتدا باید فاکتور و هزینه‌های ثبت‌شده بررسی شوند.';
+  }
   return message;
 }
 

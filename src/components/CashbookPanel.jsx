@@ -7,6 +7,7 @@ import {
   calculateAccountBalances,
   EXPENSE_CATEGORIES,
   formatJalaliDate,
+  getPeriodCostOfGoodsEntries,
   maskCardNumber,
   normalizeCardNumber,
   parseJalaliDate,
@@ -76,6 +77,7 @@ export default function CashbookPanel() {
   const [openingBalance, setOpeningBalance] = useState('');
   const [openingDate, setOpeningDate] = useState(todayJalali);
   const [transactionForm, setTransactionForm] = useState(newTransactionForm);
+  const [transactionModalOpen, setTransactionModalOpen] = useState(false);
   const [accountFilter, setAccountFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState(monthStartIso);
@@ -94,8 +96,8 @@ export default function CashbookPanel() {
     .filter((account) => account.account_type === 'bank')
     .reduce((sum, account) => sum + (balances.get(String(account.id)) || 0), 0);
   const periodSummary = useMemo(
-    () => summarizeCashTransactions(transactions, dateFrom, dateTo),
-    [transactions, dateFrom, dateTo],
+    () => summarizeCashTransactions(transactions, dateFrom, dateTo, invoices),
+    [transactions, dateFrom, dateTo, invoices],
   );
   const periodTransactions = useMemo(() => transactions
     .filter((transaction) => transaction.transaction_date >= dateFrom
@@ -104,11 +106,18 @@ export default function CashbookPanel() {
       String(second.transaction_date).localeCompare(String(first.transaction_date))
       || Number(second.id || 0) - Number(first.id || 0)
     )), [transactions, dateFrom, dateTo]);
+  const periodCostOfGoodsEntries = useMemo(
+    () => getPeriodCostOfGoodsEntries(invoices, dateFrom, dateTo),
+    [invoices, dateFrom, dateTo],
+  );
   const periodDetailsTransactions = periodDetailsType === 'income'
     ? periodTransactions.filter((transaction) => transaction.transaction_type === 'income')
     : periodDetailsType === 'expense'
-      ? periodTransactions.filter((transaction) => transaction.transaction_type === 'expense')
-      : periodTransactions;
+      ? [
+        ...periodTransactions.filter((transaction) => transaction.transaction_type === 'expense'),
+        ...periodCostOfGoodsEntries,
+      ]
+      : [...periodTransactions, ...periodCostOfGoodsEntries];
   const periodDetailsTitle = periodDetailsType === 'income'
     ? 'جزئیات دریافتی‌های دوره'
     : periodDetailsType === 'expense'
@@ -116,10 +125,12 @@ export default function CashbookPanel() {
       : 'جزئیات گردش‌های دوره';
   const periodDetailsTotal = periodDetailsType === 'all'
     ? periodSummary.income - periodSummary.expenses
-    : periodDetailsTransactions.reduce(
-      (total, transaction) => total + Number(transaction.amount || 0),
-      0,
-    );
+    : periodDetailsType === 'expense'
+      ? periodSummary.expenses
+      : periodDetailsTransactions.reduce(
+        (total, transaction) => total + Number(transaction.amount || 0),
+        0,
+      );
   const outstandingInvoices = invoices
     .map((invoice) => ({
       ...invoice,
@@ -169,13 +180,18 @@ export default function CashbookPanel() {
 
   useEffect(() => {
     const handleAppEscape = (event) => {
+      if (transactionModalOpen) {
+        event.preventDefault();
+        if (!busy) setTransactionModalOpen(false);
+        return;
+      }
       if (!periodDetailsType) return;
       event.preventDefault();
       setPeriodDetailsType(null);
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
-  }, [periodDetailsType]);
+  }, [busy, periodDetailsType, transactionModalOpen]);
 
   const openPeriodDetails = (type) => setPeriodDetailsType(type);
   const handlePeriodCardKeyDown = (event, type) => {
@@ -372,6 +388,7 @@ export default function CashbookPanel() {
       ? 'گردش مالی در دستگاه ذخیره شد و پس از اتصال همگام می‌شود.'
       : 'گردش مالی با موفقیت ثبت شد.');
     setTransactionForm(newTransactionForm());
+    setTransactionModalOpen(false);
     await refreshData();
   };
 
@@ -388,7 +405,8 @@ export default function CashbookPanel() {
       transaction_date: todayJalali(),
     }));
     setFeedback(`برای فاکتور ${invoice.customer_name || `#${invoice.id}`} دریافت ثبت کنید.`);
-    document.getElementById('cashbook-transaction-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setErrorMessage('');
+    setTransactionModalOpen(true);
   };
 
   return (
@@ -420,7 +438,9 @@ export default function CashbookPanel() {
 
       {loadError && <div className="cashbook-alert cashbook-alert-error" role="alert">{loadError}</div>}
       {feedback && <div className="cashbook-alert cashbook-alert-success" role="status">{feedback}</div>}
-      {errorMessage && <div className="cashbook-alert cashbook-alert-error" role="alert">{errorMessage}</div>}
+      {errorMessage && !transactionModalOpen && (
+        <div className="cashbook-alert cashbook-alert-error" role="alert">{errorMessage}</div>
+      )}
 
       <div className="cashbook-summary">
         <article className="cashbook-summary-cash"><span>موجودی صندوق</span><strong>{money(cashBalance)}</strong><small>{accounts.filter((account) => account.account_type === 'cash').length.toLocaleString('fa-IR')} حساب نقدی</small></article>
@@ -432,7 +452,7 @@ export default function CashbookPanel() {
         <div className="cashbook-section-title">
           <div>
             <h4>خلاصهٔ عملکرد مالی</h4>
-            <span>گردش‌های ثبت‌شده در بازهٔ انتخابی</span>
+            <span>گردش‌های مالی و بهای تمام‌شدهٔ اقلام فروخته‌شده در بازهٔ انتخابی</span>
           </div>
           <div className="cashbook-date-range">
             <label>از تاریخ
@@ -466,7 +486,7 @@ export default function CashbookPanel() {
             onKeyDown={(event) => handlePeriodCardKeyDown(event, 'expense')}
           >
             <span>هزینهٔ دوره</span><strong>{money(periodSummary.expenses)}</strong>
-            <small>برای جزئیات دوبار کلیک کنید</small>
+            <small>شامل هزینهٔ نقدی و بهای تمام‌شدهٔ فروش · جزئیات با دوبار کلیک</small>
           </article>
           <article
             className="cashbook-period-net cashbook-period-card"
@@ -512,7 +532,9 @@ export default function CashbookPanel() {
             </header>
             <div className="cashbook-period-details-summary">
               <span>
-                {periodDetailsType === 'all' ? 'خالص دوره' : `${formatPersianDigits(periodDetailsTransactions.length)} گردش`}
+                {periodDetailsType === 'all'
+                  ? 'خالص دوره'
+                  : `${formatPersianDigits(periodDetailsTransactions.length)} مورد`}
               </span>
               <strong>{money(periodDetailsTotal)}</strong>
             </div>
@@ -537,7 +559,7 @@ export default function CashbookPanel() {
                     <article className="cashbook-period-detail" key={transaction.id}>
                       <div className="cashbook-period-detail-heading">
                         <span className={`cashbook-type-badge cashbook-type-${transaction.transaction_type}`}>
-                          {typeLabel}
+                          {transaction.isCostOfGoods ? 'بهای تمام‌شدهٔ فروش' : typeLabel}
                         </span>
                         <strong className={`cashbook-amount cashbook-amount-${transaction.transaction_type}`}>
                           {money(transaction.amount)}
@@ -549,8 +571,12 @@ export default function CashbookPanel() {
                           <dd>{formatJalaliDate(transaction.transaction_date)}</dd>
                         </div>
                         <div>
-                          <dt>{transaction.transaction_type === 'transfer' ? 'حساب مبدا' : 'حساب'}</dt>
-                          <dd>{sourceAccount?.account_name || 'حساب حذف‌شده'}</dd>
+                          <dt>{transaction.isCostOfGoods
+                            ? 'نوع هزینه'
+                            : transaction.transaction_type === 'transfer' ? 'حساب مبدا' : 'حساب'}</dt>
+                          <dd>{transaction.isCostOfGoods
+                            ? 'هزینهٔ محاسباتی؛ بدون تغییر ماندهٔ صندوق/بانک'
+                            : sourceAccount?.account_name || 'حساب حذف‌شده'}</dd>
                         </div>
                         {transaction.transaction_type === 'transfer' && (
                           <div>
@@ -618,7 +644,15 @@ export default function CashbookPanel() {
                   <div><small>کل فاکتور</small><strong>{money(invoice.total)}</strong></div>
                   <div><small>پرداخت‌شده</small><strong>{money(invoice.paid)}</strong></div>
                   <div className="cashbook-invoice-remaining"><small>مانده</small><strong>{money(remaining)}</strong></div>
-                  <button type="button" className="cashbook-primary-button" onClick={() => prefillInvoiceReceipt(invoice)}>ثبت دریافت</button>
+                  <button
+                    type="button"
+                    className="cashbook-primary-button"
+                    onClick={() => prefillInvoiceReceipt(invoice)}
+                    disabled={accounts.length === 0}
+                    title={accounts.length === 0 ? 'ابتدا یک حساب صندوق یا بانک بسازید.' : undefined}
+                  >
+                    ثبت دریافت
+                  </button>
                 </article>
               );
             })}
@@ -725,11 +759,58 @@ export default function CashbookPanel() {
       </section>
 
       <section className="cashbook-transactions">
-        <div className="cashbook-section-title"><h4>ثبت گردش جدید</h4></div>
+        <div className="cashbook-section-title">
+          <h4>ثبت گردش جدید</h4>
+          {accounts.length > 0 && (
+            <button
+              type="button"
+              className="cashbook-primary-button"
+              onClick={() => {
+                setErrorMessage('');
+                setTransactionModalOpen(true);
+              }}
+            >
+              ثبت گردش
+            </button>
+          )}
+        </div>
         {!accounts.length ? (
           <p className="cashbook-empty">برای ثبت گردش، ابتدا یک حساب بسازید.</p>
-        ) : (
-          <form id="cashbook-transaction-form" className="cashbook-form cashbook-transaction-form" onSubmit={handleTransactionSubmit}>
+        ) : null}
+      </section>
+
+      {transactionModalOpen && accounts.length > 0 && (
+        <div
+          className="cashbook-transaction-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) setTransactionModalOpen(false);
+          }}
+        >
+          <section
+            className="cashbook-transaction-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cashbook-transaction-modal-title"
+            dir="rtl"
+          >
+            <header className="cashbook-transaction-modal-header">
+              <div>
+                <h3 id="cashbook-transaction-modal-title">
+                  {transactionForm.transaction_type === 'income' ? 'ثبت دریافت' : 'ثبت گردش مالی'}
+                </h3>
+                <p>اطلاعات گردش و حساب مقصد را وارد کنید.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="بستن پنجره"
+                onClick={() => setTransactionModalOpen(false)}
+                disabled={busy}
+              >
+                ×
+              </button>
+            </header>
+            {errorMessage && <div className="cashbook-alert cashbook-alert-error" role="alert">{errorMessage}</div>}
+            <form id="cashbook-transaction-form" className="cashbook-form cashbook-transaction-form" onSubmit={handleTransactionSubmit}>
             <label>
               نوع گردش
               <select
@@ -832,9 +913,10 @@ export default function CashbookPanel() {
                 {busy ? 'در حال ثبت…' : 'ثبت گردش مالی'}
               </button>
             </div>
-          </form>
-        )}
-      </section>
+            </form>
+          </section>
+        </div>
+      )}
 
       <section className="cashbook-ledger">
         <div className="cashbook-section-title">

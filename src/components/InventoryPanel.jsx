@@ -9,6 +9,10 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
   const [itemType, setItemType] = useState('sale'); // پیش‌فرض: فروشی
   const [baseCost, setBaseCost] = useState('');
   const [initialQuantity, setInitialQuantity] = useState('');
+  const [warehouses, setWarehouses] = useState([]);
+  const [initialWarehouseId, setInitialWarehouseId] = useState('');
+  const [loadedWarehouseOrganizationId, setLoadedWarehouseOrganizationId] = useState(null);
+  const [warehouseError, setWarehouseError] = useState('');
   const [price1, setPrice1] = useState('');
   const [price2, setPrice2] = useState('');
   const [price3, setPrice3] = useState('');
@@ -40,6 +44,46 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const warehousesLoading = loadedWarehouseOrganizationId !== (organizationId || null);
+
+  useEffect(() => {
+    let active = true;
+    const loadWarehouses = async () => {
+      const { data, error } = await readTable('inventory_warehouses', {
+        orderBy: 'name',
+        ascending: true,
+      });
+      if (!active) return;
+      if (error) {
+        setWarehouseError(`دریافت فهرست انبارها ناموفق بود: ${error.message}`);
+        setWarehouses([]);
+        setInitialWarehouseId('');
+        setLoadedWarehouseOrganizationId(organizationId || null);
+        return;
+      }
+
+      const availableWarehouses = data || [];
+      const defaultWarehouse = availableWarehouses.find((warehouse) => warehouse.is_default)
+        || availableWarehouses[0];
+      setWarehouses(availableWarehouses);
+      setInitialWarehouseId((current) => (
+        availableWarehouses.some((warehouse) => String(warehouse.id) === String(current))
+          ? current
+          : String(defaultWarehouse?.id || '')
+      ));
+      setWarehouseError('');
+      setLoadedWarehouseOrganizationId(organizationId || null);
+    };
+
+    loadWarehouses();
+    window.addEventListener('offline-data-updated', loadWarehouses);
+    window.addEventListener('inventory-data-updated', loadWarehouses);
+    return () => {
+      active = false;
+      window.removeEventListener('offline-data-updated', loadWarehouses);
+      window.removeEventListener('inventory-data-updated', loadWarehouses);
+    };
+  }, [organizationId]);
 
   useEffect(() => {
     const handleAppEscape = (event) => {
@@ -62,28 +106,30 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
       alert('موجودی اولیه باید عددی نامنفی با حداکثر سه رقم اعشار باشد.');
       return;
     }
+    const purchaseCost = baseCost === '' ? 0 : Number(baseCost);
+    if (!Number.isSafeInteger(purchaseCost) || purchaseCost < 0) {
+      alert('قیمت خرید باید عدد صحیح و نامنفی باشد.');
+      return;
+    }
+    if (stockQuantity > 0 && warehousesLoading) {
+      alert('فهرست انبارها هنوز دریافت نشده است؛ کمی صبر کنید و دوباره ثبت کنید.');
+      return;
+    }
+    const initialWarehouse = warehouses.find(
+      (warehouse) => String(warehouse.id) === String(initialWarehouseId),
+    );
+    if (stockQuantity > 0 && !initialWarehouse) {
+      alert(warehouseError || 'برای ثبت موجودی اولیه، یک انبار معتبر انتخاب کنید.');
+      return;
+    }
 
     setLoading(true);
     let itemWasCreated = false;
     try {
-      let defaultWarehouse = null;
-      if (stockQuantity > 0) {
-        const warehouseResult = await readTable('inventory_warehouses', {
-          orderBy: 'name',
-          ascending: true,
-        });
-        if (warehouseResult.error) throw warehouseResult.error;
-        const warehouses = warehouseResult.data || [];
-        defaultWarehouse = warehouses.find((warehouse) => warehouse.is_default) || warehouses[0];
-        if (!defaultWarehouse) {
-          throw new Error('برای ثبت موجودی اولیه، ابتدا یک انبار بسازید.');
-        }
-      }
-
       const { data, error } = await insertRows('inventory', [{
         title: title.trim(),
         item_type: itemType,
-        base_cost: baseCost === '' ? 0 : parseFloat(baseCost),
+        base_cost: purchaseCost,
         price_level1: price1 === '' ? 0 : parseFloat(price1),
         price_level2: price2 === '' ? 0 : parseFloat(price2),
         price_level3: price3 === '' ? 0 : parseFloat(price3)
@@ -104,10 +150,10 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
       if (stockQuantity > 0) {
         const movementResult = await insertRows('inventory_stock_movements', [{
           inventory_id: createdItem.id,
-          warehouse_id: defaultWarehouse.id,
+          warehouse_id: initialWarehouse.id,
           movement_type: 'opening',
           quantity_delta: stockQuantity,
-          unit_cost: baseCost === '' ? null : Number(baseCost),
+          unit_cost: baseCost === '' ? null : purchaseCost,
           note: 'موجودی اولیه هنگام ثبت کالا',
           source_type: 'manual',
           source_id: null,
@@ -116,11 +162,15 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
         if (movementResult.error) {
           throw new Error(`ثبت موجودی اولیه ناموفق بود: ${movementResult.error.message}`);
         }
+        window.dispatchEvent(new Event('inventory-data-updated'));
       }
       await refresh();
     } catch (err) {
       console.error(itemWasCreated ? 'خطا در ثبت موجودی اولیه:' : 'خطا در ثبت کالا:', err.message);
-      if (itemWasCreated) await refresh();
+      if (itemWasCreated) {
+        window.dispatchEvent(new Event('inventory-data-updated'));
+        await refresh();
+      }
       alert(`${itemWasCreated ? 'کالا ثبت شد، اما ' : 'خطا در ثبت کالا: '}${err.message}`);
     } finally {
       setLoading(false);
@@ -234,7 +284,34 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
         </div>
 
         <div>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#475569', fontWeight: 'bold' }}>موجودی اولیه (انبار اصلی)</label>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569', fontWeight: 'bold' }}>انبار موجودی اولیه</label>
+          <select
+            value={initialWarehouseId}
+            onChange={(event) => setInitialWarehouseId(event.target.value)}
+            disabled={warehousesLoading || warehouses.length === 0}
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', backgroundColor: '#fff' }}
+          >
+            <option value="">
+              {warehousesLoading ? 'در حال دریافت انبارها...' : 'انتخاب انبار'}
+            </option>
+            {warehouses.map((warehouse) => (
+              <option key={warehouse.id} value={warehouse.id}>
+                {warehouse.name}{warehouse.is_default ? ' (اصلی)' : ''}
+              </option>
+            ))}
+          </select>
+          <small style={{ display: 'block', marginTop: '4px', color: '#64748b', fontSize: '10px' }}>
+            موجودی اولیه در همین انبار ثبت می‌شود.
+          </small>
+          {warehouseError && (
+            <small role="alert" style={{ display: 'block', marginTop: '4px', color: '#b42336', fontSize: '10px' }}>
+              {warehouseError}
+            </small>
+          )}
+        </div>
+
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#475569', fontWeight: 'bold' }}>موجودی اولیه</label>
           <FormattedNumberInput
             value={initialQuantity}
             onValueChange={setInitialQuantity}

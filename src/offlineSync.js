@@ -9,9 +9,11 @@ const TENANT_TABLES = new Set([
   'customers',
   'ceremonies',
   'events',
+  'event_tasks',
   'inventory',
   'quotations',
   'invoices',
+  'invoice_expenses',
   'financial_accounts',
   'cash_transactions',
   'bot_orders',
@@ -148,6 +150,7 @@ const localizeRows = async (userId, table, rows) => {
     mapping.localId,
   ]));
   const referenceTables = {
+    event_tasks: { event_id: 'events' },
     invoices: { quotation_id: 'quotations' },
     cash_transactions: {
       account_id: 'financial_accounts',
@@ -417,6 +420,7 @@ const rewriteReferences = async (userId, table, value) => {
 
 const tableForReference = (key, fallback) => {
   if (key === 'customer_id') return 'customers';
+  if (key === 'event_id') return 'events';
   if (key === 'quotation_id') return 'quotations';
   if (key === 'account_id' || key === 'transfer_to_account_id') return 'financial_accounts';
   if (key === 'invoice_id') return 'invoices';
@@ -426,6 +430,7 @@ const tableForReference = (key, fallback) => {
   }
   if (key === 'supplier_id') return 'inventory_suppliers';
   if (key === 'reservation_id') return 'inventory_reservations';
+  if (key === 'cash_transaction_id') return 'cash_transactions';
   return fallback;
 };
 
@@ -549,6 +554,7 @@ export async function recordCashTransaction(transaction) {
       await applyCashTransactionResult(userId, null, data);
       return { data, error: null, offline: false };
     }
+
     if (!isNetworkError(error)) return { data: null, error };
   }
 
@@ -582,6 +588,37 @@ export async function recordCashTransaction(transaction) {
   } catch (error) {
     return { data: null, error: { message: error.message } };
   }
+}
+
+export async function payInvoiceExpense(expenseId, accountId, paymentDate) {
+  if (!navigator.onLine) {
+    return { data: null, error: { message: 'برای ثبت پرداخت هزینهٔ فاکتور، اتصال اینترنت لازم است.' } };
+  }
+  if (isPendingId(expenseId)) {
+    return { data: null, error: { message: 'ابتدا هزینهٔ ذخیره‌شده را همگام‌سازی کنید، سپس پرداخت آن را ثبت کنید.' } };
+  }
+  if (isPendingId(accountId)) {
+    return { data: null, error: { message: 'ابتدا حساب صندوق/بانک را همگام‌سازی کنید، سپس پرداخت را ثبت کنید.' } };
+  }
+
+  const userId = await getUserId();
+  const serverExpenseId = await resolveServerId(userId, 'invoice_expenses', expenseId);
+  const serverAccountId = await resolveServerId(userId, 'financial_accounts', accountId);
+  const { data, error } = await supabase.rpc('pay_invoice_expense', {
+    p_expense_id: serverExpenseId,
+    p_account_id: serverAccountId,
+    p_payment_date: paymentDate,
+    p_offline_sync_id: crypto.randomUUID(),
+  });
+  if (error) return { data: null, error };
+  if (!data?.expense || !data?.transaction) {
+    return { data: null, error: { message: 'پاسخ ثبت پرداخت هزینه از سرور معتبر نیست.' } };
+  }
+
+  await cacheRows(userId, 'invoice_expenses', [data.expense]);
+  await cacheRows(userId, 'cash_transactions', [data.transaction]);
+  window.dispatchEvent(new Event('offline-data-updated'));
+  return { data, error: null, offline: false };
 }
 
 const updateCachedRows = async (userId, table, filters, updates, { pending = false } = {}) => {
@@ -769,6 +806,7 @@ export async function warmOfflineCache() {
     'customers',
     'ceremonies',
     'events',
+    'event_tasks',
     'inventory',
     'quotations',
     'invoices',

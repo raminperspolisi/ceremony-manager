@@ -140,7 +140,7 @@ export const renderBusinessContactHtml = (contact = {}) => {
         : link.key === 'telegram'
           ? `https://t.me/${encodeURIComponent(handle)}`
           : `https://rubika.ir/${encodeURIComponent(handle)}`;
-      entries.push({ label: link.label, href, text: link.label });
+      entries.push({ label: link.label, href, text: `@${handle}` });
     } catch {
       // Omit invalid legacy contact data from printed documents.
     }

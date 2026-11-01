@@ -115,6 +115,16 @@ test('invoice deletion explains how to preserve cash transactions', () => {
   assert.match(message, /گردش‌ها باقی می‌مانند/);
 });
 
+test('invoice deletion preserves paid invoice-expense links', () => {
+  const message = getInvoiceDeletionErrorMessage({
+    code: '23503',
+    message: 'update or delete violates foreign key constraint "invoice_expenses_cash_transaction_id_fkey"',
+  });
+
+  assert.match(message, /هزینهٔ پرداخت‌شده/);
+  assert.match(message, /حفظ سوابق مالی/);
+});
+
 test('unrelated invoice deletion errors retain their original message', () => {
   assert.equal(
     getInvoiceDeletionErrorMessage({ code: '42501', message: 'اجازه حذف ندارید.' }),

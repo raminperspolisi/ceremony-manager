@@ -70,13 +70,61 @@ export const calculateAccountBalances = (accounts, transactions) => {
   return balances;
 };
 
-export const summarizeCashTransactions = (transactions, fromDate, toDate) => transactions.reduce((summary, transaction) => {
-  if (transaction.transaction_date < fromDate || transaction.transaction_date > toDate) return summary;
-  if (transaction.transaction_type === 'income') summary.income += Number(transaction.amount || 0);
-  if (transaction.transaction_type === 'expense') summary.expenses += Number(transaction.amount || 0);
-  if (transaction.transaction_type === 'transfer') summary.transfers += Number(transaction.amount || 0);
+const numberOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
+export const getInvoiceSalesCost = (invoice) => {
+  const items = [invoice?.items_data, invoice?.items_json, invoice?.items]
+    .find((value) => Array.isArray(value)) || [];
+  return items.reduce((total, item) => {
+    if (['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type || item.type)) return total;
+    const quantity = Number(item.qty || item.quantity || item.requestedQuantity || 1);
+    if (!Number.isFinite(quantity) || quantity <= 0) return total;
+
+    const lineCost = numberOrNull(item.total_cost);
+    if (lineCost !== null && lineCost > 0) return total + lineCost;
+    const unitCost = [item.base_cost, item.cost, item.unit_cost]
+      .map(numberOrNull)
+      .find((cost) => cost !== null && cost > 0);
+    return unitCost === undefined ? total : total + unitCost * quantity;
+  }, 0);
+};
+
+export const getInvoiceIssueDate = (invoice) => String(
+  invoice?.created_at || invoice?.invoice_date || invoice?.issue_date || '',
+).slice(0, 10);
+
+export const getPeriodCostOfGoodsEntries = (invoices, fromDate, toDate) => invoices.flatMap((invoice) => {
+  const transactionDate = getInvoiceIssueDate(invoice);
+  const amount = getInvoiceSalesCost(invoice);
+  if (!transactionDate || transactionDate < fromDate || transactionDate > toDate || amount <= 0) return [];
+  return [{
+    id: `cost-of-goods-${invoice.id}`,
+    transaction_type: 'expense',
+    amount,
+    transaction_date: transactionDate,
+    category: 'بهای تمام‌شدهٔ کالای فروخته‌شده',
+    description: `بهای تمام‌شدهٔ اقلام فروشی فاکتور #${invoice.invoice_number || invoice.id}`,
+    invoice_id: invoice.id,
+    isCostOfGoods: true,
+  }];
+});
+
+export const summarizeCashTransactions = (transactions, fromDate, toDate, invoices = []) => {
+  const summary = transactions.reduce((current, transaction) => {
+    if (transaction.transaction_date < fromDate || transaction.transaction_date > toDate) return current;
+    if (transaction.transaction_type === 'income') current.income += Number(transaction.amount || 0);
+    if (transaction.transaction_type === 'expense') current.expenses += Number(transaction.amount || 0);
+    if (transaction.transaction_type === 'transfer') current.transfers += Number(transaction.amount || 0);
+    return current;
+  }, { income: 0, expenses: 0, transfers: 0 });
+  summary.expenses += getPeriodCostOfGoodsEntries(invoices, fromDate, toDate)
+    .reduce((total, item) => total + item.amount, 0);
   return summary;
-}, { income: 0, expenses: 0, transfers: 0 });
+};
 
 export const getInvoicePaymentStatus = (paidAmount, totalAmount) => {
   if (Number(paidAmount) <= 0) return 'unpaid';

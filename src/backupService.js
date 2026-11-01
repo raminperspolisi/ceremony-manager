@@ -15,6 +15,7 @@ const TABLE_LABELS = {
   invoices: 'فاکتورهای رسمی',
   financial_accounts: 'حساب‌های صندوق و بانک',
   cash_transactions: 'گردش‌های مالی',
+  invoice_expenses: 'هزینه‌های فاکتور',
 };
 const IMMUTABLE_TABLES = new Set([
   'cash_transactions',
@@ -27,6 +28,7 @@ const RESTORE_STEPS = [
   'customers',
   'ceremonies',
   'events',
+  'event_tasks',
   'inventory',
   'quotations',
   'inventory_warehouses',
@@ -44,6 +46,7 @@ const RESTORE_STEPS = [
   { table: 'inventory_stock_movements', filter: (row) => Boolean(row.reservation_id) },
   'financial_accounts',
   'cash_transactions',
+  'invoice_expenses',
 ];
 
 export async function readAllBackupRows(table, readTable) {
@@ -98,7 +101,9 @@ export async function restoreBackupDocument(
       const mappedInventoryId = restoredIds.get('inventory').get(inventoryId);
       row.source_id = `${mappedInvoiceId ?? invoiceId}:${mappedInventoryId ?? inventoryId}`;
     }
-    const references = table === 'invoices'
+    const references = table === 'event_tasks'
+      ? [['event_id', 'events']]
+      : table === 'invoices'
       ? [['quotation_id', 'quotations']]
       : table === 'cash_transactions'
         ? [
@@ -106,6 +111,12 @@ export async function restoreBackupDocument(
           ['transfer_to_account_id', 'financial_accounts'],
           ['invoice_id', 'invoices'],
         ]
+        : table === 'invoice_expenses'
+          ? [
+            ['invoice_id', 'invoices'],
+            ['account_id', 'financial_accounts'],
+            ['cash_transaction_id', 'cash_transactions'],
+          ]
         : table === 'inventory_purchase_receipts'
           ? [
             ['inventory_id', 'inventory'],
@@ -171,7 +182,8 @@ export async function restoreBackupDocument(
           continue;
         }
         restoredIds.get(table).set(String(row.id), existingRow.id);
-        if (IMMUTABLE_TABLES.has(table)) {
+        if (IMMUTABLE_TABLES.has(table)
+          || (table === 'invoice_expenses' && (existingRow.is_paid || row.is_paid))) {
           const comparableRow = rewriteReferences(table, row);
           const changed = Object.keys(comparableRow)
             .filter((field) => !['organization_id', 'id', 'offline_sync_id', 'created_at'].includes(field))

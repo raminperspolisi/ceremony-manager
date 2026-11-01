@@ -73,5 +73,5 @@ test('renders escaped contact details for invoice HTML', () => {
   assert.equal(renderBusinessContactHtml({
     email: 'info@example.com',
     socialLinks: [{ key: 'telegram', label: '<b>Social</b>', href: 'https://t.me/social?x=1&y=2' }],
-  }), '<div class="business-contact"><strong>راه‌های ارتباطی مجموعه:</strong><a href="mailto:info%40example.com">ایمیل: info@example.com</a><a href="https://t.me/social">&lt;b&gt;Social&lt;/b&gt;: &lt;b&gt;Social&lt;/b&gt;</a></div>');
+  }), '<div class="business-contact"><strong>راه‌های ارتباطی مجموعه:</strong><a href="mailto:info%40example.com">ایمیل: info@example.com</a><a href="https://t.me/social">&lt;b&gt;Social&lt;/b&gt;: @social</a></div>');
 });

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'jalali-moment';
 import { readTable } from '../offlineSync';
+import { getInvoiceExpenses, sumInvoiceExpenses } from '../invoiceExpenseUtils';
 
 const PERIODS = [
   { value: 'month', label: 'ماه جاری' },
@@ -58,17 +59,19 @@ const normalizeSearch = (value) => String(value ?? '')
   .trim()
   .toLocaleLowerCase('fa-IR');
 
-function getInvoiceBreakdown(invoice) {
+function getInvoiceBreakdown(invoice, invoiceExpenses = []) {
   const summary = {
     total: Number(invoice.total_price || invoice.total_amount || 0),
     salesRevenue: 0,
     costedSalesRevenue: 0,
     costOfGoods: 0,
     profit: 0,
+    invoiceExpenses: getInvoiceExpenses(invoiceExpenses, invoice.id),
     rentRevenue: 0,
     missingCostCount: 0,
     items: [],
   };
+  summary.invoiceExpenseTotal = sumInvoiceExpenses(summary.invoiceExpenses);
 
   getInvoiceItems(invoice).forEach((item, index) => {
     const quantity = Math.max(Number(item.qty || item.quantity || item.requestedQuantity || 1), 0);
@@ -132,6 +135,7 @@ function isInRange(date, from, to) {
 
 export default function AnalyticsPanel() {
   const [invoices, setInvoices] = useState([]);
+  const [invoiceExpenses, setInvoiceExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState('');
@@ -147,10 +151,17 @@ export default function AnalyticsPanel() {
       setError('');
     }
     try {
-      const invoiceResult = await readTable('invoices', { orderBy: 'created_at', ascending: false });
+      const [invoiceResult, expenseResult] = await Promise.all([
+        readTable('invoices', { orderBy: 'created_at', ascending: false }),
+        readTable('invoice_expenses', { orderBy: 'expense_date', ascending: false }),
+      ]);
       if (invoiceResult.error) throw invoiceResult.error;
+      if (expenseResult.error) {
+        throw new Error(`بارگذاری هزینه‌های فاکتور ناموفق بود: ${expenseResult.error.message}`);
+      }
       setLoadFailed(false);
       setInvoices(invoiceResult.data || []);
+      setInvoiceExpenses(expenseResult.data || []);
     } catch (err) {
       setLoadFailed(true);
       setError(`بارگذاری اطلاعات تحلیل ناموفق بود: ${err.message}`);
@@ -210,6 +221,7 @@ export default function AnalyticsPanel() {
       collected: 0,
       receivables: 0,
       costOfGoods: 0,
+      invoiceExpenses: 0,
       rentRevenue: 0,
       missingCostCount: 0,
       missingItemInvoiceCount: 0,
@@ -231,6 +243,8 @@ export default function AnalyticsPanel() {
       if (monthKey) {
         if (!result.months[monthKey]) result.months[monthKey] = { salesRevenue: 0, costedSalesRevenue: 0, costs: 0, net: 0 };
       }
+
+      result.invoiceExpenses += sumInvoiceExpenses(getInvoiceExpenses(invoiceExpenses, invoice.id));
 
       const invoiceItems = getInvoiceItems(invoice);
       if (invoiceItems.length === 0) result.missingItemInvoiceCount += 1;
@@ -275,9 +289,10 @@ export default function AnalyticsPanel() {
       month.net = month.costedSalesRevenue - month.costs;
     });
     return result;
-  }, [dateBasis, filteredInvoices]);
+  }, [dateBasis, filteredInvoices, invoiceExpenses]);
 
   const grossProfit = report.costedSalesRevenue - report.costOfGoods;
+  const profitAfterInvoiceExpenses = grossProfit + report.rentRevenue - report.invoiceExpenses;
   const margin = report.costedSalesRevenue > 0 ? (grossProfit / report.costedSalesRevenue) * 100 : 0;
   const topItems = Object.values(report.items).filter((item) => !item.isRent).sort((a, b) => b.profit - a.profit).slice(0, 5);
   const chartMonths = Object.entries(report.months).sort(([a], [b]) => a.localeCompare(b)).slice(-6);
@@ -350,6 +365,11 @@ export default function AnalyticsPanel() {
               <h3>{formatMoney(grossProfit)}</h3>
               <span>حاشیه سود فروش: {margin.toLocaleString('fa-IR', { maximumFractionDigits: 1 })}٪</span>
             </article>
+            <article className={`analytics-stat-card ${profitAfterInvoiceExpenses < 0 ? 'loss' : 'net'}`}>
+              <p>برآورد مانده پس از هزینه‌های فاکتور{report.missingCostCount > 0 || report.missingItemInvoiceCount > 0 ? ' (ناقص)' : ''}</p>
+              <h3>{formatMoney(profitAfterInvoiceExpenses)}</h3>
+              <span>جمع هزینهٔ فاکتورهای بازه: {formatMoney(report.invoiceExpenses)}</span>
+            </article>
             <article className="analytics-stat-card">
               <p>درآمد اجاره (جدا از سود فروش)</p>
               <h3>{formatMoney(report.rentRevenue)}</h3>
@@ -383,11 +403,13 @@ export default function AnalyticsPanel() {
                     <tr><td>۲</td><th scope="row">فروش دارای بهای خرید ثبت‌شده</th><td>{formatMoney(report.costedSalesRevenue)}</td></tr>
                     <tr><td>۳</td><th scope="row">بهای خرید اقلام فروخته‌شده</th><td>− {formatMoney(report.costOfGoods)}</td></tr>
                     <tr className="statement-total"><td>۴</td><th scope="row">سود ناخالص فروش</th><td>{formatMoney(grossProfit)}</td></tr>
-                    <tr className="statement-rent"><td>۵</td><th scope="row">درآمد اجاره (جدا از سود فروش)</th><td>{formatMoney(report.rentRevenue)}</td></tr>
+                    <tr className="statement-rent"><td>۵</td><th scope="row">درآمد اجاره</th><td>{formatMoney(report.rentRevenue)}</td></tr>
+                    <tr><td>۶</td><th scope="row">هزینه‌های ثبت‌شدهٔ فاکتورها</th><td>− {formatMoney(report.invoiceExpenses)}</td></tr>
+                    <tr className="statement-total"><td>۷</td><th scope="row">برآورد مانده پس از هزینه‌های فاکتور</th><td>{formatMoney(profitAfterInvoiceExpenses)}</td></tr>
                   </tbody>
                 </table>
               </div>
-              <p className="analytics-footnote">سود ناخالص این گزارش فقط از فروش کالاها محاسبه می‌شود: مبلغ فروش منهای بهای خرید ثبت‌شده. هزینه‌های عملیاتی و استهلاک اقلام اجاره‌ای از آن کسر نشده‌اند و درآمد اجاره جدا گزارش می‌شود.</p>
+              <p className="analytics-footnote">این برآورد برابر سود ناخالص فروش به‌علاوهٔ درآمد اجاره و منهای هزینه‌های ثبت‌شده روی فاکتورهای بازه است. هزینه‌های عمومیِ ثبت‌نشده برای فاکتور و بهای تمام‌شده یا استهلاک اقلام اجاره‌ای از آن کسر نشده‌اند؛ بنابراین سود خالص نهایی نیست.</p>
             </article>
 
             <article className="analytics-items-card">
@@ -449,13 +471,14 @@ export default function AnalyticsPanel() {
                       <th>فروش اقلام فروشی</th>
                       <th>بهای خرید</th>
                       <th>سود ناخالص فروش</th>
+                      <th>هزینه فاکتور</th>
                       <th>درآمد اجاره</th>
                       <th>جزئیات</th>
                     </tr>
                   </thead>
                   <tbody>
                     {searchedInvoices.map((invoice) => {
-                      const details = getInvoiceBreakdown(invoice);
+                      const details = getInvoiceBreakdown(invoice, invoiceExpenses);
                       const isExpanded = expandedInvoiceId === invoice.id;
                       return (
                         <React.Fragment key={invoice.id}>
@@ -469,6 +492,7 @@ export default function AnalyticsPanel() {
                             <td className={details.missingCostCount ? 'analytics-incomplete-value' : 'analytics-profit-value'}>
                               {details.missingCostCount ? 'ناقص' : formatMoney(details.profit)}
                             </td>
+                            <td>{formatMoney(details.invoiceExpenseTotal)}</td>
                             <td>{formatMoney(details.rentRevenue)}</td>
                             <td>
                               <button
@@ -483,7 +507,7 @@ export default function AnalyticsPanel() {
                           </tr>
                           {isExpanded && (
                             <tr className="analytics-invoice-detail-row">
-                              <td colSpan="9">
+                              <td colSpan="10">
                                 <div className="analytics-invoice-detail">
                                   <div className="analytics-invoice-detail-heading">
                                     <strong>ریز سود و زیان فاکتور #{String(invoice.invoice_number || invoice.invoiceNumber || invoice.id).toLocaleString('fa-IR')} — {invoice.customer_name || 'نامشخص'}</strong>
@@ -521,9 +545,21 @@ export default function AnalyticsPanel() {
                                         <span>فروش دارای بهای خرید: <strong>{formatMoney(details.costedSalesRevenue)}</strong></span>
                                         <span>بهای خرید فروش: <strong>{formatMoney(details.costOfGoods)}</strong></span>
                                         <span>سود ناخالص فروش: <strong>{details.missingCostCount ? 'ناقص؛ بعضی بهاها ثبت نشده' : formatMoney(details.profit)}</strong></span>
+                                        <span>هزینه‌های این فاکتور: <strong>{formatMoney(details.invoiceExpenseTotal)}</strong></span>
+                                        <span>برآورد مانده پس از هزینه‌های فاکتور: <strong>{details.missingCostCount ? 'ناقص؛ بعضی بهاها ثبت نشده' : formatMoney(details.profit + details.rentRevenue - details.invoiceExpenseTotal)}</strong></span>
                                         <span>درآمد اجاره (جدا): <strong>{formatMoney(details.rentRevenue)}</strong></span>
                                       </div>
                                     </>
+                                  )}
+                                  {details.invoiceExpenses.length > 0 && (
+                                    <div className="analytics-invoice-detail-totals">
+                                      {details.invoiceExpenses.map((expense) => (
+                                        <span key={expense.id}>
+                                          {expense.category}{expense.description ? ` — ${expense.description}` : ''}
+                                          : <strong>{formatMoney(expense.amount)}{expense.is_paid ? ' · پرداخت‌شده' : ' · پرداخت‌نشده'}</strong>
+                                        </span>
+                                      ))}
+                                    </div>
                                   )}
                                 </div>
                               </td>
@@ -536,7 +572,7 @@ export default function AnalyticsPanel() {
                 </table>
               </div>
             )}
-            <p className="analytics-footnote">سود هر فاکتور از فروش اقلام فروشی منهای بهای خرید همان اقلام است. اجاره جدا نمایش داده می‌شود و در سود فروش وارد نمی‌شود؛ اگر بهای خریدی در خود فاکتور ثبت نشده باشد، سود آن ردیف نامشخص می‌ماند.</p>
+            <p className="analytics-footnote">برآورد ماندهٔ هر فاکتور برابر سود ناخالص اقلام فروشی به‌علاوهٔ درآمد اجاره و منهای هزینه‌های ثبت‌شده برای همان فاکتور است. بهای تمام‌شدهٔ اقلام اجاره‌ای و هزینه‌های عمومیِ ثبت‌نشده برای فاکتور در این عدد نیستند؛ پس آن را سود خالص نهایی در نظر نگیرید.</p>
           </section>
 
           <section className="analytics-items-card">

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
-import { insertRows, readTable, updateRows } from "../offlineSync";
+import { deleteRows, insertRows, readTable, updateRows } from "../offlineSync";
 import { formatPersianDigits } from "../styles";
 import moment from "jalali-moment";
 
@@ -83,6 +83,13 @@ export default function CalendarPanel() {
   const [isCustomerListOpen, setIsCustomerListOpen] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
+  const [selectedEventForTasks, setSelectedEventForTasks] = useState(null);
+  const [eventTasks, setEventTasks] = useState([]);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskAssignee, setTaskAssignee] = useState("");
+  const [taskLoading, setTaskLoading] = useState(false);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [taskError, setTaskError] = useState("");
 
   const emptyForm = {
     customer_id: "",
@@ -295,6 +302,89 @@ export default function CalendarPanel() {
   }, [events, invoices]);
 
   const selectedDayEvents = eventsByJalaliDate[selectedDay] || [];
+
+  const openEventTasks = async (event) => {
+    setSelectedEventForTasks(event);
+    setEventTasks([]);
+    setTaskTitle("");
+    setTaskAssignee("");
+    setTaskError("");
+    setTaskLoading(true);
+    try {
+      const { data, error: taskFetchError } = await readTable("event_tasks", {
+        filters: [{ column: "event_id", operator: "eq", value: event.id }],
+        orderBy: "created_at",
+        ascending: true,
+      });
+      if (taskFetchError) throw taskFetchError;
+      setEventTasks(data || []);
+    } catch (taskFetchError) {
+      setTaskError(
+        `بارگذاری پرونده ناموفق بود: ${taskFetchError.message}`
+        + " برای فعال‌سازی این بخش، migration "
+        + "supabase/migrations/20261102090000_event_tasks.sql را در Supabase اجرا کنید.",
+      );
+    } finally {
+      setTaskLoading(false);
+    }
+  };
+
+  const handleAddTask = async (event) => {
+    event.preventDefault();
+    const title = taskTitle.trim();
+    if (!title || !selectedEventForTasks) return;
+    setTaskSaving(true);
+    setTaskError("");
+    try {
+      const { data, error: taskInsertError } = await insertRows("event_tasks", [{
+        event_id: selectedEventForTasks.id,
+        title,
+        assignee: taskAssignee.trim() || null,
+        completed: false,
+      }]);
+      if (taskInsertError) throw taskInsertError;
+      setEventTasks((currentTasks) => [...currentTasks, ...(data || [])]);
+      setTaskTitle("");
+      setTaskAssignee("");
+    } catch (taskInsertError) {
+      setTaskError(`ثبت کار ناموفق بود: ${taskInsertError.message}`);
+    } finally {
+      setTaskSaving(false);
+    }
+  };
+
+  const handleToggleTask = async (task) => {
+    try {
+      const { error: taskUpdateError } = await updateRows(
+        "event_tasks",
+        { completed: !task.completed },
+        [{ column: "id", operator: "eq", value: task.id }],
+      );
+      if (taskUpdateError) throw taskUpdateError;
+      setEventTasks((currentTasks) => currentTasks.map((currentTask) => (
+        String(currentTask.id) === String(task.id)
+          ? { ...currentTask, completed: !task.completed }
+          : currentTask
+      )));
+    } catch (taskUpdateError) {
+      setTaskError(`به‌روزرسانی وضعیت کار ناموفق بود: ${taskUpdateError.message}`);
+    }
+  };
+
+  const handleDeleteTask = async (task) => {
+    try {
+      const { error: taskDeleteError } = await deleteRows(
+        "event_tasks",
+        [{ column: "id", operator: "eq", value: task.id }],
+      );
+      if (taskDeleteError) throw taskDeleteError;
+      setEventTasks((currentTasks) => currentTasks.filter(
+        (currentTask) => String(currentTask.id) !== String(task.id),
+      ));
+    } catch (taskDeleteError) {
+      setTaskError(`حذف کار ناموفق بود: ${taskDeleteError.message}`);
+    }
+  };
 
   return (
     <div className="calendar-panel">
@@ -519,6 +609,15 @@ export default function CalendarPanel() {
                     {!isInvoice && event.guest_count && <span>تعداد مهمان: {Number(event.guest_count).toLocaleString("fa-IR")}</span>}
                     {!isInvoice && event.notes && <span>توضیح: {event.notes}</span>}
                   </div>
+                  {!isInvoice && (
+                    <button
+                      type="button"
+                      className="calendar-event-tasks-button"
+                      onClick={() => openEventTasks(event)}
+                    >
+                      پروندهٔ اجرایی و چک‌لیست
+                    </button>
+                  )}
                   {isInvoice && eventItems.length > 0 && (
                     <div className="calendar-invoice-items">
                       {eventItems.map((item, index) => {
@@ -538,6 +637,92 @@ export default function CalendarPanel() {
             })}
           </div>
         </section>
+        </div>
+      )}
+      {selectedEventForTasks && (
+        <div className="calendar-event-tasks-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setSelectedEventForTasks(null);
+        }}>
+          <section
+            className="calendar-event-tasks-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="calendar-event-tasks-title"
+          >
+            <div className="calendar-event-tasks-heading">
+              <div>
+                <span className="calendar-eyebrow">پروندهٔ اجرایی مراسم</span>
+                <h3 id="calendar-event-tasks-title">
+                  {selectedEventForTasks.customer_name || "مشتری ثبت‌نشده"} · {selectedEventForTasks.event_type || "مراسم"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="invoice-details-close"
+                onClick={() => setSelectedEventForTasks(null)}
+                aria-label="بستن پرونده"
+              >
+                ×
+              </button>
+            </div>
+            <p className="calendar-event-tasks-description">
+              کارهای لازم برای این مراسم را ثبت کنید، مسئول هر کار را مشخص کنید و انجام‌شدن آن را پیگیری کنید.
+            </p>
+            {taskError && <div className="calendar-error" role="alert">{taskError}</div>}
+            <form className="calendar-event-task-form" onSubmit={handleAddTask}>
+              <label>
+                عنوان کار
+                <input
+                  className="calendar-input"
+                  value={taskTitle}
+                  onChange={(event) => setTaskTitle(event.target.value)}
+                  placeholder="مثلاً هماهنگی گل‌آرایی"
+                  required
+                  maxLength={180}
+                />
+              </label>
+              <label>
+                مسئول (اختیاری)
+                <input
+                  className="calendar-input"
+                  value={taskAssignee}
+                  onChange={(event) => setTaskAssignee(event.target.value)}
+                  placeholder="نام مسئول"
+                  maxLength={120}
+                />
+              </label>
+              <button type="submit" className="calendar-save-button" disabled={taskSaving || !taskTitle.trim()}>
+                {taskSaving ? "در حال ثبت..." : "افزودن به چک‌لیست"}
+              </button>
+            </form>
+            {taskLoading ? (
+              <p className="calendar-event-tasks-empty">در حال بارگذاری کارهای مراسم...</p>
+            ) : eventTasks.length ? (
+              <ul className="calendar-event-task-list">
+                {eventTasks.map((task) => (
+                  <li key={task.id} className={task.completed ? "completed" : ""}>
+                    <label className="calendar-event-task-check">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(task.completed)}
+                        onChange={() => handleToggleTask(task)}
+                        aria-label={`وضعیت انجام ${task.title}`}
+                      />
+                      <span>
+                        <strong>{task.title}</strong>
+                        {task.assignee && <small>مسئول: {task.assignee}</small>}
+                      </span>
+                    </label>
+                    <button type="button" onClick={() => handleDeleteTask(task)} aria-label={`حذف ${task.title}`}>
+                      حذف
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              !taskLoading && <p className="calendar-event-tasks-empty">هنوز کاری برای این مراسم ثبت نشده است.</p>
+            )}
+          </section>
         </div>
       )}
       {loading && <p style={{ marginTop: 12, textAlign: "center", color: "#64748b", fontSize: 12 }}>در حال بارگذاری مراسم‌ها...</p>}

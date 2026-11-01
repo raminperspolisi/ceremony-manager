@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { deleteRows, readTable, updateRows } from '../offlineSync';
+import { deleteRows, insertRows, payInvoiceExpense, readTable, updateRows } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
 import { getInvoiceDeletionErrorMessage, updateOfficialInvoice } from '../quotationInvoice';
-import { getInvoicePaymentStatus } from '../cashbookUtils';
+import { EXPENSE_CATEGORIES, getInvoicePaymentStatus } from '../cashbookUtils';
 import { formatPersianDate } from '../dateUtils';
 import { renderBusinessContactHtml } from '../profileLinks';
+import { sumInvoiceExpenses } from '../invoiceExpenseUtils';
 
 // مقادیر مجاز وضعیت پرداخت
 const PAYMENT_STATUSES = [
@@ -17,12 +18,38 @@ const PAYMENT_STATUSES = [
 
 const getStatusMeta = (status) =>
   PAYMENT_STATUSES.find(s => s.value === status) || PAYMENT_STATUSES[0];
+const todayIsoDate = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+const isValidIsoDate = (value) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+};
 
 export default function OfficialInvoicesPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
   const [invoices, setInvoices] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkAction, setBulkAction] = useState('');
   const [detailsInvoice, setDetailsInvoice] = useState(null);
+  const [invoiceExpenses, setInvoiceExpenses] = useState([]);
+  const [invoiceExpenseAccounts, setInvoiceExpenseAccounts] = useState([]);
+  const [invoiceExpensesLoading, setInvoiceExpensesLoading] = useState(false);
+  const [invoiceExpensesError, setInvoiceExpensesError] = useState('');
+  const [invoiceExpenseAccountsError, setInvoiceExpenseAccountsError] = useState('');
+  const [invoiceExpenseFeedback, setInvoiceExpenseFeedback] = useState('');
+  const [invoiceExpenseBusy, setInvoiceExpenseBusy] = useState(false);
+  const [editingInvoiceExpenseId, setEditingInvoiceExpenseId] = useState(null);
+  const [invoiceExpenseForm, setInvoiceExpenseForm] = useState({
+    category: EXPENSE_CATEGORIES[0],
+    description: '',
+    amount: '',
+    expenseDate: todayIsoDate(),
+  });
+  const [expensePaymentAccounts, setExpensePaymentAccounts] = useState({});
+  const [expensePaymentDate, setExpensePaymentDate] = useState(todayIsoDate());
 
   // حالت ویرایش فاکتور
   const [editingId, setEditingId] = useState(null);
@@ -85,6 +112,36 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   }, []);
 
   useEffect(() => {
+    if (!detailsInvoice) return undefined;
+    let active = true;
+    const fetchExpenseData = async () => {
+      setInvoiceExpensesLoading(true);
+      setInvoiceExpensesError('');
+      const [expenseResult, accountResult] = await Promise.all([
+        readTable('invoice_expenses', {
+          filters: [{ column: 'invoice_id', operator: 'eq', value: detailsInvoice.id }],
+          orderBy: 'expense_date',
+          ascending: false,
+        }),
+        readTable('financial_accounts', { orderBy: 'account_name', ascending: true }),
+      ]);
+      if (!active) return;
+      setInvoiceExpensesError(expenseResult.error?.message || '');
+      setInvoiceExpenseAccountsError(accountResult.error?.message || '');
+      if (!expenseResult.error) setInvoiceExpenses(expenseResult.data || []);
+      if (!accountResult.error) setInvoiceExpenseAccounts(accountResult.data || []);
+      setInvoiceExpensesLoading(false);
+    };
+    void fetchExpenseData();
+    const refreshExpenseData = () => { void fetchExpenseData(); };
+    window.addEventListener('offline-data-updated', refreshExpenseData);
+    return () => {
+      active = false;
+      window.removeEventListener('offline-data-updated', refreshExpenseData);
+    };
+  }, [detailsInvoice]);
+
+  useEffect(() => {
     const handleAppEscape = (event) => {
       if (isCustomerListOpen) {
         event.preventDefault();
@@ -129,6 +186,124 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
 
   // محاسبه مانده بدهی
   const calcRemaining = (total, paid) => Math.max(0, Number(total || 0) - Number(paid || 0));
+
+  const resetInvoiceExpenseForm = () => {
+    setEditingInvoiceExpenseId(null);
+    setInvoiceExpenseForm({
+      category: EXPENSE_CATEGORIES[0],
+      description: '',
+      amount: '',
+      expenseDate: todayIsoDate(),
+    });
+  };
+
+  const handleOpenInvoiceDetails = (invoice) => {
+    setInvoiceExpenses([]);
+    setInvoiceExpenseAccounts([]);
+    setInvoiceExpensesError('');
+    setInvoiceExpenseAccountsError('');
+    setInvoiceExpenseFeedback('');
+    setExpensePaymentAccounts({});
+    resetInvoiceExpenseForm();
+    setDetailsInvoice(invoice);
+  };
+
+  const handleSaveInvoiceExpense = async (event) => {
+    event.preventDefault();
+    if (!detailsInvoice) return;
+    setInvoiceExpenseFeedback('');
+    const amount = Math.round(Number(invoiceExpenseForm.amount));
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      setInvoiceExpenseFeedback('مبلغ هزینه باید عدد صحیح و بیشتر از صفر باشد.');
+      return;
+    }
+    if (!isValidIsoDate(invoiceExpenseForm.expenseDate)) {
+      setInvoiceExpenseFeedback('تاریخ هزینه معتبر نیست.');
+      return;
+    }
+
+    setInvoiceExpenseBusy(true);
+    const expense = {
+      category: invoiceExpenseForm.category,
+      description: invoiceExpenseForm.description.trim(),
+      amount,
+      expense_date: invoiceExpenseForm.expenseDate,
+    };
+    const result = editingInvoiceExpenseId
+      ? await updateRows('invoice_expenses', expense, [
+        { column: 'id', operator: 'eq', value: editingInvoiceExpenseId },
+        { column: 'invoice_id', operator: 'eq', value: detailsInvoice.id },
+      ])
+      : await insertRows('invoice_expenses', [{
+        ...expense,
+        invoice_id: detailsInvoice.id,
+        is_paid: false,
+      }]);
+    setInvoiceExpenseBusy(false);
+    if (result.error) {
+      setInvoiceExpenseFeedback(`ثبت هزینه ناموفق بود: ${result.error.message}`);
+      return;
+    }
+    if (editingInvoiceExpenseId && !result.data?.length) {
+      setInvoiceExpenseFeedback('هزینه تغییر نکرد؛ ممکن است قبلاً پرداخت شده باشد.');
+      return;
+    }
+    setInvoiceExpenseFeedback(result.offline
+      ? 'هزینه ذخیره شد و پس از اتصال همگام می‌شود.'
+      : 'هزینهٔ فاکتور ثبت شد.');
+    resetInvoiceExpenseForm();
+    window.dispatchEvent(new Event('offline-data-updated'));
+  };
+
+  const handleEditInvoiceExpense = (expense) => {
+    setEditingInvoiceExpenseId(expense.id);
+    setInvoiceExpenseForm({
+      category: expense.category || EXPENSE_CATEGORIES[0],
+      description: expense.description || '',
+      amount: String(expense.amount || ''),
+      expenseDate: expense.expense_date || '',
+    });
+  };
+
+  const handleDeleteInvoiceExpense = async (expense) => {
+    if (!window.confirm('این هزینهٔ پرداخت‌نشده از فاکتور حذف شود؟')) return;
+    setInvoiceExpenseBusy(true);
+    setInvoiceExpenseFeedback('');
+    const { error } = await deleteRows('invoice_expenses', [
+      { column: 'id', operator: 'eq', value: expense.id },
+      { column: 'invoice_id', operator: 'eq', value: detailsInvoice.id },
+    ]);
+    setInvoiceExpenseBusy(false);
+    if (error) {
+      setInvoiceExpenseFeedback(`حذف هزینه ناموفق بود: ${error.message}`);
+      return;
+    }
+    if (String(editingInvoiceExpenseId) === String(expense.id)) resetInvoiceExpenseForm();
+    setInvoiceExpenseFeedback('هزینهٔ پرداخت‌نشده حذف شد.');
+    window.dispatchEvent(new Event('offline-data-updated'));
+  };
+
+  const handlePayInvoiceExpense = async (expense) => {
+    const accountId = expensePaymentAccounts[expense.id];
+    const account = invoiceExpenseAccounts.find((item) => String(item.id) === String(accountId));
+    if (!account) {
+      setInvoiceExpenseFeedback('برای ثبت پرداخت، حساب صندوق یا بانک را انتخاب کنید.');
+      return;
+    }
+    if (!isValidIsoDate(expensePaymentDate)) {
+      setInvoiceExpenseFeedback('تاریخ پرداخت معتبر نیست.');
+      return;
+    }
+    setInvoiceExpenseBusy(true);
+    setInvoiceExpenseFeedback('');
+    const { error } = await payInvoiceExpense(expense.id, account.id, expensePaymentDate);
+    setInvoiceExpenseBusy(false);
+    if (error) {
+      setInvoiceExpenseFeedback(`ثبت پرداخت ناموفق بود: ${error.message}`);
+      return;
+    }
+    setInvoiceExpenseFeedback('هزینه پرداخت شد و در صندوق/بانک ثبت شد.');
+  };
 
   async function fetchOfficialInvoices() {
     const { data, error } = await readTable('invoices', { orderBy: 'created_at', ascending: false });
@@ -300,23 +475,6 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     if (lvl === '2') return Number(item.p2 ?? 0);
     if (lvl === '3') return Number(item.p3 ?? 0);
     return Number(item.p1 ?? item.price ?? 0);
-  };
-
-  const calculateInvoiceProfit = (items) => {
-    if (!items || !Array.isArray(items)) return 0;
-    return items.reduce((sum, item) => {
-      const qty = Number(item.qty || 1);
-      const isRent = item.item_type === 'rent';
-      const unitPrice = getActiveUnitPrice(item);
-
-      if (isRent) {
-        return sum + (unitPrice * qty);
-      } else {
-        const buyCost = Number(item.base_cost ?? item.cost ?? item.unit_cost ?? 0);
-        const profitPerItem = Math.max(0, unitPrice - buyCost);
-        return sum + (profitPerItem * qty);
-      }
-    }, 0);
   };
 
   const handleStartEdit = (inv) => {
@@ -723,7 +881,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                         className="official-invoice-details-button"
                         aria-label={`نمایش جزئیات فاکتور ${formatPersianDigits(inv.id)}`}
                         title="نمایش همهٔ جزئیات فاکتور"
-                        onClick={() => setDetailsInvoice(inv)}
+                        onClick={() => handleOpenInvoiceDetails(inv)}
                       >
                         ◉
                       </button>
@@ -1111,12 +1269,146 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                 <div><dt>مبلغ پرداختی</dt><dd>{formatDisplay(paid)} تومان</dd></div>
                 <div><dt>مانده</dt><dd>{formatDisplay(calcRemaining(total, paid))} تومان</dd></div>
                 <div><dt>وضعیت پرداخت</dt><dd><span style={{ color: status.color }}>{status.label}</span></dd></div>
-                <div><dt>سود خالص</dt><dd>{formatDisplay(calculateInvoiceProfit(detailsItems))} تومان</dd></div>
+                <div><dt>جمع هزینه‌های ثبت‌شده</dt><dd>{formatDisplay(sumInvoiceExpenses(invoiceExpenses))} تومان</dd></div>
                 <div><dt>تاریخ ثبت</dt><dd>{detailsInvoice.created_at ? new Date(detailsInvoice.created_at).toLocaleDateString('fa-IR') : 'ثبت نشده'}</dd></div>
                 {detailsInvoice.quotation_id && (
                   <div><dt>پیش‌فاکتور مبنا</dt><dd>شمارهٔ #{formatPersianDigits(detailsInvoice.quotation_id)}</dd></div>
                 )}
               </dl>
+              <section aria-labelledby="invoice-expenses-title">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <h4 id="invoice-expenses-title" className="invoice-details-items-title">هزینه‌های این فاکتور</h4>
+                  <strong>جمع هزینه‌ها: {formatDisplay(sumInvoiceExpenses(invoiceExpenses))} تومان</strong>
+                </div>
+                {invoiceExpensesError && <p className="inventory-ops-message error" role="alert">بارگذاری هزینه‌های فاکتور ناموفق بود: {invoiceExpensesError}</p>}
+                {invoiceExpenseAccountsError && <p className="inventory-ops-message error" role="alert">بارگذاری حساب‌های صندوق/بانک ناموفق بود (برای پرداخت، دسترسی حسابداری لازم است): {invoiceExpenseAccountsError}</p>}
+                {invoiceExpensesLoading ? (
+                  <p className="invoice-details-empty">در حال بارگذاری هزینه‌های فاکتور…</p>
+                ) : invoiceExpenses.length ? (
+                  <div className="invoice-details-items-wrap">
+                    <table className="invoice-details-items">
+                      <thead>
+                        <tr><th>دسته</th><th>شرح</th><th>تاریخ هزینه</th><th>مبلغ</th><th>وضعیت پرداخت</th><th>اقدام</th></tr>
+                      </thead>
+                      <tbody>
+                        {invoiceExpenses.map((expense) => {
+                          const account = invoiceExpenseAccounts.find((item) => String(item.id) === String(expense.account_id));
+                          const isPending = String(expense.id).startsWith('offline:');
+                          return (
+                            <tr key={expense.id}>
+                              <td>{expense.category}</td>
+                              <td>{expense.description || '—'}</td>
+                              <td>{formatPersianDate(expense.expense_date)}</td>
+                              <td>{formatDisplay(expense.amount)} تومان</td>
+                              <td>
+                                {expense.is_paid
+                                  ? `پرداخت‌شده${account ? ` · ${account.account_name}` : ''} · ${formatPersianDate(expense.payment_date)}`
+                                  : 'پرداخت‌نشده'}
+                              </td>
+                              <td>
+                                {expense.is_paid ? (
+                                  <span>ثبت‌شده در صندوق/بانک</span>
+                                ) : (
+                                  <div style={{ display: 'grid', gap: '6px', minWidth: '170px' }}>
+                                    <select
+                                      aria-label={`حساب پرداخت هزینه ${expense.description || expense.category}`}
+                                      value={expensePaymentAccounts[expense.id] || ''}
+                                      onChange={(event) => setExpensePaymentAccounts((current) => ({
+                                        ...current,
+                                        [expense.id]: event.target.value,
+                                      }))}
+                                    >
+                                      <option value="">انتخاب حساب</option>
+                                      {invoiceExpenseAccounts.map((item) => (
+                                        <option key={item.id} value={item.id}>{item.account_name}</option>
+                                      ))}
+                                    </select>
+                                    <PersianDateInput
+                                      aria-label={`تاریخ پرداخت هزینه ${expense.description || expense.category}`}
+                                      value={expensePaymentDate}
+                                      onChange={setExpensePaymentDate}
+                                    />
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                      <button
+                                        type="button"
+                                        className="official-invoices-apply-button"
+                                        disabled={invoiceExpenseBusy || isPending || !invoiceExpenseAccounts.length || Boolean(invoiceExpenseAccountsError)}
+                                        onClick={() => handlePayInvoiceExpense(expense)}
+                                      >
+                                        پرداخت و ثبت در صندوق
+                                      </button>
+                                      <button type="button" className="official-invoices-cancel-button" disabled={invoiceExpenseBusy || expense.is_paid} onClick={() => handleEditInvoiceExpense(expense)}>ویرایش</button>
+                                      <button type="button" className="official-invoices-cancel-button" disabled={invoiceExpenseBusy || expense.is_paid} onClick={() => handleDeleteInvoiceExpense(expense)}>حذف</button>
+                                    </div>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="invoice-details-empty">برای این فاکتور هنوز هزینه‌ای ثبت نشده است.</p>
+                )}
+                <form onSubmit={handleSaveInvoiceExpense} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px', alignItems: 'end', marginTop: '14px' }}>
+                  <label>
+                    دسته‌بندی
+                    <select
+                      value={invoiceExpenseForm.category}
+                      onChange={(event) => setInvoiceExpenseForm((current) => ({ ...current, category: event.target.value }))}
+                      disabled={invoiceExpenseBusy || Boolean(invoiceExpensesError)}
+                    >
+                      {EXPENSE_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    شرح هزینه
+                    <input
+                      type="text"
+                      value={invoiceExpenseForm.description}
+                      onChange={(event) => setInvoiceExpenseForm((current) => ({ ...current, description: event.target.value }))}
+                      placeholder="مثلاً حمل‌ونقل یا گل‌آرایی"
+                      maxLength={240}
+                      disabled={invoiceExpenseBusy || Boolean(invoiceExpensesError)}
+                    />
+                  </label>
+                  <label>
+                    مبلغ (تومان)
+                    <FormattedNumberInput
+                      value={invoiceExpenseForm.amount}
+                      onValueChange={(amount) => setInvoiceExpenseForm((current) => ({ ...current, amount }))}
+                      allowDecimal={false}
+                      inputMode="numeric"
+                      placeholder="۰"
+                      disabled={invoiceExpenseBusy || Boolean(invoiceExpensesError)}
+                    />
+                  </label>
+                  <label>
+                    تاریخ هزینه
+                    <PersianDateInput
+                      value={invoiceExpenseForm.expenseDate}
+                      onChange={(expenseDate) => setInvoiceExpenseForm((current) => ({ ...current, expenseDate }))}
+                      disabled={invoiceExpenseBusy || Boolean(invoiceExpensesError)}
+                    />
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      type="submit"
+                      className="official-invoices-apply-button"
+                      disabled={invoiceExpenseBusy || invoiceExpensesLoading || Boolean(invoiceExpensesError)}
+                    >
+                      {editingInvoiceExpenseId ? 'ذخیرهٔ تغییر هزینه' : 'ثبت هزینه'}
+                    </button>
+                    {editingInvoiceExpenseId && (
+                      <button type="button" className="official-invoices-cancel-button" onClick={resetInvoiceExpenseForm} disabled={invoiceExpenseBusy}>انصراف</button>
+                    )}
+                  </div>
+                </form>
+                {invoiceExpenseFeedback && <p role="status" style={{ marginTop: '10px' }}>{invoiceExpenseFeedback}</p>}
+                <p className="invoice-details-empty">هزینهٔ پرداخت‌نشده فقط به این فاکتور تعلق می‌گیرد؛ با زدن «پرداخت و ثبت در صندوق»، پرداخت از حساب انتخاب‌شده ثبت می‌شود. سود اجاره هنوز شامل استهلاک یا بهای تمام‌شدهٔ اقلام اجاره‌ای نیست.</p>
+              </section>
               <h4 className="invoice-details-items-title">اقلام فاکتور</h4>
               {detailsItems.length ? (
                 <div className="invoice-details-items-wrap">

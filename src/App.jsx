@@ -32,6 +32,10 @@ const DEFAULT_BUSINESS_NAME = 'تشریفات آژو';
 const DEFAULT_LOGO_URL = '/azho-logo.png';
 const BUSINESS_LOGO_BUCKET = 'business-logos';
 const APP_SECTION_HISTORY_KEY = '__ceremonyManagerSection';
+const getInitialActiveSection = () => {
+  const section = window.history.state?.[APP_SECTION_HISTORY_KEY];
+  return typeof section === 'string' ? section : 'dashboard';
+};
 const getOrganizationLogoUrl = (organization) => {
   if (!organization?.id || !organization.logo_updated_at) return DEFAULT_LOGO_URL;
   const publicUrl = supabase.storage
@@ -184,10 +188,10 @@ export default function App() {
   const [password, setPassword] = useState('');
   const [windowMode, setWindowMode] = useState('normal');
   const windowRestoreModeRef = useRef('normal');
-  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSection, setActiveSection] = useState(getInitialActiveSection);
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
-  const [visitedSections, setVisitedSections] = useState(() => new Set(['dashboard']));
+  const [visitedSections, setVisitedSections] = useState(() => new Set([getInitialActiveSection()]));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [offlineStatus, setOfflineStatus] = useState(getOfflineSyncStatus);
   const [browserOnline, setBrowserOnline] = useState(() => navigator.onLine);
@@ -507,6 +511,7 @@ export default function App() {
       'inventory',
       'quotations',
       'invoices',
+      'invoice_expenses',
       'financial_accounts',
       'cash_transactions',
     ].forEach((table) => {
@@ -672,6 +677,20 @@ export default function App() {
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
   }, [activeSection, globalSearchOpen, mobileMenuOpen, profileLoading, profileOpen]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const closeMenuOnOutsidePointer = (event) => {
+      if (!(event.target instanceof Element)) return;
+      if (
+        event.target.closest('#main-navigation')
+        || event.target.closest('.mobile-menu-toggle')
+      ) return;
+      setMobileMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeMenuOnOutsidePointer, true);
+    return () => document.removeEventListener('pointerdown', closeMenuOnOutsidePointer, true);
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     if (!sessionUserId) return undefined;

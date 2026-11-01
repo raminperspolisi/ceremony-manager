@@ -8,11 +8,13 @@ const TABLE_LABELS = {
   customers: 'مشتریان',
   ceremonies: 'مراسم‌ها',
   events: 'رویدادها',
+  event_tasks: 'کارهای مراسم',
   inventory: 'کالاهای انبار',
   quotations: 'پیش‌فاکتورها',
   invoices: 'فاکتورهای رسمی',
   financial_accounts: 'حساب‌های صندوق و بانک',
   cash_transactions: 'گردش‌های مالی',
+  invoice_expenses: 'هزینه‌های فاکتور',
 };
 
 const actionButtonStyle = {
