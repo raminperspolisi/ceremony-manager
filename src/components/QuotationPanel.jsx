@@ -6,6 +6,7 @@ import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
 import { convertQuotationToInvoice, deleteSelectedDocuments } from '../quotationInvoice';
 import { renderBusinessContactHtml } from '../profileLinks';
+import { buildInvoicePrintHtml } from '../invoicePrintTemplate';
 
 const win95Style = {
   window: { 
@@ -330,7 +331,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
         };
       });
 
-      const { error } = await insertRows("quotations", [
+      const { data: savedQuotations, error } = await insertRows("quotations", [
         { 
           customer_name: selectedCustomer["Full name"], 
           customer_phone: selectedCustomer.phone || '',
@@ -346,100 +347,48 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
 
       const printWindow = window.open("", "_blank");
       if (printWindow) {
-        const escapeHtml = (value) => String(value ?? '—').replace(/[&<>"']/g, (character) => ({
-          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-        }[character]));
-        const safeBusinessName = String(businessName).replace(/[&<>"']/g, (character) => ({
-          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-        }[character]));
-        const safeLogoUrl = String(logoUrl).replace(/[&<>"']/g, (character) => ({
-          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-        }[character]));
-        printWindow.document.write(`
-          <html dir="rtl" lang="fa">
-            <head>
-              <meta charset="UTF-8">
-              <title>پیش‌فاکتور ${safeBusinessName} - ${selectedCustomer["Full name"]}</title>
-              <style>
-                @font-face { font-family: 'IRANSans'; src: url('https://cdn.fontcdn.ir/Font/Persian/IRANSans/IRANSans.woff2') format('woff2'); }
-                * { box-sizing: border-box; }
-                body { font-family: 'IRANSans', Tahoma, sans-serif; max-width: 900px; margin: auto; padding: 28px; direction: rtl; color: #243b35; background: #fff; }
-                .header-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 16px 18px; border-radius: 14px; background: linear-gradient(135deg, #153e37, #28645a); color: #fff; font-weight: bold; font-size: 19px; }
-                .company-logo { width: 60px; height: 72px; object-fit: contain; background: #fff; border-radius: 8px; }
-                .header-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; font-size: 12px; background: #f4f8f6; padding: 14px; border-radius: 10px; border: 1px solid #dce8e2; }
-                table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
-                th, td { border: 1px solid #dce5e0; padding: 9px 7px; text-align: center; }
-                th { background-color: #eaf2ee; color: #244b40; font-weight: bold; }
-                tbody tr:nth-child(even) { background: #f8faf9; }
-                .totals { width: min(100%, 410px); margin: 20px 0 0 auto; padding: 14px 16px; border: 1px solid #dce8e2; border-radius: 12px; background: #f7faf8; font-size: 12px; }
-                .totals p { display: flex; justify-content: space-between; gap: 15px; margin: 7px 0; }
-                .totals .final { margin-top: 10px; padding-top: 10px; border-top: 1px solid #cbd9d1; color: #1d5b4b; font-size: 15px; font-weight: 800; }
-                .footer-text { margin-top: 28px; font-size: 11px; text-align: center; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
-                .business-contact { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #475569; }
-                .business-contact a { color: #28645a; text-decoration: none; }
-                @media print { body { padding: 0; } .header-title, th { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-              </style>
-            </head>
-            <body>
-              <div class="header-title">
-                <img class="company-logo" src="${safeLogoUrl}" alt="لوگوی ${safeBusinessName}">
-                <span>پیش‌فاکتور ${safeBusinessName}</span>
-              </div>
-              <div class="header-info">
-                  <div><strong>نام مشتری:</strong> ${escapeHtml(selectedCustomer["Full name"])}</div>
-                  <div><strong>تلفن:</strong> ${escapeHtml(selectedCustomer.phone || 'ثبت نشده')}</div>
-                  <div><strong>تاریخ صدور:</strong> ${escapeHtml(quotationDate)}</div>
-              </div>
-              <table>
-                <thead>
-                  <tr>
-                    <th style="width: 45px;">ردیف</th>
-                    <th>نام کالا / خدمت</th>
-                    <th style="width: 80px;">نوع کالا</th>
-                    <th style="width: 65px;">تعداد</th>
-                    <th>تحویل / مهلت عودت</th>
-                    <th>درجه یک (تومان)</th>
-                    <th>درجه دو (تومان)</th>
-                    <th>درجه سه (تومان)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${items.map((item, idx) => `
-                    <tr>
-                      <td>${formatDisplay(idx + 1)}</td>
-                      <td style="text-align: right; font-weight: 500;">${escapeHtml(item.title)}</td>
-                      <td>${(item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای') ? 'اجاره‌ای' : 'فروشی'}</td>
-                      <td>${getQuantity(item.requestedQuantity)}</td>
-                      <td>${['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type)
-                        ? `${formatPersianDate(item.rental_checkout_date)} تا ${formatPersianDate(item.rental_return_date)}`
-                        : '—'}</td>
-                      <td>${Number(item.price_level1 || 0).toLocaleString('fa-IR')}</td>
-                      <td>${Number(item.price_level2 || 0).toLocaleString('fa-IR')}</td>
-                      <td>${Number(item.price_level3 || 0).toLocaleString('fa-IR')}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-              <div class="totals">
-                <p><span>جمع کل · درجه ۱</span><strong>${formatDisplay(total1)} تومان</strong></p>
-                <p><span>جمع کل · درجه ۲</span><strong>${formatDisplay(total2)} تومان</strong></p>
-                <p><span>جمع کل · درجه ۳</span><strong>${formatDisplay(total3)} تومان</strong></p>
-                <p><span>تخفیف</span><strong>${formatDisplay(numericDiscount)} تومان</strong></p>
-                <p class="final"><span>مبلغ نهایی · درجه ۱</span><strong>${formatDisplay(finalTotal)} تومان</strong></p>
-                <p><span>مبلغ پرداختی</span><strong>${formatDisplay(paidAmount)} تومان</strong></p>
-                <p><span>مانده حساب</span><strong>${formatDisplay(remainingAmount)} تومان</strong></p>
-              </div>
-              <p class="footer-text">این پیش‌فاکتور صرفاً جهت برآورد هزینه و اطلاع مشتری صادر شده و فاقد جنبه پرداخت قطعی می‌باشد.</p>
-              ${renderBusinessContactHtml(businessContact)}
-              <script>
-                window.onload = function() { 
-                  window.print(); 
-                  window.close(); 
-                };
-              </script>
-            </body>
-          </html>
-        `);
+        const quotationRows = items.map((item) => {
+          const quantity = getQuantity(item.requestedQuantity);
+          const isRent = ['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type);
+          const rentalDates = isRent
+            ? `تحویل: ${formatPersianDate(item.rental_checkout_date)} | عودت: ${formatPersianDate(item.rental_return_date)}`
+            : '';
+          return {
+            title: item.title,
+            details: [isRent ? 'اجاره‌ای' : 'فروشی', rentalDates].filter(Boolean).join(' | '),
+            quantity,
+            prices: [
+              { label: 'درجه ۱', unit: item.price_level1, total: Number(item.price_level1 || 0) * quantity },
+              { label: 'درجه ۲', unit: item.price_level2, total: Number(item.price_level2 || 0) * quantity },
+              { label: 'درجه ۳', unit: item.price_level3, total: Number(item.price_level3 || 0) * quantity },
+            ],
+          };
+        });
+        const savedQuotationId = savedQuotations?.[0]?.id;
+        const quotationHtml = buildInvoicePrintHtml({
+          documentType: 'پیش‌فاکتور فروش و اجاره',
+          businessName,
+          logoUrl,
+          number: savedQuotationId ? formatPersianDigits(savedQuotationId) : 'ثبت آفلاین',
+          createdDate: quotationDate,
+          customerName: selectedCustomer['Full name'],
+          customerPhone: selectedCustomer.phone,
+          customerAddress: selectedCustomer.address,
+          items: quotationRows,
+          totals: [
+            { label: 'جمع کل · درجه ۱', value: total1 },
+            { label: 'جمع کل · درجه ۲', value: total2 },
+            { label: 'جمع کل · درجه ۳', value: total3 },
+            { label: 'تخفیف', value: numericDiscount },
+            { label: 'مبلغ نهایی · درجه ۱', value: finalTotal, emphasis: true },
+            { label: 'مبلغ پرداختی / پیش‌پرداخت', value: paidAmount },
+            { label: 'مانده حساب', value: remainingAmount },
+          ],
+          note: 'این پیش‌فاکتور جهت برآورد هزینه صادر شده و دریافت وجه پس از صدور فاکتور رسمی ثبت می‌شود.',
+          contactHtml: renderBusinessContactHtml(businessContact),
+          autoPrint: true,
+        });
+        printWindow.document.write(quotationHtml);
         printWindow.document.close();
       }
     } catch (err) { 

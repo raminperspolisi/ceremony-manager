@@ -8,6 +8,7 @@ import { EXPENSE_CATEGORIES, formatJalaliDate, getInvoicePaymentStatus, parseJal
 import { formatPersianDate } from '../dateUtils';
 import { renderBusinessContactHtml } from '../profileLinks';
 import { sumInvoiceExpenses } from '../invoiceExpenseUtils';
+import { buildInvoicePrintHtml } from '../invoicePrintTemplate';
 
 // مقادیر مجاز وضعیت پرداخت
 const PAYMENT_STATUSES = [
@@ -719,120 +720,52 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     const total = Number(inv.total_price || 0);
     const remaining = calcRemaining(total, paid);
     const statusMeta = getStatusMeta(inv.payment_status);
-    const safeBusinessName = String(businessName).replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[character]));
-    const safeLogoUrl = String(logoUrl).replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[character]));
-    const escapeHtml = (value) => String(value ?? '—').replace(/[&<>"']/g, (character) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[character]));
+    const discount = Number(inv.discount_amount || 0);
+    const officialItems = items.map((item) => {
+      const quantity = Number(item.qty || 1);
+      const price = getActiveUnitPrice(item);
+      const isRent = item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای';
+      const levelText = item.price_level === '2' ? 'درجه ۲' : item.price_level === '3' ? 'درجه ۳' : 'درجه ۱';
+      const details = [
+        isRent ? 'اجاره‌ای' : 'فروشی',
+        `سطح قیمت: ${levelText}`,
+        ...(isRent ? [
+          `تحویل: ${formatPersianDate(item.rental_checkout_date)}`,
+          `عودت: ${formatPersianDate(item.rental_return_date)}`,
+        ] : []),
+      ].join(' | ');
+      return {
+        title: item.title,
+        details,
+        quantity,
+        prices: [{ label: '', unit: price, total: quantity * price }],
+      };
+    });
 
-    return `
-      <html dir="rtl">
-        <head>
-          <style>
-            @font-face { font-family: 'IRANSans'; src: url('https://cdn.fontcdn.ir/Font/Persian/IRANSans/IRANSans.woff2') format('woff2'); font-weight: 100 900; font-display: swap; }
-            @page { size: A4; margin: 15mm; }
-            * { box-sizing: border-box; }
-            body { font-family: 'IRANSans', Tahoma, sans-serif; max-width: 1000px; margin: auto; padding: 24px; direction: rtl; color: #243b35; }
-            .header-container { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 18px; margin-bottom: 16px; border-radius: 14px; background: linear-gradient(135deg, #153e37, #28645a); color: #fff; }
-            .company-logo { width: 60px; height: 72px; object-fit: contain; border-radius: 8px; background: #fff; }
-            h2 { margin: 0; font-size: 18px; color: #fff; }
-            .invoice-number { font-size: 12px; font-weight: bold; color: #1d5b4b; background: #eff8f3; padding: 8px 11px; border-radius: 8px; white-space: nowrap; }
-            .info-box { border: 1px solid #dce8e2; border-radius: 10px; background: #f4f8f6; padding: 12px; margin-bottom: 18px; font-size: 12px; line-height: 1.9; }
-            .info-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border: 1px solid #d6e0da; padding: 8px; text-align: center; font-size: 11px; }
-            th { background-color: #eaf2ee; color: #244b40; }
-            tbody tr:nth-child(even) { background: #f8faf9; }
-            .badge-sale { background-color: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
-            .badge-rent { background-color: #fef9c3; color: #854d0e; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
-            .payment-box { width: min(100%, 430px); margin: 20px 0 0 auto; border: 1px solid #dce8e2; background: #f7faf8; padding: 14px 16px; border-radius: 12px; font-size: 12px; line-height: 1.8; }
-            .payment-row { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 7px; }
-            .payment-row.final { margin-top: 10px; padding-top: 10px; border-top: 1px solid #cbd9d1; color: #1d5b4b; font-size: 15px; }
-            .total { margin-top: 20px; font-weight: bold; font-size: 14px; text-align: left; line-height: 1.8; }
-            .signature-section { margin-top: 60px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 13px; }
-            .signature-box { text-align: center; width: 45%; border-top: 1px dashed #334155; padding-top: 10px; color: #334155; font-weight: bold; }
-            .business-contact { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 24px; padding-top: 10px; border-top: 1px dashed #cbd5e1; font-size: 11px; color: #475569; }
-            .business-contact a { color: #28645a; text-decoration: none; }
-            @media print { body { padding: 0; } .header-container, th { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
-          </style>
-        </head>
-        <body>
-          <div class="header-container">
-            <img class="company-logo" src="${safeLogoUrl}" alt="لوگوی ${safeBusinessName}">
-            <h2>فاکتور رسمی فروش و اجاره ${safeBusinessName}</h2>
-            <div class="invoice-number">شماره فاکتور: #${formatPersianDigits(inv.id)}</div>
-          </div>
-          <div class="info-box">
-            <div class="info-row">
-              <div><strong>نام مشتری:</strong> ${escapeHtml(inv.customer_name)}</div>
-              <div><strong>تاریخ صدور سیستم:</strong> ${new Date(inv.created_at).toLocaleDateString('fa-IR')}</div>
-            </div>
-            <div class="info-row">
-              <div><strong>تاریخ سفارش:</strong> ${inv.order_date ? formatPersianDigits(inv.order_date) : 'وارد نشده'}</div>
-              <div><strong>تاریخ مراسم:</strong> ${inv.ceremony_date ? formatPersianDigits(inv.ceremony_date) : 'وارد نشده'}</div>
-            </div>
-            <div><strong>آدرس مشتری:</strong> ${escapeHtml(inv.customer_address || 'وارد نشده')}</div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>ردیف</th>
-                <th>نام کالا / خدمت</th>
-                <th>نوع کالا</th>
-                <th>سطح قیمت</th>
-                <th>تعداد</th>
-                <th>تحویل</th>
-                <th>مهلت عودت</th>
-                <th>قیمت واحد (تومان)</th>
-                <th>مجموع (تومان)</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${items.map((item, idx) => {
-                const isRent = item.item_type === 'rent';
-                const qty = Number(item.qty || 1);
-                const price = getActiveUnitPrice(item);
-                const levelText = item.price_level === '2' ? 'درجه ۲' : item.price_level === '3' ? 'درجه ۳' : 'درجه ۱';
-                return `
-                  <tr>
-                    <td>${formatDisplay(idx + 1)}</td>
-                    <td>${item.title}</td>
-                    <td><span class="${isRent ? 'badge-rent' : 'badge-sale'}">${isRent ? 'اجاره‌ای' : 'فروشی'}</span></td>
-                    <td>${levelText}</td>
-                    <td>${formatDisplay(qty)}</td>
-                    <td>${isRent ? escapeHtml(formatPersianDate(item.rental_checkout_date)) : '—'}</td>
-                    <td>${isRent ? escapeHtml(formatPersianDate(item.rental_return_date)) : '—'}</td>
-                    <td>${formatDisplay(price)}</td>
-                    <td>${formatDisplay(qty * price)}</td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-
-          <div class="payment-box">
-            <div class="payment-row"><span><strong>جمع اقلام:</strong></span><span>${formatDisplay(total + Number(inv.discount_amount || 0))} تومان</span></div>
-            <div class="payment-row"><span><strong>تخفیف:</strong></span><span>${formatDisplay(inv.discount_amount || 0)} تومان</span></div>
-            <div class="payment-row final"><span><strong>مبلغ نهایی:</strong></span><span>${formatDisplay(total)} تومان</span></div>
-            <div class="payment-row"><span><strong>مبلغ پرداختی / پیش‌پرداخت:</strong></span><span>${formatDisplay(paid)} تومان</span></div>
-            <div class="payment-row"><span><strong>مانده بدهی:</strong></span><span style="color:${remaining > 0 ? '#dc2626' : '#16a34a'}; font-weight:bold;">${formatDisplay(remaining)} تومان</span></div>
-            <div class="payment-row"><span><strong>وضعیت تسویه:</strong></span><span style="background:${statusMeta.bg}; color:${statusMeta.color}; padding: 2px 8px; border-radius: 4px; font-weight: bold;">${statusMeta.label}</span></div>
-          </div>
-
-          <div class="signature-section">
-            <div class="signature-box">امضا و مهر فروشنده</div>
-            <div class="signature-box">امضای مشتری</div>
-          </div>
-
-          ${renderBusinessContactHtml(businessContact)}
-          ${autoPrint ? '<script>window.onload = function() { window.print(); window.close(); };</script>' : ''}
-        </body>
-      </html>
-    `;
+    return buildInvoicePrintHtml({
+      documentType: 'فاکتور رسمی فروش و اجاره',
+      businessName,
+      logoUrl,
+      number: formatPersianDigits(inv.id),
+      createdDate: inv.created_at ? new Date(inv.created_at).toLocaleDateString('fa-IR') : '—',
+      customerName: inv.customer_name,
+      customerPhone: inv.customer_phone,
+      customerAddress: inv.customer_address,
+      orderDate: inv.order_date ? formatPersianDigits(inv.order_date) : '—',
+      ceremonyDate: inv.ceremony_date ? formatPersianDigits(inv.ceremony_date) : '—',
+      items: officialItems,
+      totals: [
+        { label: 'جمع اقلام', value: total + discount },
+        { label: 'تخفیف', value: discount },
+        { label: 'مبلغ نهایی', value: total, emphasis: true },
+        { label: 'مبلغ پرداختی / پیش‌پرداخت', value: paid },
+        { label: 'مانده بدهی', value: remaining },
+        { label: 'وضعیت تسویه', text: statusMeta.label, unit: '' },
+      ],
+      note: 'این فاکتور رسمی شامل کالاها و خدمات ثبت‌شده در سفارش است. شرایط تحویل و عودت اقلام اجاره‌ای در شرح هر قلم درج شده است.',
+      contactHtml: renderBusinessContactHtml(businessContact),
+      autoPrint,
+    });
   };
 
   // باز کردن پنجرهٔ چاپ مرورگر با همان قالب پیش‌نمایش
