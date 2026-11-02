@@ -16,6 +16,9 @@ export async function convertQuotationToInvoice(quotation, { readTable, insertRo
     customer_name: quotation.customer_name,
     customer_phone: quotation.customer_phone || quotation.phone || '',
     total_price: quotation.total_price,
+    discount_amount: Number(quotation.discount_amount || 0),
+    paid_amount: 0,
+    payment_status: 'unpaid',
     items_data: quotation.items_json || quotation.items_data || [],
     is_official: true,
   }]);

@@ -8,6 +8,9 @@ const CEREMONY_TYPES = ['عروسی', 'عقد', 'نامزدی', 'تولد', 'ح�
 export default function CustomersPanel({ businessName = 'تشریفات آژو' }) {
   // فرم مشتری
   const [editingId, setEditingId] = useState(null);
+  const [customerFormOpen, setCustomerFormOpen] = useState(false);
+  const [customerFormTab, setCustomerFormTab] = useState('personal');
+  const [savingCustomer, setSavingCustomer] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -26,6 +29,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerListOpen, setCustomerListOpen] = useState(false);
 
   // مراسم‌های مشتری انتخاب‌شده
   const [ceremonies, setCeremonies] = useState([]);
@@ -49,6 +53,16 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   useEffect(() => {
     const handleAppEscape = (event) => {
+      if (customerFormOpen) {
+        event.preventDefault();
+        if (!savingCustomer) handleCancelEdit();
+        return;
+      }
+      if (customerListOpen) {
+        event.preventDefault();
+        setCustomerListOpen(false);
+        return;
+      }
       if (isSearching) {
         event.preventDefault();
         setIsSearching(false);
@@ -70,7 +84,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
-  }, [editingCeremonyId, editingId, isSearching]);
+  }, [customerFormOpen, customerListOpen, editingCeremonyId, editingId, isSearching, savingCustomer]);
 
   async function fetchCustomers() {
     try {
@@ -96,8 +110,14 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
     }
   }
 
-  async function handleSaveCustomer() {
-    if (!name || !phone) { alert('لطفاً نام و شماره تماس را وارد کنید'); return; }
+  async function handleSaveCustomer(event) {
+    event.preventDefault();
+    if (!name.trim() || !phone.trim()) {
+      setError('لطفاً نام و شماره تماس را وارد کنید.');
+      setCustomerFormTab('personal');
+      return;
+    }
+    setSavingCustomer(true);
     try {
       setError(null);
       const finalReferral = introducerMode === 'list' ? selectedIntroducer : manualIntroducer;
@@ -113,18 +133,18 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       if (editingId) {
         const { error: e2 } = await updateRows('customers', customerData, [{ column: 'id', operator: 'eq', value: editingId }]);
         if (e2) throw e2;
-        alert('اطلاعات مشتری ویرایش شد');
-        setEditingId(null);
       } else {
         const { error: e2 } = await insertRows('customers', [customerData]);
         if (e2) throw e2;
-        alert('مشتری ثبت شد');
       }
       
-      setName(''); setPhone(''); setAddress(''); 
-      setSelectedIntroducer(''); setManualIntroducer(''); setNotes('');
-      fetchCustomers();
-    } catch (err) { setError('خطا: ' + err.message); }
+      handleCancelEdit();
+      await fetchCustomers();
+    } catch (err) {
+      setError('خطا در ذخیرهٔ مشتری: ' + err.message);
+    } finally {
+      setSavingCustomer(false);
+    }
   }
 
   async function handleDeleteCustomer(id, e) {
@@ -173,6 +193,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   }
 
   function handleStartEdit(customer) {
+    setCustomerListOpen(false);
     setEditingId(customer.id);
     setName(customer["Full name"] || '');
     setPhone(customer.phone || '');
@@ -191,13 +212,23 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
     }
 
     setNotes(customer.notes || '');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setCustomerFormTab('personal');
+    setCustomerFormOpen(true);
+    setError(null);
   }
 
   function handleCancelEdit() {
     setEditingId(null); 
     setName(''); setPhone(''); setAddress(''); 
     setSelectedIntroducer(''); setManualIntroducer(''); setNotes('');
+    setCustomerFormTab('personal');
+    setCustomerFormOpen(false);
+    setError(null);
+  }
+
+  function handleStartNewCustomer() {
+    handleCancelEdit();
+    setCustomerFormOpen(true);
   }
 
   // ثبت و همگام‌سازی مراسم در جدول ceremonies و events تقویم
@@ -270,6 +301,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
+    setCustomerListOpen(false);
     setSearchTerm(customer["Full name"]);
     setIsSearching(false);
     setEditingCeremonyId(null);
@@ -280,7 +312,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   const fmt = (n) => n ? Number(n).toLocaleString('fa-IR') : '—';
 
   const styles = {
-    container: { padding: '8px', direction: 'rtl', fontFamily: '"IRANSans", Tahoma, sans-serif', maxWidth: '900px', margin: '0 auto', boxSizing: 'border-box' },
+    container: { padding: '8px', direction: 'rtl', fontFamily: '"IRANSans", Tahoma, sans-serif', maxWidth: 'none', margin: '0 auto', boxSizing: 'border-box' },
     headerTitle: { textAlign: 'center', color: 'var(--app-primary)', fontSize: '15px', fontWeight: '700', marginBottom: '8px' },
     cardBox: { backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 12px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', marginBottom: '10px' },
     sectionTitle: { fontSize: '12px', color: '#1e293b', marginBottom: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '4px', fontWeight: '600' },
@@ -297,81 +329,184 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.headerTitle}>✨ مدیریت مشتریان و مراسم‌ها | {businessName}</h2>
-
-      {error && <div style={styles.errBox}>{error}</div>}
-
-      {/* فرم ثبت/ویرایش مشتری */}
-      <div style={{ ...styles.cardBox, border: editingId ? '2px solid #d97706' : '1px solid #e2e8f0' }}>
-        <h3 style={styles.sectionTitle}>{editingId ? '✏️ ویرایش مشتری' : '➕ ثبت مشتری جدید'}</h3>
-        
-        <div className="accounting-form-grid customer-form-grid" style={styles.formGrid}>
-          <div className="accounting-field">
-            <label htmlFor="customer-name">نام و نام خانوادگی *</label>
-            <input id="customer-name" style={styles.input} placeholder="نام مشتری" value={name} onChange={e => setName(e.target.value)} />
-          </div>
-          <div className="accounting-field">
-            <label htmlFor="customer-phone">شماره تماس *</label>
-            <input id="customer-phone" style={styles.input} type="tel" inputMode="tel" placeholder="مثلاً 09123456789" value={phone} onChange={e => setPhone(e.target.value)} />
-          </div>
-          <div className="accounting-field">
-            <label htmlFor="customer-address">آدرس</label>
-            <input id="customer-address" style={styles.input} placeholder="آدرس مشتری (اختیاری)" value={address} onChange={e => setAddress(e.target.value)} />
-          </div>
-          <div className="accounting-field">
-            <label htmlFor="customer-notes">یادداشت</label>
-            <input id="customer-notes" style={styles.input} placeholder="یادداشت تکمیلی (اختیاری)" value={notes} onChange={e => setNotes(e.target.value)} />
-          </div>
+    <div className="customers-panel" style={styles.container}>
+      <header className="customers-page-heading">
+        <div>
+          <span className="customers-page-eyebrow">مدیریت ارتباط با مشتری</span>
+          <h2>مشتریان و مراسم‌ها</h2>
+          <p>اطلاعات طرف‌حساب‌ها، سوابق و مراسم‌های مرتبط را یکجا مدیریت کنید.</p>
         </div>
+        <button type="button" className="customers-add-button" onClick={handleStartNewCustomer}>
+          <span aria-hidden="true">＋</span>
+          مشتری جدید
+        </button>
+      </header>
 
-        {/* بخش انتخاب معرف */}
-        <div className="customer-referral-fields">
-          <div className="accounting-field customer-referral-mode-field">
-            <label htmlFor="customer-referral-mode">معرف</label>
-            <select
-              id="customer-referral-mode"
-              className="customer-referral-mode"
-              value={introducerMode}
-              onChange={(event) => setIntroducerMode(event.target.value)}
-            >
-              <option value="list">انتخاب از فهرست</option>
-              <option value="manual">ورود دستی</option>
-            </select>
-          </div>
+      {error && !customerFormOpen && <div style={styles.errBox}>{error}</div>}
 
-          <div className="accounting-field customer-referral-value-field">
-            {introducerMode === 'list' ? (
-              <>
-                <label htmlFor="customer-referral">انتخاب معرف</label>
-                <select id="customer-referral" className="customer-referral-input" value={selectedIntroducer} onChange={e => setSelectedIntroducer(e.target.value)}>
-                  <option value="">-- انتخاب معرف --</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c["Full name"]}>{c["Full name"]} ({formatPersianDigits(c.phone)})</option>
-                  ))}
-                </select>
-              </>
-            ) : (
-              <>
-                <label htmlFor="customer-manual-referral">نام معرف</label>
-                <input id="customer-manual-referral" className="customer-referral-input" placeholder="نام معرف را وارد کنید" value={manualIntroducer} onChange={e => setManualIntroducer(e.target.value)} />
-              </>
-            )}
-          </div>
+      {customerFormOpen && (
+        <div
+          className="customer-form-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !savingCustomer) handleCancelEdit();
+          }}
+        >
+          <section
+            className="customer-form-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customer-form-title"
+            dir="rtl"
+          >
+            <header className="customer-form-dialog-heading">
+              <div>
+                <span className="customers-page-eyebrow">طرف حساب · {businessName}</span>
+                <h2 id="customer-form-title">{editingId ? 'ویرایش مشخصات مشتری' : 'ثبت طرف حساب جدید'}</h2>
+              </div>
+              <div className="customer-form-heading-actions">
+                <span className="customer-type-badge">مشتری</span>
+                <button type="button" aria-label="بستن فرم" onClick={handleCancelEdit} disabled={savingCustomer}>×</button>
+              </div>
+            </header>
+
+            <div className="customer-form-tabs" role="tablist" aria-label="بخش‌های مشخصات مشتری">
+              {[
+                ['personal', 'مشخصات شخصی'],
+                ['contact', 'اطلاعات تماس'],
+                ['referral', 'معرف'],
+                ['notes', 'یادداشت‌ها'],
+              ].map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  role="tab"
+                  id={`customer-tab-${tab}`}
+                  aria-selected={customerFormTab === tab}
+                  aria-controls={`customer-tabpanel-${tab}`}
+                  className={customerFormTab === tab ? 'active' : ''}
+                  onClick={() => setCustomerFormTab(tab)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <form className="customer-form-content" onSubmit={handleSaveCustomer}>
+              {error && <div className="customer-form-error" role="alert">{error}</div>}
+              <div
+                id={`customer-tabpanel-${customerFormTab}`}
+                role="tabpanel"
+                aria-labelledby={`customer-tab-${customerFormTab}`}
+                className="customer-form-tabpanel"
+              >
+                {customerFormTab === 'personal' && (
+                  <div className="customer-form-fields">
+                    <label className="accounting-field">
+                      نام و نام خانوادگی <span>*</span>
+                      <input
+                        autoFocus
+                        autoComplete="name"
+                        value={name}
+                        onChange={(event) => setName(event.target.value)}
+                        placeholder="نام کامل مشتری"
+                        maxLength={160}
+                        required
+                      />
+                    </label>
+                    <label className="accounting-field">
+                      شماره تماس <span>*</span>
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="tel"
+                        value={phone}
+                        onChange={(event) => setPhone(event.target.value)}
+                        placeholder="مثلاً 09123456789"
+                        maxLength={32}
+                        required
+                      />
+                    </label>
+                  </div>
+                )}
+                {customerFormTab === 'contact' && (
+                  <div className="customer-form-fields">
+                    <label className="accounting-field customer-form-field-wide">
+                      نشانی
+                      <textarea
+                        autoComplete="street-address"
+                        value={address}
+                        onChange={(event) => setAddress(event.target.value)}
+                        placeholder="نشانی مشتری"
+                        rows={4}
+                        maxLength={500}
+                      />
+                    </label>
+                  </div>
+                )}
+                {customerFormTab === 'referral' && (
+                  <div className="customer-form-fields">
+                    <label className="accounting-field">
+                      روش ثبت معرف
+                      <select value={introducerMode} onChange={(event) => setIntroducerMode(event.target.value)}>
+                        <option value="list">انتخاب از فهرست مشتریان</option>
+                        <option value="manual">ورود دستی</option>
+                      </select>
+                    </label>
+                    <label className="accounting-field">
+                      {introducerMode === 'list' ? 'انتخاب معرف' : 'نام معرف'}
+                      {introducerMode === 'list' ? (
+                        <select value={selectedIntroducer} onChange={(event) => setSelectedIntroducer(event.target.value)}>
+                          <option value="">انتخاب کنید</option>
+                          {customers
+                            .filter((customer) => String(customer.id) !== String(editingId))
+                            .map((customer) => (
+                              <option key={customer.id} value={customer['Full name']}>
+                                {customer['Full name']} ({formatPersianDigits(customer.phone)})
+                              </option>
+                            ))}
+                        </select>
+                      ) : (
+                        <input
+                          value={manualIntroducer}
+                          onChange={(event) => setManualIntroducer(event.target.value)}
+                          placeholder="نام معرف را وارد کنید"
+                          maxLength={160}
+                        />
+                      )}
+                    </label>
+                  </div>
+                )}
+                {customerFormTab === 'notes' && (
+                  <div className="customer-form-fields">
+                    <label className="accounting-field customer-form-field-wide">
+                      یادداشت تکمیلی
+                      <textarea
+                        value={notes}
+                        onChange={(event) => setNotes(event.target.value)}
+                        placeholder="نکته‌ها و توضیحات مربوط به مشتری"
+                        rows={4}
+                        maxLength={1000}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <footer className="customer-form-actions">
+                <button type="button" className="customer-form-cancel" onClick={handleCancelEdit} disabled={savingCustomer}>
+                  انصراف
+                </button>
+                <button type="submit" className="customer-form-save" disabled={savingCustomer}>
+                  {savingCustomer ? 'در حال ذخیره…' : editingId ? 'ذخیره تغییرات' : 'ثبت مشتری'}
+                </button>
+              </footer>
+            </form>
+          </section>
         </div>
-
-        <div style={{ marginTop: '8px' }}>
-          <button style={{ ...styles.btn, backgroundColor: editingId ? '#d97706' : 'var(--app-primary)' }} onClick={handleSaveCustomer}>
-            {editingId ? '💾 ذخیره تغییرات مشتری' : 'ثبت مشتری'}
-          </button>
-          {editingId && (
-            <button style={{ ...styles.btnSmall, background: '#64748b', marginRight: '6px', padding: '5px 12px' }} onClick={handleCancelEdit}>لغو</button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* جستجوی سریع */}
-      <div style={styles.cardBox}>
+      <div className="customer-search-card" style={styles.cardBox}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>🔍 جستجو:</span>
           <div style={{ position: 'relative', flex: 1 }}>
@@ -400,65 +535,106 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
         )}
       </div>
 
-      {/* لیست مشتریان */}
-      <div style={styles.cardBox}>
-        <div className="customer-list-toolbar">
-          <div className="customer-list-heading">
-            <h3 style={{ ...styles.sectionTitle, margin: 0, borderBottom: 0, paddingBottom: 0 }}>📋 لیست مشتریان ({formatDisplay(customers.length)})</h3>
-            <div className="customer-list-selection-actions">
-              <label className="customer-select-all">
-                <input
-                  type="checkbox"
-                  checked={customers.length > 0 && selectedCustomerIds.size === customers.length}
-                  onChange={(event) => setSelectedCustomerIds(event.target.checked ? new Set(customers.map((customer) => customer.id)) : new Set())}
-                  aria-label="انتخاب همه مشتریان"
-                />
-                انتخاب همه
-              </label>
-              {selectedCustomerIds.size > 0 && (
-                <button type="button" className="customer-bulk-delete" onClick={handleDeleteSelectedCustomers}>
-                  حذف انتخاب‌شده‌ها ({formatDisplay(selectedCustomerIds.size)})
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="customer-list-actions">
-            <span>دابل‌کلیک روی نام مشتری برای ویرایش</span>
-          </div>
-        </div>
-        {customers.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '8px', fontSize: '12px' }}>هنوز مشتری‌ای ثبت نشده است.</p>}
-        <ul className="customer-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {customers.map(c => (
-            <li key={c.id}
-                onDoubleClick={() => handleStartEdit(c)}
-                title="دابل‌کلیک برای ویرایش"
-                style={{ padding: '7px 8px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', cursor: 'pointer', background: selectedCustomerIds.has(c.id) ? '#f0f9ff' : selectedCustomer?.id === c.id ? '#fffbeb' : 'transparent' }}>
-              <div className="customer-list-identity">
-                <input
-                  type="checkbox"
-                  checked={selectedCustomerIds.has(c.id)}
-                  onChange={() => handleToggleCustomerSelection(c.id)}
-                  onClick={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  aria-label={`انتخاب مشتری ${c['Full name'] || ''}`}
-                />
-                <div className="customer-list-row-actions">
-                  <button type="button" style={{ ...styles.btnSmall, background: 'var(--app-primary)' }} onClick={(e) => { e.stopPropagation(); handleCustomerSelect(c); }}>مراسم‌ها</button>
-                  <button type="button" aria-label={`حذف مشتری ${c['Full name'] || ''}`} title="حذف مشتری" style={{ ...styles.btnSmall, background: 'transparent', color: '#dc2626' }} onClick={(e) => handleDeleteCustomer(c.id, e)}>🗑️</button>
+      <button
+        type="button"
+        className="customer-list-open-button"
+        onClick={() => setCustomerListOpen(true)}
+      >
+        <span aria-hidden="true">📋</span>
+        <span>لیست مشتریان</span>
+        <strong>{formatDisplay(customers.length)}</strong>
+      </button>
+
+      {customerListOpen && (
+        <div
+          className="customer-list-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setCustomerListOpen(false);
+          }}
+        >
+          <section
+            className="customer-list-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customer-list-title"
+            dir="rtl"
+          >
+            <header className="customer-list-dialog-heading">
+              <div>
+                <span className="customers-page-eyebrow">مدیریت ارتباط با مشتری</span>
+                <h2 id="customer-list-title">لیست مشتریان ({formatDisplay(customers.length)})</h2>
+              </div>
+              <button
+                type="button"
+                aria-label="بستن لیست مشتریان"
+                onClick={() => setCustomerListOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            <div className="customer-list-card">
+              <div className="customer-list-toolbar">
+                <div className="customer-list-heading">
+                  <div className="customer-list-selection-actions">
+                    <label className="customer-select-all">
+                      <input
+                        type="checkbox"
+                        checked={customers.length > 0 && selectedCustomerIds.size === customers.length}
+                        onChange={(event) => setSelectedCustomerIds(event.target.checked ? new Set(customers.map((customer) => customer.id)) : new Set())}
+                        aria-label="انتخاب همه مشتریان"
+                      />
+                      انتخاب همه
+                    </label>
+                    {selectedCustomerIds.size > 0 && (
+                      <button type="button" className="customer-bulk-delete" onClick={handleDeleteSelectedCustomers}>
+                        حذف انتخاب‌شده‌ها ({formatDisplay(selectedCustomerIds.size)})
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600' }}>{c["Full name"]}</div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>📞 {formatPersianDigits(c.phone)}{c.referral ? ` | 👤 معرف: ${c.referral}` : ''}</div>
+                <div className="customer-list-actions">
+                  <span>دابل‌کلیک روی نام مشتری برای ویرایش</span>
                 </div>
               </div>
-            </li>
-          ))}
-        </ul>
-      </div>
+              {customers.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '8px', fontSize: '12px' }}>هنوز مشتری‌ای ثبت نشده است.</p>}
+              <ul className="customer-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {customers.map(c => (
+                  <li
+                    key={c.id}
+                    className="customer-list-item"
+                    onDoubleClick={() => handleStartEdit(c)}
+                    title="دابل‌کلیک برای ویرایش"
+                    style={{ padding: '7px 8px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', cursor: 'pointer', background: selectedCustomerIds.has(c.id) ? '#f0f9ff' : selectedCustomer?.id === c.id ? '#fffbeb' : 'transparent' }}
+                  >
+                    <div className="customer-list-identity">
+                      <input
+                        type="checkbox"
+                        checked={selectedCustomerIds.has(c.id)}
+                        onChange={() => handleToggleCustomerSelection(c.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                        aria-label={`انتخاب مشتری ${c['Full name'] || ''}`}
+                      />
+                      <div className="customer-list-row-actions">
+                        <button type="button" style={{ ...styles.btnSmall, background: 'var(--app-primary)' }} onClick={(event) => { event.stopPropagation(); handleCustomerSelect(c); }}>مراسم‌ها</button>
+                        <button type="button" aria-label={`حذف مشتری ${c['Full name'] || ''}`} title="حذف مشتری" style={{ ...styles.btnSmall, background: 'transparent', color: '#dc2626' }} onClick={(event) => handleDeleteCustomer(c.id, event)}>🗑️</button>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '12px', fontWeight: '600' }}>{c["Full name"]}</div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>📞 {formatPersianDigits(c.phone)}{c.referral ? ` | 👤 معرف: ${c.referral}` : ''}</div>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* مراسم‌های مشتری انتخاب‌شده */}
       {selectedCustomer && (
-        <div style={{ ...styles.cardBox, border: '2px solid #d97706' }}>
+        <div className="customer-ceremonies-card" style={{ ...styles.cardBox, border: '2px solid #d97706' }}>
           <h3 style={styles.sectionTitle}>🎉 مراسم‌های «{selectedCustomer["Full name"]}» ({formatDisplay(ceremonies.length)})</h3>
 
           <div className="accounting-form-grid ceremony-form-grid" style={styles.formGrid}>

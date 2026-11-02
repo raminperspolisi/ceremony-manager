@@ -15,6 +15,7 @@ test('conversion creates a linked invoice when no invoice exists', async () => {
       customer_name: 'مشتری',
       customer_phone: '09120000000',
       total_price: 500,
+      discount_amount: 120,
       items_json: [{
         title: 'کالای اجاره‌ای',
         inventory_id: 81,
@@ -37,6 +38,10 @@ test('conversion creates a linked invoice when no invoice exists', async () => {
   assert.equal(inserted.table, 'invoices');
   assert.equal(inserted.row.quotation_id, '12');
   assert.equal(inserted.row.customer_phone, '09120000000');
+  assert.equal(inserted.row.total_price, 500);
+  assert.equal(inserted.row.discount_amount, 120);
+  assert.equal(inserted.row.paid_amount, 0);
+  assert.equal(inserted.row.payment_status, 'unpaid');
   assert.deepEqual(inserted.row.items_data, [{
     title: 'کالای اجاره‌ای',
     inventory_id: 81,

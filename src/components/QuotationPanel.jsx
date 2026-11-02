@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { formatDisplay, formatPersianDigits } from '../styles';
-import { deleteRows, insertRows, readTable } from '../offlineSync';
+import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatPersianDate } from '../dateUtils';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
@@ -73,9 +73,14 @@ const hasInventoryReference = (value) => (
   && !String(value).startsWith('restored-')
 );
 
-export default function QuotationPanel({ selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
+export default function QuotationPanel({ inventoryItems = [], onItemSelected, selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
   const items = selectedItems || [];
   const [customers, setCustomers] = useState([]);
+  const [inventoryPickerOpen, setInventoryPickerOpen] = useState(false);
+  const [inventorySearchTerm, setInventorySearchTerm] = useState('');
+  const [editingInventoryItemId, setEditingInventoryItemId] = useState(null);
+  const [inventoryEditForm, setInventoryEditForm] = useState({});
+  const [savingInventoryItem, setSavingInventoryItem] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -87,6 +92,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
 
   const [quotationDate, setQuotationDate] = useState(new Date().toLocaleDateString('fa-IR'));
+  const [discountAmount, setDiscountAmount] = useState('0');
   const [savedInvoices, setSavedInvoices] = useState([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
   const [convertingQuotationId, setConvertingQuotationId] = useState(null);
@@ -104,6 +110,16 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
   useEffect(() => {
     const handleAppEscape = (event) => {
+      if (inventoryPickerOpen) {
+        event.preventDefault();
+        if (editingInventoryItemId !== null) {
+          setEditingInventoryItemId(null);
+          setInventoryEditForm({});
+        } else {
+          setInventoryPickerOpen(false);
+        }
+        return;
+      }
       if (isSearching) {
         event.preventDefault();
         setIsSearching(false);
@@ -118,7 +134,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
-  }, [isSearching, showAddCustomerForm]);
+  }, [editingInventoryItemId, inventoryPickerOpen, isSearching, showAddCustomerForm]);
 
   async function fetchCustomers() {
     try {
@@ -193,6 +209,62 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
   const total1 = items.reduce((sum, item) => sum + (Number(item.price_level1) || 0) * getQuantity(item.requestedQuantity), 0);
   const total2 = items.reduce((sum, item) => sum + (Number(item.price_level2) || 0) * getQuantity(item.requestedQuantity), 0);
   const total3 = items.reduce((sum, item) => sum + (Number(item.price_level3) || 0) * getQuantity(item.requestedQuantity), 0);
+  const numericDiscount = Math.max(0, Number(discountAmount) || 0);
+  const finalTotal = Math.max(0, total1 - numericDiscount);
+  const paidAmount = 0;
+  const remainingAmount = Math.max(0, finalTotal - paidAmount);
+  const filteredInventoryItems = inventoryItems.filter((item) => (
+    item.title?.toLowerCase().includes(inventorySearchTerm.trim().toLowerCase())
+  ));
+
+  const handleStartInventoryItemEdit = (item) => {
+    setEditingInventoryItemId(item.id);
+    setInventoryEditForm({
+      title: item.title || '',
+      item_type: item.item_type || 'sale',
+      price_level1: item.price_level1 ?? 0,
+      price_level2: item.price_level2 ?? 0,
+      price_level3: item.price_level3 ?? 0,
+    });
+  };
+
+  const handleSaveInventoryItemEdit = async (item) => {
+    if (!inventoryEditForm.title.trim()) {
+      alert('نام کالا یا خدمت را وارد کنید.');
+      return;
+    }
+
+    const updatedItem = {
+      title: inventoryEditForm.title.trim(),
+      item_type: inventoryEditForm.item_type || 'sale',
+      price_level1: Number(inventoryEditForm.price_level1) || 0,
+      price_level2: Number(inventoryEditForm.price_level2) || 0,
+      price_level3: Number(inventoryEditForm.price_level3) || 0,
+    };
+
+    setSavingInventoryItem(true);
+    try {
+      const { error } = await updateRows(
+        'inventory',
+        updatedItem,
+        [{ column: 'id', operator: 'eq', value: item.id }],
+      );
+      if (error) throw error;
+
+      setSelectedItems?.((currentItems) => currentItems.map((currentItem) => (
+        String(currentItem.id) === String(item.id)
+          ? { ...currentItem, ...updatedItem }
+          : currentItem
+      )));
+      setEditingInventoryItemId(null);
+      setInventoryEditForm({});
+      window.dispatchEvent(new Event('offline-data-updated'));
+    } catch (error) {
+      alert(`خطا در ویرایش کالا: ${error.message}`);
+    } finally {
+      setSavingInventoryItem(false);
+    }
+  };
 
   const handleSaveAndPrint = async () => {
     if (!selectedCustomer) { 
@@ -202,6 +274,10 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     if (items.length === 0) { 
       alert("لیست کالاها خالی است."); 
       return; 
+    }
+    if (!Number.isSafeInteger(numericDiscount) || numericDiscount > total1) {
+      alert('مبلغ تخفیف باید عدد صحیح و بین صفر تا مبلغ کل درجهٔ یک باشد.');
+      return;
     }
 
     const rentalItemsWithoutDates = items.filter((item) => {
@@ -259,7 +335,8 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
           customer_name: selectedCustomer["Full name"], 
           customer_phone: selectedCustomer.phone || '',
           items_json: itemsPayload, 
-          total_price: total1 
+          total_price: finalTotal,
+          discount_amount: numericDiscount,
         }
       ]);
 
@@ -269,6 +346,9 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
 
       const printWindow = window.open("", "_blank");
       if (printWindow) {
+        const escapeHtml = (value) => String(value ?? '—').replace(/[&<>"']/g, (character) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[character]));
         const safeBusinessName = String(businessName).replace(/[&<>"']/g, (character) => ({
           '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
         }[character]));
@@ -282,18 +362,22 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
               <title>پیش‌فاکتور ${safeBusinessName} - ${selectedCustomer["Full name"]}</title>
               <style>
                 @font-face { font-family: 'IRANSans'; src: url('https://cdn.fontcdn.ir/Font/Persian/IRANSans/IRANSans.woff2') format('woff2'); }
-                body { font-family: 'IRANSans', Tahoma, sans-serif; padding: 35px; direction: rtl; color: #1e293b; }
-                .header-title { display: flex; align-items: center; justify-content: center; gap: 16px; text-align: center; font-weight: bold; font-size: 22px; margin-bottom: 25px; border-bottom: 2px solid #0284c7; padding-bottom: 12px; }
-                .company-logo { width: 72px; height: 94px; object-fit: contain; }
-                .header-info { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; background: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
-                table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
-                th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: center; }
-                th { background-color: #f1f5f9; color: #334155; font-weight: bold; }
-                .totals { margin-top: 25px; font-weight: bold; font-size: 15px; background: #fafafa; padding: 12px; border-radius: 6px; border: 1px solid #e2e8f0; }
-                .totals p { margin: 6px 0; }
-                .footer-text { margin-top: 40px; font-size: 12px; text-align: center; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
+                * { box-sizing: border-box; }
+                body { font-family: 'IRANSans', Tahoma, sans-serif; max-width: 900px; margin: auto; padding: 28px; direction: rtl; color: #243b35; background: #fff; }
+                .header-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; padding: 16px 18px; border-radius: 14px; background: linear-gradient(135deg, #153e37, #28645a); color: #fff; font-weight: bold; font-size: 19px; }
+                .company-logo { width: 60px; height: 72px; object-fit: contain; background: #fff; border-radius: 8px; }
+                .header-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; font-size: 12px; background: #f4f8f6; padding: 14px; border-radius: 10px; border: 1px solid #dce8e2; }
+                table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
+                th, td { border: 1px solid #dce5e0; padding: 9px 7px; text-align: center; }
+                th { background-color: #eaf2ee; color: #244b40; font-weight: bold; }
+                tbody tr:nth-child(even) { background: #f8faf9; }
+                .totals { width: min(100%, 410px); margin: 20px 0 0 auto; padding: 14px 16px; border: 1px solid #dce8e2; border-radius: 12px; background: #f7faf8; font-size: 12px; }
+                .totals p { display: flex; justify-content: space-between; gap: 15px; margin: 7px 0; }
+                .totals .final { margin-top: 10px; padding-top: 10px; border-top: 1px solid #cbd9d1; color: #1d5b4b; font-size: 15px; font-weight: 800; }
+                .footer-text { margin-top: 28px; font-size: 11px; text-align: center; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
                 .business-contact { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #475569; }
                 .business-contact a { color: #28645a; text-decoration: none; }
+                @media print { body { padding: 0; } .header-title, th { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
               </style>
             </head>
             <body>
@@ -302,9 +386,9 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                 <span>پیش‌فاکتور ${safeBusinessName}</span>
               </div>
               <div class="header-info">
-                  <div><strong>نام مشتری:</strong> ${selectedCustomer["Full name"]}</div>
-                  <div><strong>تلفن:</strong> ${selectedCustomer.phone || 'ثبت نشده'}</div>
-                  <div><strong>تاریخ صدور:</strong> ${quotationDate}</div>
+                  <div><strong>نام مشتری:</strong> ${escapeHtml(selectedCustomer["Full name"])}</div>
+                  <div><strong>تلفن:</strong> ${escapeHtml(selectedCustomer.phone || 'ثبت نشده')}</div>
+                  <div><strong>تاریخ صدور:</strong> ${escapeHtml(quotationDate)}</div>
               </div>
               <table>
                 <thead>
@@ -323,7 +407,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                   ${items.map((item, idx) => `
                     <tr>
                       <td>${formatDisplay(idx + 1)}</td>
-                      <td style="text-align: right; font-weight: 500;">${item.title}</td>
+                      <td style="text-align: right; font-weight: 500;">${escapeHtml(item.title)}</td>
                       <td>${(item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای') ? 'اجاره‌ای' : 'فروشی'}</td>
                       <td>${getQuantity(item.requestedQuantity)}</td>
                       <td>${['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type)
@@ -337,9 +421,13 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
                 </tbody>
               </table>
               <div class="totals">
-                <p>مجموع کل (درجه ۱): ${Number(total1).toLocaleString('fa-IR')} تومان</p>
-                <p>مجموع کل (درجه ۲): ${Number(total2).toLocaleString('fa-IR')} تومان</p>
-                <p>مجموع کل (درجه ۳): ${Number(total3).toLocaleString('fa-IR')} تومان</p>
+                <p><span>جمع کل · درجه ۱</span><strong>${formatDisplay(total1)} تومان</strong></p>
+                <p><span>جمع کل · درجه ۲</span><strong>${formatDisplay(total2)} تومان</strong></p>
+                <p><span>جمع کل · درجه ۳</span><strong>${formatDisplay(total3)} تومان</strong></p>
+                <p><span>تخفیف</span><strong>${formatDisplay(numericDiscount)} تومان</strong></p>
+                <p class="final"><span>مبلغ نهایی · درجه ۱</span><strong>${formatDisplay(finalTotal)} تومان</strong></p>
+                <p><span>مبلغ پرداختی</span><strong>${formatDisplay(paidAmount)} تومان</strong></p>
+                <p><span>مانده حساب</span><strong>${formatDisplay(remainingAmount)} تومان</strong></p>
               </div>
               <p class="footer-text">این پیش‌فاکتور صرفاً جهت برآورد هزینه و اطلاع مشتری صادر شده و فاقد جنبه پرداخت قطعی می‌باشد.</p>
               ${renderBusinessContactHtml(businessContact)}
@@ -442,6 +530,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
     if (setSelectedItems) {
       setSelectedItems(restoredItems);
     }
+    setDiscountAmount(String(inv.discount_amount || 0));
     setSearchTerm(inv.customer_name || '');
     setSelectedCustomer({ "Full name": inv.customer_name });
     alert(`پیش‌فاکتور مشتری «${inv.customer_name}» بارگذاری شد.`);
@@ -484,7 +573,16 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
           <h2>مدیریت و صدور پیش‌فاکتور</h2>
           <p>اقلام را از انبار انتخاب کنید و پیش‌فاکتور مشتری را صادر کنید.</p>
         </div>
-        <span className="quotation-document-badge">پیش‌فاکتور جدید</span>
+        <button
+          type="button"
+          className="quotation-new-button"
+          onClick={() => {
+            setInventorySearchTerm('');
+            setInventoryPickerOpen(true);
+          }}
+        >
+          صدور پیش‌فاکتور جدید
+        </button>
       </header>
 
       <div className="quotation-workspace">
@@ -579,7 +677,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
             <div className="quotation-section-heading">
               <div>
                 <h3>اقلام پیش‌فاکتور</h3>
-                <span>برای افزودن کالا، از بخش انبار استفاده کنید.</span>
+                <span>برای افزودن کالا، از فهرست انبار استفاده کنید.</span>
               </div>
               <span className="quotation-items-count">{formatDisplay(items.length)} قلم</span>
             </div>
@@ -603,7 +701,7 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
               {items.length === 0 ? (
                 <tr className="quotation-items-empty-row">
                   <td colSpan={showBuyingPrice ? 10 : 9} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
-                    هیچ کالایی به پیش‌فاکتور اضافه نشده است. (کالاهای مورد نظر را از بخش انبار انتخاب کنید)
+                    هیچ کالایی به پیش‌فاکتور اضافه نشده است. (از دکمهٔ «صدور پیش‌فاکتور جدید» استفاده کنید)
                   </td>
                 </tr>
               ) : (
@@ -704,9 +802,34 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
               <span>مجموع کل · درجه ۳</span>
               <strong>{total3.toLocaleString('fa-IR')} <small>تومان</small></strong>
             </div>
+            <label className="quotation-discount-field">
+              تخفیف (تومان)
+              <FormattedNumberInput
+                allowDecimal={false}
+                inputMode="numeric"
+                value={discountAmount}
+                onValueChange={setDiscountAmount}
+              />
+            </label>
+            <div className="quotation-total-row discount">
+              <span>مبلغ تخفیف</span>
+              <strong>{formatDisplay(numericDiscount)} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row final">
+              <span>مبلغ نهایی · درجه ۱</span>
+              <strong>{formatDisplay(finalTotal)} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row">
+              <span>مبلغ پرداختی</span>
+              <strong>{formatDisplay(paidAmount)} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row remaining">
+              <span>مانده حساب</span>
+              <strong>{formatDisplay(remainingAmount)} <small>تومان</small></strong>
+            </div>
           </div>
           <p className="quotation-summary-note">
-            {items.length ? `${formatDisplay(items.length)} قلم کالا در این پیش‌فاکتور ثبت شده است.` : 'هنوز کالایی به پیش‌فاکتور اضافه نشده است.'}
+          {items.length ? `${formatDisplay(items.length)} قلم کالا در این پیش‌فاکتور ثبت شده است. دریافت وجه پس از صدور فاکتور رسمی از صندوق/بانک ثبت می‌شود.` : 'هنوز کالایی به پیش‌فاکتور اضافه نشده است.'}
           </p>
           <button
             className="quotation-save-button"
@@ -716,6 +839,167 @@ export default function QuotationPanel({ selectedItems = [], setSelectedItems, b
           </button>
         </aside>
       </div>
+
+      {inventoryPickerOpen && (
+        <div
+          className="quotation-inventory-picker-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setInventoryPickerOpen(false);
+          }}
+        >
+          <section
+            className="quotation-inventory-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quotation-inventory-picker-title"
+            dir="rtl"
+          >
+            <header className="quotation-inventory-picker-heading">
+              <div>
+                <span className="quotation-heading-kicker">انتخاب از موجودی انبار</span>
+                <h2 id="quotation-inventory-picker-title">اقلام پیش‌فاکتور</h2>
+                <p>{formatDisplay(inventoryItems.length)} کالا در انبار ثبت شده است.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="بستن فهرست اقلام"
+                onClick={() => setInventoryPickerOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            <label className="quotation-inventory-picker-search">
+              <span>جستجوی کالا</span>
+              <input
+                type="search"
+                value={inventorySearchTerm}
+                onChange={(event) => setInventorySearchTerm(event.target.value)}
+                placeholder="نام کالا را وارد کنید..."
+                autoFocus
+              />
+            </label>
+            <div className="quotation-inventory-picker-list">
+              {filteredInventoryItems.length === 0 ? (
+                <p className="quotation-inventory-picker-empty">
+                  {inventoryItems.length === 0 ? 'هنوز کالایی در انبار ثبت نشده است.' : 'کالایی با این نام پیدا نشد.'}
+                </p>
+              ) : (
+                <table className="quotation-inventory-picker-table">
+                  <thead>
+                    <tr>
+                      <th>ردیف</th>
+                      <th>عنوان کالا / خدمت</th>
+                      <th>نوع کالا</th>
+                      <th>نرخ سطح ۱</th>
+                      <th>نرخ سطح ۲</th>
+                      <th>نرخ سطح ۳</th>
+                      <th>عملیات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredInventoryItems.map((item, index) => {
+                      const isSelected = items.some((draft) => String(draft.id) === String(item.id));
+                      const isEditing = String(editingInventoryItemId) === String(item.id);
+                      const isRent = ['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type);
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`${isSelected ? 'selected' : ''}${isEditing ? ' editing' : ''}`}
+                          onClick={() => {
+                            if (!isEditing && !isSelected) onItemSelected?.(item);
+                          }}
+                          onDoubleClick={() => {
+                            if (!savingInventoryItem) handleStartInventoryItemEdit(item);
+                          }}
+                          title={isEditing ? 'ویرایش کالا' : 'برای افزودن کلیک کنید؛ دابل‌کلیک برای ویرایش'}
+                        >
+                          <td>{isSelected ? '✓' : formatDisplay(index + 1)}</td>
+                          <td onClick={(event) => event.stopPropagation()}>
+                            {isEditing ? (
+                              <input
+                                aria-label="عنوان کالا"
+                                value={inventoryEditForm.title}
+                                onChange={(event) => setInventoryEditForm((current) => ({ ...current, title: event.target.value }))}
+                              />
+                            ) : item.title}
+                          </td>
+                          <td>
+                            {isEditing ? (
+                              <select
+                                aria-label="نوع کالا"
+                                value={inventoryEditForm.item_type}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => setInventoryEditForm((current) => ({ ...current, item_type: event.target.value }))}
+                              >
+                                <option value="sale">فروشی</option>
+                                <option value="rent">اجاره‌ای</option>
+                              </select>
+                            ) : (
+                              <span className={isRent ? 'rent' : 'sale'}>
+                                {isRent ? 'اجاره‌ای' : 'فروشی'}
+                              </span>
+                            )}
+                          </td>
+                          {['price_level1', 'price_level2', 'price_level3'].map((priceField, priceIndex) => (
+                            <td key={priceField} onClick={(event) => event.stopPropagation()}>
+                              {isEditing ? (
+                                <FormattedNumberInput
+                                  aria-label={`نرخ سطح ${priceIndex + 1}`}
+                                  value={inventoryEditForm[priceField]}
+                                  onValueChange={(value) => setInventoryEditForm((current) => ({ ...current, [priceField]: value }))}
+                                  onClick={(event) => event.stopPropagation()}
+                                />
+                              ) : (
+                                <>{formatDisplay(item[priceField] || 0)} تومان</>
+                              )}
+                            </td>
+                          ))}
+                          <td onClick={(event) => event.stopPropagation()}>
+                            {isEditing ? (
+                              <div className="quotation-inventory-picker-edit-actions">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveInventoryItemEdit(item)}
+                                  disabled={savingInventoryItem}
+                                >
+                                  {savingInventoryItem ? '...' : 'ذخیره'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cancel"
+                                  onClick={() => {
+                                    setEditingInventoryItemId(null);
+                                    setInventoryEditForm({});
+                                  }}
+                                  disabled={savingInventoryItem}
+                                >
+                                  لغو
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="quotation-inventory-picker-edit-button"
+                                onClick={() => handleStartInventoryItemEdit(item)}
+                              >
+                                ویرایش
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <footer className="quotation-inventory-picker-footer">
+              <span>{formatDisplay(items.length)} قلم در پیش‌فاکتور</span>
+              <button type="button" onClick={() => setInventoryPickerOpen(false)}>پایان انتخاب</button>
+            </footer>
+          </section>
+        </div>
+      )}
 
       {/* بخش فاکتورهای اخیر */}
       <div className="recent-invoices" dir="rtl">

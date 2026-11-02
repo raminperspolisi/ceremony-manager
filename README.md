@@ -29,8 +29,9 @@ If you are developing a production application, we recommend using TypeScript wi
 6. برای افزودن شمارهٔ پیگیری و یادداشت رسید به گردش‌ها و ثبت آن‌ها در RPC، migration `supabase/migrations/20261023234000_cash_transaction_receipt_details.sql` را اجرا کنید.
 7. برای حذف فاکتوری که گردش صندوق یا بانک دارد، migration `supabase/migrations/20261101120000_invoice_cash_transaction_set_null.sql` را اجرا کنید. این migration سوابق گردش را نگه می‌دارد و فقط اتصال آن‌ها به فاکتور حذف‌شده را پاک می‌کند.
 8. برای افزودن چک‌لیست و مسئولیت‌های هر مراسم، migration `supabase/migrations/20261102090000_event_tasks.sql` را اجرا کنید. دسترسی جدول جدید بر اساس عضویت و مجوز بخش تقویم کنترل می‌شود.
-9. سیاست‌های RLS جدول‌های `customers`, `ceremonies`, `events`, `event_tasks`, `inventory`, `quotations` و `invoices` را بررسی کنید. کاربر واردشده باید مجوزهای لازم برای `SELECT`, `INSERT`, `UPDATE` و `DELETE` را داشته باشد. درج‌های آفلاین هنگام همگام‌سازی با `upsert` انجام می‌شوند؛ بنابراین سیاست‌های درج/به‌روزرسانی و دسترسی خواندن نیز باید با این روش سازگار باشند.
-10. نسخهٔ production را روی دامنهٔ **HTTPS** منتشر کنید. Service Worker و نصب PWA روی دامنهٔ امن کار می‌کنند؛ `localhost` برای آزمایش محلی استثناست.
+9. برای ذخیرهٔ تخفیف در پیش‌فاکتور و فاکتور رسمی، migration `supabase/migrations/20261103090000_invoice_discounts.sql` را اجرا کنید. مبلغ پرداختی فاکتور رسمی از گردش‌های «صندوق و بانک» محاسبه می‌شود؛ هنگام ثبت دریافت، فاکتور و حساب مقصد را انتخاب کنید.
+10. سیاست‌های RLS جدول‌های `customers`, `ceremonies`, `events`, `event_tasks`, `inventory`, `quotations` و `invoices` را بررسی کنید. کاربر واردشده باید مجوزهای لازم برای `SELECT`, `INSERT`, `UPDATE` و `DELETE` را داشته باشد. درج‌های آفلاین هنگام همگام‌سازی با `upsert` انجام می‌شوند؛ بنابراین سیاست‌های درج/به‌روزرسانی و دسترسی خواندن نیز باید با این روش سازگار باشند.
+11. نسخهٔ production را روی دامنهٔ **HTTPS** منتشر کنید. Service Worker و نصب PWA روی دامنهٔ امن کار می‌کنند؛ `localhost` برای آزمایش محلی استثناست.
 
 ## سازمان‌ها، اعضا و دسترسی بخش‌محور
 

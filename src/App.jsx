@@ -1795,12 +1795,21 @@ export default function App() {
                     items={inventory}
                     organizationId={activeOrganizationId}
                     refresh={fetchData}
-                    onItemSelected={handleSelectItem}
                     onItemUpdated={handleItemUpdated}
                   />
                 )}
                 {activeSection === "bot-orders" && <BotOrdersPanel />}
-                {activeSection === "quotations" && <QuotationPanel selectedItems={selectedItems} setSelectedItems={setSelectedItems} businessName={businessName} logoUrl={logoUrl} businessContact={businessContact} />}
+                {activeSection === "quotations" && (
+                  <QuotationPanel
+                    inventoryItems={inventory}
+                    onItemSelected={handleSelectItem}
+                    selectedItems={selectedItems}
+                    setSelectedItems={setSelectedItems}
+                    businessName={businessName}
+                    logoUrl={logoUrl}
+                    businessContact={businessContact}
+                  />
+                )}
                 {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} businessContact={businessContact} />}
                 {activeSection === "backup" && (
                   <BackupPanel userId={sessionUserId} organizationId={activeOrganizationId} />

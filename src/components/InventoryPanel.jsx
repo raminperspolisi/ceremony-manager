@@ -4,7 +4,7 @@ import { formatDisplay } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 import InventoryOperationsPanel from './InventoryOperationsPanel';
 
-export default function InventoryPanel({ items, refresh, onItemSelected, onItemUpdated, organizationId }) {
+export default function InventoryPanel({ items, refresh, onItemUpdated, organizationId }) {
   const [title, setTitle] = useState('');
   const [itemType, setItemType] = useState('sale'); // پیش‌فرض: فروشی
   const [baseCost, setBaseCost] = useState('');
@@ -38,9 +38,6 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
 
   const displayedLevels = isDesktopView ? ['1', '2', '3'] : ['1'];
   const tableColumnCount = 4 + displayedLevels.length + (showCostPrice ? 1 : 0);
-
-  // استیت برای نگهداری شناسه آیتم‌های انتخاب‌شده
-  const [selectedIds, setSelectedIds] = useState(new Set());
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -237,20 +234,6 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
     }
   };
 
-  const handleSelectClick = (item) => {
-    if (selectedIds.has(item.id)) return;
-
-    setSelectedIds(prev => {
-      const newSet = new Set(prev);
-      newSet.add(item.id);
-      return newSet;
-    });
-
-    if (onItemSelected) {
-      onItemSelected(item);
-    }
-  };
-
   // فیلتر کردن اقلام انبار بر اساس عبارت جستجو شده
   const filteredItems = items.filter(item => 
     item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -424,22 +407,18 @@ export default function InventoryPanel({ items, refresh, onItemSelected, onItemU
               ) : (
                 filteredItems.map((item, index) => {
                   const isEditing = editingId === item.id;
-                  const isSelected = selectedIds.has(item.id);
                   const currentType = item.item_type || 'sale';
 
                   return (
                     <tr 
                       key={item.id} 
-                      onClick={() => !isEditing && handleSelectClick(item)}
                       style={{ 
                         borderBottom: '1px solid #f1f5f9', 
-                        backgroundColor: isEditing ? '#fefce8' : isSelected ? '#f0fdf4' : 'transparent', 
-                        cursor: 'pointer' 
+                        backgroundColor: isEditing ? '#fefce8' : 'transparent',
                       }}
-                      title="کلیک برای افزودن به فاکتور"
                     >
-                      <td className="inventory-col-index" style={{ padding: '8px 10px', color: isSelected ? '#15803d' : '#64748b', fontWeight: isSelected ? 'bold' : 'normal' }}>
-                        {isSelected ? '✓' : formatDisplay(index + 1)}
+                      <td className="inventory-col-index" style={{ padding: '8px 10px', color: '#64748b' }}>
+                        {formatDisplay(index + 1)}
                       </td>
                       
                       <td className="inventory-col-title" onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', fontWeight: '500', color: '#1e293b' }}>
