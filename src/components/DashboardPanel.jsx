@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'jalali-moment';
 import { readTable } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
-import { formatDashboardDate, toDashboardIsoDate } from '../dashboardUtils';
+import { formatDashboardDate, getPendingEventTasks, toDashboardIsoDate } from '../dashboardUtils';
 import BusinessContactCard from './BusinessContactCard';
 
 const PAGE_SIZE = 1000;
@@ -18,30 +18,44 @@ async function readAllRows(table, orderBy) {
   }
 }
 
-export default function DashboardPanel({ onNavigate, businessName, businessContact, onEditProfile }) {
+export default function DashboardPanel({
+  onNavigate,
+  businessName,
+  businessContact,
+  onEditProfile,
+  canViewCalendar = false,
+}) {
   const [invoices, setInvoices] = useState([]);
   const [ceremonies, setCeremonies] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [eventTasks, setEventTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
-  const refresh = async () => {
-    const [invoiceResult, ceremonyResult, customerResult] = await Promise.all([
+  const refresh = useCallback(async () => {
+    const [invoiceResult, ceremonyResult, customerResult, eventResult, eventTaskResult] = await Promise.all([
       readAllRows('invoices', 'created_at'),
       readAllRows('ceremonies', 'ceremony_date'),
       readAllRows('customers', 'created_at'),
+      canViewCalendar ? readAllRows('events', 'event_date') : Promise.resolve({ data: [], error: null }),
+      canViewCalendar ? readAllRows('event_tasks', 'created_at') : Promise.resolve({ data: [], error: null }),
     ]);
     const failures = [
       invoiceResult.error && `فاکتورها: ${invoiceResult.error.message}`,
       ceremonyResult.error && `مراسم‌ها: ${ceremonyResult.error.message}`,
       customerResult.error && `مشتری‌ها: ${customerResult.error.message}`,
+      eventResult.error && `مراسم‌ها: ${eventResult.error.message}`,
+      eventTaskResult.error && `کارهای مراسم: ${eventTaskResult.error.message}`,
     ].filter(Boolean);
     setLoadError(failures.join('؛ '));
     if (!invoiceResult.error) setInvoices(invoiceResult.data || []);
     if (!ceremonyResult.error) setCeremonies(ceremonyResult.data || []);
     if (!customerResult.error) setCustomers(customerResult.data || []);
+    if (!eventResult.error) setEvents(eventResult.data || []);
+    if (!eventTaskResult.error) setEventTasks(eventTaskResult.data || []);
     setLoading(false);
-  };
+  }, [canViewCalendar]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => { void refresh(); }, 0);
@@ -53,7 +67,7 @@ export default function DashboardPanel({ onNavigate, businessName, businessConta
       window.removeEventListener('offline-data-updated', handleUpdate);
       window.removeEventListener('focus', handleUpdate);
     };
-  }, []);
+  }, [refresh]);
 
   const { receivables, pendingReminders, upcomingCeremonies } = useMemo(() => {
     const today = moment().format('YYYY-MM-DD');
@@ -114,6 +128,10 @@ export default function DashboardPanel({ onNavigate, businessName, businessConta
       upcomingCeremonies: [...byCustomerDate.values()].sort((first, second) => first.date.localeCompare(second.date)).slice(0, 8),
     };
   }, [ceremonies, customers, invoices]);
+
+  const pendingEventTasks = useMemo(() => (
+    getPendingEventTasks(eventTasks, events, moment().format('YYYY-MM-DD'))
+  ), [eventTasks, events]);
 
   const navigate = (section) => onNavigate(section);
 
@@ -196,6 +214,39 @@ export default function DashboardPanel({ onNavigate, businessName, businessConta
           )}
         </section>
       </div>
+
+      {canViewCalendar && (
+        <section className="home-dashboard-card home-dashboard-task-card">
+          <div className="home-dashboard-card-heading">
+            <div><span>پروندهٔ اجرایی</span><h4>کارهای انجام‌نشدهٔ مراسم</h4></div>
+            <button type="button" onClick={() => navigate('calendar')}>تقویم مراسم‌ها</button>
+          </div>
+          {loading ? <p className="home-dashboard-empty">در حال بارگذاری…</p> : pendingEventTasks.length === 0 ? (
+            <p className="home-dashboard-empty">همهٔ کارهای ثبت‌شده انجام شده‌اند.</p>
+          ) : (
+            <div className="home-event-task-list">
+              {pendingEventTasks.map((task) => (
+                <button
+                  type="button"
+                  className="home-reminder-item home-event-task-item"
+                  key={task.id}
+                  onClick={() => navigate('calendar')}
+                >
+                  <span className="home-reminder-dot" />
+                  <span className="home-reminder-content">
+                    <strong>{task.title}</strong>
+                    <small>
+                      {task.customer_name} · {task.event_type}
+                      {task.assignee ? ` · مسئول: ${task.assignee}` : ''}
+                    </small>
+                  </span>
+                  <span className="home-ceremony-date">{formatDashboardDate(task.event_date)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="home-dashboard-shortcuts" aria-label="دسترسی سریع">
         <h4>دسترسی سریع</h4>

@@ -31,3 +31,36 @@ export const formatDashboardDate = (value) => {
   const parsed = parseDashboardDate(value);
   return parsed ? formatPersianDigits(parsed.locale('fa').format('jYYYY/jMM/jDD')) : 'تاریخ ثبت نشده';
 };
+
+export const getPendingEventTasks = (tasks, events, today, limit = 8) => {
+  const eventById = new Map((events || []).map((event) => [String(event.id), event]));
+  const pendingTasks = (tasks || [])
+    .filter((task) => !task.completed)
+    .map((task) => {
+      const event = eventById.get(String(task.event_id));
+      if (!event) return null;
+      return {
+        ...task,
+        event_date: event.event_date,
+        event_date_iso: toDashboardIsoDate(event.event_date),
+        event_type: event.event_type || 'مراسم',
+        customer_name: event.customer_name || 'مشتری ثبت‌نشده',
+      };
+    })
+    .filter(Boolean);
+
+  return pendingTasks
+    .sort((first, second) => {
+      const firstDate = first.event_date_iso;
+      const secondDate = second.event_date_iso;
+      const firstOverdue = Boolean(firstDate && firstDate < today);
+      const secondOverdue = Boolean(secondDate && secondDate < today);
+      if (firstOverdue !== secondOverdue) return firstOverdue ? -1 : 1;
+      if (firstOverdue) return secondDate.localeCompare(firstDate);
+      if (firstDate && secondDate) return firstDate.localeCompare(secondDate);
+      if (firstDate) return -1;
+      if (secondDate) return 1;
+      return String(first.id).localeCompare(String(second.id));
+    })
+    .slice(0, limit);
+};

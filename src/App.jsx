@@ -1787,6 +1787,7 @@ export default function App() {
                     businessName={businessName}
                     businessContact={businessContact}
                     onEditProfile={handleOpenProfile}
+                    canViewCalendar={hasSectionAccess('calendar')}
                   />
                 )}
                 {activeSection === "customers" && <CustomersPanel businessName={businessName} />}
