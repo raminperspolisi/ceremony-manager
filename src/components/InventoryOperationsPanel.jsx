@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { readTable } from '../offlineSync';
 import { supabase } from '../supabaseClient';
 import {
@@ -49,7 +49,12 @@ const movementTypeLabel = (type) => ({
   transfer_out: 'خروج انتقال',
 }[type] || type);
 
-export default function InventoryOperationsPanel({ items, organizationId, refreshInventory }) {
+export default function InventoryOperationsPanel({
+  items,
+  organizationId,
+  refreshInventory,
+  onStockSummaryChange,
+}) {
   const [warehouses, setWarehouses] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -92,6 +97,7 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
   const [errorMessage, setErrorMessage] = useState('');
   const [feedback, setFeedback] = useState('');
   const [offlineData, setOfflineData] = useState(false);
+  const saveStockTargetRef = useRef(null);
 
   const refresh = useCallback(async () => {
     const results = await Promise.all([
@@ -169,6 +175,34 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
     (inventoryId, warehouseId) => getInventoryQuantity(movements, inventoryId, warehouseId),
     [movements],
   );
+  useEffect(() => {
+    if (typeof onStockSummaryChange !== 'function' || !selectedWarehouseId) return;
+    const activeWarehouse = warehouses.find(
+      (warehouse) => String(warehouse.id) === String(selectedWarehouseId),
+    );
+    if (!activeWarehouse) return;
+    const quantities = Object.fromEntries(items.map((item) => [
+      item.id,
+      getInventoryQuantity(movements, item.id, selectedWarehouseId),
+    ]));
+    onStockSummaryChange({
+      warehouseName: activeWarehouse.name,
+      quantities,
+      busy: busy || offlineData,
+      save: (inventoryId, targetQuantity) => {
+        const item = items.find((candidate) => String(candidate.id) === String(inventoryId));
+        if (!item) return Promise.resolve(false);
+        const stockKey = `${selectedWarehouseId}:${item.id}`;
+        return saveStockTargetRef.current?.(
+          item,
+          selectedWarehouseId,
+          getInventoryQuantity(movements, item.id, selectedWarehouseId),
+          stockKey,
+          targetQuantity,
+        ) ?? Promise.resolve(false);
+      },
+    });
+  }, [items, movements, onStockSummaryChange, selectedWarehouseId, warehouses, busy, offlineData]);
   const reservationOptions = useMemo(() => reservations.filter((reservation) => (
     String(reservation.inventory_id) === String(movementForm.inventory_id)
     && String(reservation.warehouse_id) === String(movementForm.warehouse_id)
@@ -182,11 +216,11 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
   const runOnlineAction = async (action, successMessage) => {
     if (!organizationId) {
       setErrorMessage('فضای کاری فعال مشخص نیست.');
-      return;
+      return false;
     }
     if (!navigator.onLine || offlineData) {
       setErrorMessage('برای ثبت عملیات موجودی به اتصال آنلاین و دادهٔ تازهٔ انبار نیاز است.');
-      return;
+      return false;
     }
     setBusy(true);
     setErrorMessage('');
@@ -195,8 +229,10 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
       await action();
       await refresh();
       setFeedback(successMessage);
+      return true;
     } catch (error) {
       setErrorMessage(`عملیات انبار ناموفق بود: ${error.message}`);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -380,8 +416,8 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
     }, 'حداقل موجودی ثبت شد.');
   };
 
-  const saveStockTarget = async (item, warehouseId, currentQuantity, stockKey) => {
-    const targetQuantity = Number(stockTargets[stockKey] ?? currentQuantity);
+  const saveStockTarget = async (item, warehouseId, currentQuantity, stockKey, targetValue) => {
+    const targetQuantity = Number(targetValue ?? stockTargets[stockKey] ?? currentQuantity);
     if (!Number.isFinite(targetQuantity) || targetQuantity < 0
       || Math.round(targetQuantity * 1000) / 1000 !== targetQuantity) {
       setErrorMessage('موجودی نهایی باید عددی نامنفی با حداکثر سه رقم اعشار باشد.');
@@ -392,10 +428,10 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
     if (quantityDelta === 0) {
       setFeedback('موجودی با مقدار فعلی یکسان است.');
       setErrorMessage('');
-      return;
+      return true;
     }
 
-    await runOnlineAction(async () => {
+    return runOnlineAction(async () => {
       await insertOnline('inventory_stock_movements', {
         inventory_id: Number(item.id),
         warehouse_id: Number(warehouseId),
@@ -406,6 +442,9 @@ export default function InventoryOperationsPanel({ items, organizationId, refres
       });
     }, 'موجودی انبار اصلاح شد.');
   };
+  useEffect(() => {
+    saveStockTargetRef.current = saveStockTarget;
+  });
 
   const setDefaultWarehouse = async () => runOnlineAction(async () => {
     const { error } = await supabase.rpc('set_default_inventory_warehouse', {

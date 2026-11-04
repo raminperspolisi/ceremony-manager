@@ -37,7 +37,13 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
   }, []);
 
   const displayedLevels = isDesktopView ? ['1', '2', '3'] : ['1'];
-  const tableColumnCount = 4 + displayedLevels.length + (showCostPrice ? 1 : 0);
+  const tableColumnCount = 5 + displayedLevels.length + (showCostPrice ? 1 : 0);
+  const [stockSummary, setStockSummary] = useState({
+    warehouseName: '',
+    quantities: null,
+    busy: true,
+    save: null,
+  });
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -194,7 +200,9 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
       base_cost: item.base_cost ?? '',
       price_level1: item.price_level1 ?? '',
       price_level2: item.price_level2 ?? '',
-      price_level3: item.price_level3 ?? ''
+      price_level3: item.price_level3 ?? '',
+      stock_quantity: String(stockSummary.quantities?.[item.id] ?? 0),
+      original_stock_quantity: String(stockSummary.quantities?.[item.id] ?? 0),
     });
   };
 
@@ -205,6 +213,23 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
     }
 
     try {
+      const targetStock = Number(editForm.stock_quantity);
+      if (!Number.isFinite(targetStock) || targetStock < 0
+        || Math.round(targetStock * 1000) / 1000 !== targetStock) {
+        alert('موجودی نهایی باید عددی نامنفی با حداکثر سه رقم اعشار باشد.');
+        return;
+      }
+
+      const stockChanged = targetStock !== Number(editForm.original_stock_quantity);
+      if (stockChanged) {
+        if (!stockSummary.save) {
+          alert('برای تغییر تعداد، اطلاعات تازهٔ انبار در دسترس نیست.');
+          return;
+        }
+        const stockSaved = await stockSummary.save(id, editForm.stock_quantity);
+        if (!stockSaved) return;
+      }
+
       const updatedData = {
         title: editForm.title.trim(),
         item_type: editForm.item_type || 'sale',
@@ -390,6 +415,9 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
                 <th className="inventory-col-index" style={{ padding: '8px 10px' }}>ردیف</th>
                 <th className="inventory-col-title" style={{ padding: '8px 10px' }}>عنوان کالا / خدمت</th>
                 <th className="inventory-col-type" style={{ padding: '8px 10px' }}>نوع کالا</th>
+                <th style={{ padding: '8px 10px' }}>
+                  تعداد موجودی{stockSummary.warehouseName ? ` (${stockSummary.warehouseName})` : ''}
+                </th>
                 {showCostPrice && <th className="inventory-col-cost" style={{ padding: '8px 10px', color: '#b91c1c' }}>قیمت خرید</th>}
                 {displayedLevels.map((level) => (
                   <th key={level} className="inventory-col-price" style={{ padding: '8px 10px' }}>نرخ سطح {level}</th>
@@ -412,6 +440,12 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
                   return (
                     <tr 
                       key={item.id} 
+                      onKeyDown={(event) => {
+                        if (isEditing && event.key === 'Enter' && !event.target.closest('button')) {
+                          event.preventDefault();
+                          handleInlineSave(item.id);
+                        }
+                      }}
                       style={{ 
                         borderBottom: '1px solid #f1f5f9', 
                         backgroundColor: isEditing ? '#fefce8' : 'transparent',
@@ -449,6 +483,21 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
                         )}
                       </td>
 
+                      <td style={{ padding: '8px 10px', color: '#334155', fontWeight: 'bold' }}>
+                        {isEditing ? (
+                          <FormattedNumberInput
+                            value={editForm.stock_quantity}
+                            onValueChange={(value) => setEditForm({ ...editForm, stock_quantity: value })}
+                            aria-label={`تعداد موجودی ${item.title}`}
+                            style={{ width: '80px', padding: '3px 5px', fontSize: '12px' }}
+                          />
+                        ) : (
+                          stockSummary.quantities
+                            ? formatDisplay(stockSummary.quantities[item.id] ?? 0)
+                            : '—'
+                        )}
+                      </td>
+
                       {showCostPrice && (
                         <td className="inventory-col-cost" onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick(item); }} style={{ padding: '8px 10px', color: '#b91c1c', fontWeight: 'bold' }}>
                           {isEditing ? (
@@ -477,12 +526,19 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
                       <td className="inventory-col-actions" style={{ padding: '8px 10px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         {isEditing ? (
                           <div className="inventory-row-actions">
-                            <button type="button" className="inventory-action-button save" onClick={() => handleInlineSave(item.id)}>ذخیره</button>
+                            <button
+                              type="button"
+                              className="inventory-action-button save"
+                              disabled={Number(editForm.stock_quantity) !== Number(editForm.original_stock_quantity)
+                                && (stockSummary.busy || !stockSummary.save)}
+                              onClick={() => handleInlineSave(item.id)}
+                            >
+                              ذخیره
+                            </button>
                             <button type="button" className="inventory-action-button cancel" onClick={() => setEditingId(null)}>لغو</button>
                           </div>
                         ) : (
                           <div className="inventory-row-actions">
-                            <button type="button" className="inventory-action-button save" onClick={() => handleDoubleClick(item)}>ویرایش</button>
                             <button type="button" className="inventory-action-button delete" onClick={() => handleDelete(item.id)}>حذف</button>
                           </div>
                         )}
@@ -499,6 +555,7 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
         items={items}
         organizationId={organizationId}
         refreshInventory={refresh}
+        onStockSummaryChange={setStockSummary}
       />
     </div>
   );
