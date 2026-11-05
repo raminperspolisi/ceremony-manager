@@ -10656,16 +10656,16 @@ textarea {
 
   .panel-container table.inventory-table {
     display: table !important;
-    width: 820px !important;
-    min-width: 820px !important;
+    width: 540px !important;
+    min-width: 540px !important;
     max-width: none !important;
     overflow: visible !important;
     table-layout: fixed;
   }
 
   .panel-container table.inventory-table.has-cost-column {
-    width: 860px !important;
-    min-width: 860px !important;
+    width: 640px !important;
+    min-width: 640px !important;
   }
 
   .panel-container table.inventory-table .inventory-col-title {
@@ -10688,6 +10688,24 @@ textarea {
     width: 68px !important;
     min-width: 68px !important;
     max-width: 68px !important;
+  }
+
+  .panel-container table.inventory-table .inventory-col-price {
+    width: 105px !important;
+    min-width: 105px !important;
+    max-width: 105px !important;
+  }
+
+  .panel-container table.inventory-table .inventory-col-cost {
+    width: 100px !important;
+    min-width: 100px !important;
+    max-width: 100px !important;
+  }
+
+  .panel-container table.inventory-table .inventory-col-actions {
+    width: 58px !important;
+    min-width: 58px !important;
+    max-width: 58px !important;
   }
 }
 
