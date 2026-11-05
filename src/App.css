@@ -10640,6 +10640,36 @@ textarea {
   #root {
     overflow-x: visible;
   }
+
+  .inventory-table-wrap {
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .panel-container table.inventory-table {
+    display: table !important;
+    width: 820px !important;
+    min-width: 820px !important;
+    max-width: none !important;
+    overflow: visible !important;
+    table-layout: fixed;
+  }
+
+  .panel-container table.inventory-table.has-cost-column {
+    width: 920px !important;
+    min-width: 920px !important;
+  }
+
+  .panel-container table.inventory-table .inventory-col-title {
+    width: 200px !important;
+    min-width: 200px !important;
+    max-width: 200px !important;
+    overflow: visible !important;
+    overflow-wrap: anywhere !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
