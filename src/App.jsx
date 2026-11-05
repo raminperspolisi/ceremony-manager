@@ -288,7 +288,10 @@ export default function App() {
   // تابع دریافت داده‌ها
   const fetchData = async () => {
     try {
-      const { data, error } = await readTable('inventory');
+      const { data, error } = await readTable('inventory', {
+        orderBy: 'sort_order',
+        ascending: true,
+      });
       if (error) throw error;
       setInventory(data || []);
     } catch (error) {
@@ -1797,6 +1800,7 @@ export default function App() {
                     organizationId={activeOrganizationId}
                     refresh={fetchData}
                     onItemUpdated={handleItemUpdated}
+                    onItemsReordered={setInventory}
                   />
                 )}
                 {activeSection === "bot-orders" && <BotOrdersPanel />}

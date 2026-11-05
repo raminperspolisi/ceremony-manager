@@ -98,6 +98,7 @@ export default function InventoryOperationsPanel({
   const [feedback, setFeedback] = useState('');
   const [offlineData, setOfflineData] = useState(false);
   const saveStockTargetRef = useRef(null);
+  const [operationsModalOpen, setOperationsModalOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const results = await Promise.all([
@@ -446,6 +447,15 @@ export default function InventoryOperationsPanel({
     saveStockTargetRef.current = saveStockTarget;
   });
 
+  useEffect(() => {
+    if (!operationsModalOpen) return undefined;
+    const handleEscape = (event) => {
+      if (event.key === 'Escape' && !busy) setOperationsModalOpen(false);
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [operationsModalOpen, busy]);
+
   const setDefaultWarehouse = async () => runOnlineAction(async () => {
     const { error } = await supabase.rpc('set_default_inventory_warehouse', {
       p_organization_id: organizationId,
@@ -552,15 +562,42 @@ export default function InventoryOperationsPanel({
       )}
       {errorMessage && <p className="inventory-ops-message error" role="alert">{errorMessage}</p>}
       {feedback && <p className="inventory-ops-message success" role="status">{feedback}</p>}
-      <details className="inventory-ops-drawer">
-        <summary>
-          <span>عملیات و گزارش‌های انبار</span>
-          <span className={lowStockItems.length ? 'inventory-ops-drawer-alert' : 'inventory-ops-drawer-count'}>
-            {formatNumber(lowStockItems.length)} هشدار کمبود موجودی
-          </span>
-          <span className="inventory-ops-drawer-hint">برای باز کردن انتخاب کنید</span>
-        </summary>
-        <div className="inventory-ops-drawer-content">
+      <button
+        type="button"
+        className="inventory-ops-open-button"
+        onClick={() => setOperationsModalOpen(true)}
+      >
+        عملیات انبار
+        <span className={lowStockItems.length ? 'inventory-ops-drawer-alert' : 'inventory-ops-drawer-count'}>
+          {formatNumber(lowStockItems.length)} هشدار کمبود
+        </span>
+      </button>
+      {operationsModalOpen && (
+        <div
+          className="inventory-ops-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) setOperationsModalOpen(false);
+          }}
+        >
+          <section
+            className="inventory-ops-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="inventory-ops-modal-title"
+            dir="rtl"
+          >
+            <header className="inventory-ops-modal-heading">
+              <h2 id="inventory-ops-modal-title">عملیات و گزارش‌های انبار</h2>
+              <button
+                type="button"
+                aria-label="بستن عملیات انبار"
+                onClick={() => setOperationsModalOpen(false)}
+                disabled={busy}
+              >
+                ×
+              </button>
+            </header>
+            <div className="inventory-ops-modal-content">
       <header className="inventory-operations-heading">
         <div>
           <h3>موجودی و گردش انبار</h3>
@@ -874,8 +911,10 @@ export default function InventoryOperationsPanel({
           </table>
         </div>
       </details>
+            </div>
+          </section>
         </div>
-      </details>
+      )}
     </section>
   );
 }

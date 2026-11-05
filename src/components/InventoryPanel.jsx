@@ -1,10 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
 import InventoryOperationsPanel from './InventoryOperationsPanel';
 
-export default function InventoryPanel({ items, refresh, onItemUpdated, organizationId }) {
+export default function InventoryPanel({
+  items,
+  refresh,
+  onItemUpdated,
+  onItemsReordered,
+  organizationId,
+}) {
   const [title, setTitle] = useState('');
   const [itemType, setItemType] = useState('sale'); // پیش‌فرض: فروشی
   const [baseCost, setBaseCost] = useState('');
@@ -17,6 +23,12 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
   const [price2, setPrice2] = useState('');
   const [price3, setPrice3] = useState('');
   const [loading, setLoading] = useState(false);
+  const [newItemModalOpen, setNewItemModalOpen] = useState(false);
+  const [draggingItemId, setDraggingItemId] = useState(null);
+  const [dragOverItemId, setDragOverItemId] = useState(null);
+  const [savingItemOrder, setSavingItemOrder] = useState(false);
+  const dragItemIdRef = useRef(null);
+  const dragOverItemIdRef = useRef(null);
 
   // استیت جستجو در انبار
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,14 +102,89 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
 
   useEffect(() => {
     const handleAppEscape = (event) => {
-      if (editingId !== null) {
+      if (newItemModalOpen && !loading) {
+        event.preventDefault();
+        setNewItemModalOpen(false);
+      } else if (editingId !== null) {
         event.preventDefault();
         setEditingId(null);
       }
     };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && newItemModalOpen && !loading) {
+        event.preventDefault();
+        setNewItemModalOpen(false);
+      }
+    };
     window.addEventListener('app-escape', handleAppEscape);
-    return () => window.removeEventListener('app-escape', handleAppEscape);
-  }, [editingId]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('app-escape', handleAppEscape);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editingId, loading, newItemModalOpen]);
+
+  useEffect(() => {
+    if (draggingItemId === null) return undefined;
+    const handlePointerMove = (event) => {
+      const row = document.elementFromPoint(event.clientX, event.clientY)
+        ?.closest('[data-inventory-id]');
+      if (!row) return;
+      const itemId = row.dataset.inventoryId;
+      dragOverItemIdRef.current = itemId;
+      setDragOverItemId(itemId);
+    };
+    const handlePointerUp = async () => {
+      const draggedId = dragItemIdRef.current;
+      const targetId = dragOverItemIdRef.current;
+      dragItemIdRef.current = null;
+      dragOverItemIdRef.current = null;
+      setDraggingItemId(null);
+      setDragOverItemId(null);
+      if (draggedId === null || targetId === null || draggedId === targetId || searchQuery.trim()) return;
+
+      const fromIndex = items.findIndex((item) => String(item.id) === draggedId);
+      const toIndex = items.findIndex((item) => String(item.id) === targetId);
+      if (fromIndex < 0 || toIndex < 0) return;
+      const reordered = [...items];
+      const [movedItem] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, movedItem);
+      onItemsReordered(reordered);
+      setSavingItemOrder(true);
+      try {
+        for (const [index, item] of reordered.entries()) {
+          const { error } = await updateRows(
+            'inventory',
+            { sort_order: index + 1 },
+            [{ column: 'id', operator: 'eq', value: item.id }],
+          );
+          if (error) throw error;
+        }
+        await refresh();
+      } catch (error) {
+        console.error('خطا در ذخیرهٔ ترتیب کالاها:', error.message);
+        alert(`ذخیرهٔ ترتیب کالاها ناموفق بود: ${error.message}`);
+        await refresh();
+      } finally {
+        setSavingItemOrder(false);
+      }
+    };
+    const handlePointerCancel = () => {
+      dragItemIdRef.current = null;
+      dragOverItemIdRef.current = null;
+      setDraggingItemId(null);
+      setDragOverItemId(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerCancel);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
+    };
+  }, [draggingItemId, items, onItemsReordered, refresh, searchQuery]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -132,6 +219,7 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
       const { data, error } = await insertRows('inventory', [{
         title: title.trim(),
         item_type: itemType,
+        sort_order: Math.max(0, ...items.map((item) => Number(item.sort_order) || 0)) + 1,
         base_cost: purchaseCost,
         price_level1: price1 === '' ? 0 : parseFloat(price1),
         price_level2: price2 === '' ? 0 : parseFloat(price2),
@@ -168,6 +256,7 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
         window.dispatchEvent(new Event('inventory-data-updated'));
       }
       await refresh();
+      setNewItemModalOpen(false);
     } catch (err) {
       console.error(itemWasCreated ? 'خطا در ثبت موجودی اولیه:' : 'خطا در ثبت کالا:', err.message);
       if (itemWasCreated) {
@@ -260,13 +349,42 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
   };
 
   // فیلتر کردن اقلام انبار بر اساس عبارت جستجو شده
-  const filteredItems = items.filter(item => 
+  const filteredItems = items.filter(item =>
     item.title && item.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <div style={{ padding: '15px', backgroundColor: '#f8fafc', fontSize: '13px', direction: 'rtl' }}>
-      <form onSubmit={handleSave} style={{ background: '#ffffff', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0', marginBottom: '15px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', alignItems: 'end' }}>
+      <div className="inventory-panel-heading">
+        <h2>مدیریت موجودی انبار</h2>
+      </div>
+
+      {newItemModalOpen && (
+        <div
+          className="inventory-create-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !loading) setNewItemModalOpen(false);
+          }}
+        >
+          <section
+            className="inventory-create-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="inventory-create-modal-title"
+            dir="rtl"
+          >
+            <header className="inventory-create-modal-heading">
+              <h2 id="inventory-create-modal-title">ثبت کالای جدید</h2>
+              <button
+                type="button"
+                aria-label="بستن فرم ثبت کالا"
+                onClick={() => setNewItemModalOpen(false)}
+                disabled={loading}
+              >
+                ×
+              </button>
+            </header>
+            <form onSubmit={handleSave} style={{ background: '#ffffff', padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', alignItems: 'end', overflowY: 'auto' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '4px', color: '#475569', fontWeight: 'bold' }}>نام کالا / خدمت</label>
           <input 
@@ -377,7 +495,10 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
             {loading ? 'در حال ثبت...' : '+ ثبت کالا'}
           </button>
         </div>
-      </form>
+            </form>
+          </section>
+        </div>
+      )}
 
       <div style={{ background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ padding: '10px 12px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
@@ -393,6 +514,22 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
               style={{ padding: '5px 8px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '11px', width: '180px', backgroundColor: '#fff' }}
             />
 
+            <div className="inventory-list-actions">
+              <button
+                type="button"
+                className="inventory-add-item-button"
+                onClick={() => setNewItemModalOpen(true)}
+              >
+                + ثبت کالای جدید
+              </button>
+              <InventoryOperationsPanel
+                items={items}
+                organizationId={organizationId}
+                refreshInventory={refresh}
+                onStockSummaryChange={setStockSummary}
+              />
+            </div>
+
             {/* دکمه نمایش قیمت خرید، چسبیده به کادر جستجو */}
             <button 
               type="button" 
@@ -404,7 +541,9 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
           </div>
 
           <div className="inventory-table-controls" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>💡 دابل‌کلیک برای ویرایش</span>
+            <span style={{ fontSize: '11px', color: '#64748b' }}>
+              💡 دابل‌کلیک برای ویرایش · برای جابه‌جایی، ردیف را نگه دارید و بکشید
+            </span>
           </div>
         </div>
         
@@ -440,6 +579,17 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
                   return (
                     <tr 
                       key={item.id} 
+                      data-inventory-id={item.id}
+                      className={`${String(draggingItemId) === String(item.id) ? 'is-dragging ' : ''}${String(dragOverItemId) === String(item.id) ? 'is-drop-target' : ''}`}
+                      onPointerDown={(event) => {
+                        if (isEditing || event.button !== 0 || savingItemOrder || searchQuery.trim()) return;
+                        if (event.target.closest('button, input, select, textarea, a, [contenteditable="true"]')) return;
+                        event.preventDefault();
+                        dragItemIdRef.current = String(item.id);
+                        dragOverItemIdRef.current = String(item.id);
+                        setDraggingItemId(item.id);
+                        setDragOverItemId(String(item.id));
+                      }}
                       onKeyDown={(event) => {
                         if (isEditing && event.key === 'Enter' && !event.target.closest('button')) {
                           event.preventDefault();
@@ -551,12 +701,6 @@ export default function InventoryPanel({ items, refresh, onItemUpdated, organiza
           </table>
         </div>
       </div>
-      <InventoryOperationsPanel
-        items={items}
-        organizationId={organizationId}
-        refreshInventory={refresh}
-        onStockSummaryChange={setStockSummary}
-      />
     </div>
   );
 }

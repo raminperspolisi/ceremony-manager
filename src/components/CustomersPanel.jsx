@@ -505,45 +505,47 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
         </div>
       )}
 
-      {/* جستجوی سریع */}
-      <div className="customer-search-card" style={styles.cardBox}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>🔍 جستجو:</span>
-          <div style={{ position: 'relative', flex: 1 }}>
-            <input
-              style={{ ...styles.input, padding: '4px 8px', fontSize: '11px' }}
-              placeholder="نام مشتری را تایپ کنید..."
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setIsSearching(true); }}
-              onFocus={() => setIsSearching(true)}
-            />
-            {isSearching && searchTerm && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #cbd5e1', borderRadius: '0 0 5px 5px', maxHeight: '130px', overflowY: 'auto', zIndex: 100, boxShadow: '0 4px 6px rgba(0,0,0,0.08)' }}>
-                {filteredCustomers.length > 0 ? filteredCustomers.map(c => (
-                  <div key={c.id} onClick={() => handleCustomerSelect(c)} style={{ padding: '5px 8px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '11px' }}>
-                    <strong>{c["Full name"]}</strong> — {formatPersianDigits(c.phone)}
-                  </div>
-                )) : <div style={{ padding: '5px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>یافت نشد</div>}
-              </div>
-            )}
+      <div className="customer-quick-tools">
+        {/* جستجوی سریع */}
+        <div className="customer-search-card" style={styles.cardBox}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'nowrap' }}>🔍 جستجو:</span>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <input
+                style={{ ...styles.input, padding: '4px 8px', fontSize: '11px' }}
+                placeholder="نام مشتری را تایپ کنید..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setIsSearching(true); }}
+                onFocus={() => setIsSearching(true)}
+              />
+              {isSearching && searchTerm && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: '1px solid #cbd5e1', borderRadius: '0 0 5px 5px', maxHeight: '130px', overflowY: 'auto', zIndex: 100, boxShadow: '0 4px 6px rgba(0,0,0,0.08)' }}>
+                  {filteredCustomers.length > 0 ? filteredCustomers.map(c => (
+                    <div key={c.id} onClick={() => handleCustomerSelect(c)} style={{ padding: '5px 8px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '11px' }}>
+                      <strong>{c["Full name"]}</strong> — {formatPersianDigits(c.phone)}
+                    </div>
+                  )) : <div style={{ padding: '5px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>یافت نشد</div>}
+                </div>
+              )}
+            </div>
           </div>
+          {selectedCustomer && (
+            <div style={{ marginTop: '6px', padding: '5px 8px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '5px', fontSize: '11px', color: '#166534' }}>
+              ✅ مشتری انتخاب‌شده: <strong>{selectedCustomer["Full name"]}</strong> ({formatPersianDigits(selectedCustomer.phone)})
+            </div>
+          )}
         </div>
-        {selectedCustomer && (
-          <div style={{ marginTop: '6px', padding: '5px 8px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '5px', fontSize: '11px', color: '#166534' }}>
-            ✅ مشتری انتخاب‌شده: <strong>{selectedCustomer["Full name"]}</strong> ({formatPersianDigits(selectedCustomer.phone)})
-          </div>
-        )}
-      </div>
 
-      <button
-        type="button"
-        className="customer-list-open-button"
-        onClick={() => setCustomerListOpen(true)}
-      >
-        <span aria-hidden="true">📋</span>
-        <span>لیست مشتریان</span>
-        <strong>{formatDisplay(customers.length)}</strong>
-      </button>
+        <button
+          type="button"
+          className="customer-list-open-button"
+          onClick={() => setCustomerListOpen(true)}
+        >
+          <span aria-hidden="true">📋</span>
+          <span>لیست مشتریان</span>
+          <strong>{formatDisplay(customers.length)}</strong>
+        </button>
+      </div>
 
       {customerListOpen && (
         <div
