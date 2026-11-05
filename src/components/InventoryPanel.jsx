@@ -29,6 +29,13 @@ export default function InventoryPanel({
   const [savingItemOrder, setSavingItemOrder] = useState(false);
   const dragItemIdRef = useRef(null);
   const dragOverItemIdRef = useRef(null);
+  const pendingTouchDragRef = useRef(null);
+
+  useEffect(() => () => {
+    if (pendingTouchDragRef.current?.timer) {
+      window.clearTimeout(pendingTouchDragRef.current.timer);
+    }
+  }, []);
 
   // استیت جستجو در انبار
   const [searchQuery, setSearchQuery] = useState('');
@@ -126,6 +133,7 @@ export default function InventoryPanel({
 
   useEffect(() => {
     if (draggingItemId === null) return undefined;
+    const preventTouchScrollDuringDrag = (event) => event.preventDefault();
     const handlePointerMove = (event) => {
       const row = document.elementFromPoint(event.clientX, event.clientY)
         ?.closest('[data-inventory-id]');
@@ -170,6 +178,10 @@ export default function InventoryPanel({
       }
     };
     const handlePointerCancel = () => {
+      if (pendingTouchDragRef.current?.timer) {
+        window.clearTimeout(pendingTouchDragRef.current.timer);
+      }
+      pendingTouchDragRef.current = null;
       dragItemIdRef.current = null;
       dragOverItemIdRef.current = null;
       setDraggingItemId(null);
@@ -179,10 +191,12 @@ export default function InventoryPanel({
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerCancel);
+    document.addEventListener('touchmove', preventTouchScrollDuringDrag, { passive: false });
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerCancel);
+      document.removeEventListener('touchmove', preventTouchScrollDuringDrag);
     };
   }, [draggingItemId, items, onItemsReordered, refresh, searchQuery]);
 
@@ -582,11 +596,43 @@ export default function InventoryPanel({
                       onPointerDown={(event) => {
                         if (isEditing || event.button !== 0 || savingItemOrder || searchQuery.trim()) return;
                         if (event.target.closest('button, input, select, textarea, a, [contenteditable="true"]')) return;
+                        if (event.pointerType === 'touch') {
+                          const startX = event.clientX;
+                          const startY = event.clientY;
+                          const timer = window.setTimeout(() => {
+                            pendingTouchDragRef.current = null;
+                            dragItemIdRef.current = String(item.id);
+                            dragOverItemIdRef.current = String(item.id);
+                            setDraggingItemId(item.id);
+                            setDragOverItemId(String(item.id));
+                          }, 450);
+                          pendingTouchDragRef.current = {
+                            itemId: String(item.id),
+                            startX,
+                            startY,
+                            timer,
+                          };
+                          return;
+                        }
                         event.preventDefault();
                         dragItemIdRef.current = String(item.id);
                         dragOverItemIdRef.current = String(item.id);
                         setDraggingItemId(item.id);
                         setDragOverItemId(String(item.id));
+                      }}
+                      onPointerMove={(event) => {
+                        const pendingDrag = pendingTouchDragRef.current;
+                        if (!pendingDrag || event.pointerType !== 'touch') return;
+                        if (Math.hypot(event.clientX - pendingDrag.startX, event.clientY - pendingDrag.startY) > 8) {
+                          window.clearTimeout(pendingDrag.timer);
+                          pendingTouchDragRef.current = null;
+                        }
+                      }}
+                      onPointerUp={() => {
+                        if (pendingTouchDragRef.current?.timer) {
+                          window.clearTimeout(pendingTouchDragRef.current.timer);
+                        }
+                        pendingTouchDragRef.current = null;
                       }}
                       onKeyDown={(event) => {
                         if (isEditing && event.key === 'Enter' && !event.target.closest('button')) {

@@ -3170,7 +3170,7 @@ textarea:focus-visible {
 
 .inventory-table tbody tr {
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-x pan-y;
 }
 
 .inventory-table tbody tr.is-dragging {
@@ -10640,14 +10640,12 @@ textarea {
 
 @media (max-width: 600px) {
   html {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
   }
 
   body,
   #root {
-    overflow-x: visible;
+    overflow-x: hidden;
   }
 
   .inventory-table-wrap {
