@@ -5661,8 +5661,17 @@ textarea:focus-visible {
   }
 
   .inventory-table .inventory-col-index {
-    width: 48px;
+    width: 38px;
     text-align: center;
+  }
+
+  .inventory-table .inventory-col-stock {
+    width: 68px;
+    max-width: 68px;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .inventory-table .inventory-col-title {
@@ -10657,18 +10666,30 @@ textarea {
   }
 
   .panel-container table.inventory-table.has-cost-column {
-    width: 920px !important;
-    min-width: 920px !important;
+    width: 860px !important;
+    min-width: 860px !important;
   }
 
   .panel-container table.inventory-table .inventory-col-title {
-    width: 200px !important;
-    min-width: 200px !important;
-    max-width: 200px !important;
+    width: 150px !important;
+    min-width: 150px !important;
+    max-width: 150px !important;
     overflow: visible !important;
     overflow-wrap: anywhere !important;
     text-overflow: clip !important;
     white-space: normal !important;
+  }
+
+  .panel-container table.inventory-table .inventory-col-index {
+    width: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+  }
+
+  .panel-container table.inventory-table .inventory-col-stock {
+    width: 68px !important;
+    min-width: 68px !important;
+    max-width: 68px !important;
   }
 }
 

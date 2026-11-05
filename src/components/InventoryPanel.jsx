@@ -554,9 +554,7 @@ export default function InventoryPanel({
                 <th className="inventory-col-index" style={{ padding: '8px 10px' }}>ردیف</th>
                 <th className="inventory-col-title" style={{ padding: '8px 10px' }}>عنوان کالا / خدمت</th>
                 <th className="inventory-col-type" style={{ padding: '8px 10px' }}>نوع کالا</th>
-                <th style={{ padding: '8px 10px' }}>
-                  تعداد موجودی{stockSummary.warehouseName ? ` (${stockSummary.warehouseName})` : ''}
-                </th>
+                <th className="inventory-col-stock" style={{ padding: '8px 10px' }}>موجودی</th>
                 {showCostPrice && <th className="inventory-col-cost" style={{ padding: '8px 10px', color: '#b91c1c' }}>قیمت خرید</th>}
                 {displayedLevels.map((level) => (
                   <th key={level} className="inventory-col-price" style={{ padding: '8px 10px' }}>نرخ سطح {level}</th>
@@ -633,7 +631,7 @@ export default function InventoryPanel({
                         )}
                       </td>
 
-                      <td style={{ padding: '8px 10px', color: '#334155', fontWeight: 'bold' }}>
+                      <td className="inventory-col-stock" style={{ padding: '8px 10px', color: '#334155', fontWeight: 'bold' }}>
                         {isEditing ? (
                           <FormattedNumberInput
                             value={editForm.stock_quantity}
