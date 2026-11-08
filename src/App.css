@@ -10981,7 +10981,8 @@ textarea {
   z-index: 1100;
   inset: 0;
   display: grid;
-  place-items: center;
+  place-items: start center;
+  align-content: start;
   overflow: hidden;
   padding: clamp(12px, 2.4vw, 32px);
   background: rgb(17 33 39 / 48%);
@@ -11985,9 +11986,10 @@ body:has([role="dialog"][aria-modal="true"]) {
 .cashbook-period-details-backdrop,
 .quotation-inventory-picker-backdrop {
   box-sizing: border-box;
-  align-content: center;
+  align-content: start;
+  align-items: start;
   padding:
-    max(12px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-top))
     max(12px, env(safe-area-inset-right))
     max(12px, env(safe-area-inset-bottom))
     max(12px, env(safe-area-inset-left));
@@ -12002,16 +12004,16 @@ body:has([role="dialog"][aria-modal="true"]) {
   min-width: 0;
   max-width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right));
   max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-  margin: auto;
+  margin: 0 auto;
   overscroll-behavior: contain;
   scroll-padding-block: 16px;
 }
 
 .section-page-popup-backdrop {
   box-sizing: border-box;
-  align-content: center;
+  align-content: start;
   padding:
-    max(12px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-top))
     max(12px, env(safe-area-inset-right))
     max(12px, env(safe-area-inset-bottom))
     max(12px, env(safe-area-inset-left));

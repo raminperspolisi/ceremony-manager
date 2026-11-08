@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { normalizeIranianMobile, normalizeOtp } from '../authUtils';
+import './SMSAuthPanel.css';
 
 const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
 const toPersianDigits = (value) =>
@@ -211,354 +212,191 @@ export default function SMSAuthPanel({
         : 'برای ورود، کد یک‌بارمصرف به شماره موبایل تأییدشدهٔ شما پیامک می‌شود.';
 
   return (
-    <section
-      className={`sms-auth-panel ${className}`}
-      style={{
-        maxWidth: 420,
-        margin: '10vh auto',
-        padding: 24,
-        direction: 'rtl',
-        background: '#fff',
-        borderRadius: 12,
-        boxShadow: '0 8px 30px rgba(15, 23, 42, 0.1)',
-        fontFamily: '"IRANSans", Tahoma, sans-serif',
-      }}
-    >
-      <img
-        src="/azho-logo.png"
-        alt="لوگوی آژو مراسم"
-        className="sms-auth-logo"
-        style={{
-          display: 'block',
-          margin: '0 auto 16px',
-          width: 56,
-          height: 56,
-        }}
-      />
-      <h1
-        style={{
-          margin: '0 0 8px',
-          fontSize: 22,
-          color: '#0f172a',
-          textAlign: 'center',
-        }}
-      >
-        {title}
-      </h1>
-      <p
-        style={{
-          margin: '0 0 20px',
-          color: '#64748b',
-          fontSize: 14,
-          textAlign: 'center',
-          lineHeight: 1.5,
-        }}
-      >
-        {description}
-      </p>
+    <main className="sms-auth-screen">
+      <section className={`sms-auth-panel ${className}`}>
+        <div className="sms-auth-content">
+          <div className="sms-auth-mobile-brand">
+            <img src="/azho-logo.png" alt="لوگوی آژو مراسم" />
+            <span>آژو</span>
+          </div>
+          <div className="sms-auth-heading">
+            <span className="sms-auth-eyebrow">{isSignUp ? 'به خانواده آژو بپیوندید' : 'خوش آمدید'}</span>
+            <h1>{title}</h1>
+            <p>{description}</p>
+          </div>
 
-      {(useEmailAuth ? emailAuthError : authError) && (
-        <div
-          role="alert"
-          style={{
-            marginBottom: 14,
-            padding: 10,
-            borderRadius: 6,
-            color: '#b91c1c',
-            background: '#fee2e2',
-            fontSize: 14,
-            textAlign: 'right',
-          }}
-        >
-          {useEmailAuth ? emailAuthError : authError}
-        </div>
-      )}
-      {(useEmailAuth ? emailAuthMessage : authMessage) && (
-        <div
-          role="status"
-          style={{
-            marginBottom: 14,
-            padding: 10,
-            borderRadius: 6,
-            color: '#166534',
-            background: '#dcfce7',
-            fontSize: 14,
-            textAlign: 'right',
-          }}
-        >
-          {useEmailAuth ? emailAuthMessage : authMessage}
-        </div>
-      )}
-
-      {useEmailAuth ? (
-        <form
-          onSubmit={isSignUp ? onEmailSignUp : onEmailSignIn}
-          style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-        >
-          <label htmlFor="email-auth-email" style={{ fontSize: 14, color: '#334155' }}>ایمیل</label>
-          <input
-            id="email-auth-email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            disabled={authLoading}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{
-              width: '100%',
-              padding: 10,
-              fontSize: 15,
-              border: '1px solid #cbd5e1',
-              borderRadius: 8,
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-          <label htmlFor="email-auth-password" style={{ fontSize: 14, color: '#334155' }}>گذرواژه</label>
-          <input
-            id="email-auth-password"
-            type="password"
-            autoComplete={isSignUp ? 'new-password' : 'current-password'}
-            minLength={6}
-            required
-            value={password}
-            disabled={authLoading}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{
-              width: '100%',
-              padding: 10,
-              fontSize: 15,
-              border: '1px solid #cbd5e1',
-              borderRadius: 8,
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-          <button
-            type="submit"
-            disabled={authLoading}
-            style={{
-              width: '100%',
-              padding: 10,
-              fontSize: 15,
-              fontWeight: 600,
-              color: '#fff',
-              background: authLoading ? '#94a3b8' : '#28645a',
-              border: 'none',
-              borderRadius: 8,
-              cursor: authLoading ? 'not-allowed' : 'pointer',
-              opacity: authLoading ? 0.7 : 1,
-            }}
-          >
-            {authLoading ? 'لطفاً صبر کنید…' : isSignUp ? 'ثبت‌نام با ایمیل' : 'ورود با ایمیل'}
-          </button>
-        </form>
-      ) : (
-        <form
-          onSubmit={otpSent ? handleVerifyPhoneOtp : handleRequestPhoneOtp}
-          style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-        >
-          {!otpSent && (
-          <>
-            <label
-              htmlFor="sms-auth-phone"
-              style={{
-                display: 'block',
-                marginBottom: 6,
-                fontSize: 14,
-                color: '#334155',
-              }}
-            >
-              شماره موبایل
-            </label>
-            <input
-              id="sms-auth-phone"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              required
-              value={phone}
-              disabled={loading || authLoading}
-              onChange={(e) => setPhone(e.target.value)}
-              style={{
-                width: '100%',
-                padding: 10,
-                fontSize: 15,
-                border: '1px solid #cbd5e1',
-                borderRadius: 8,
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-            {isSignUp && !otpSent && (
-              <>
-                <label
-                  htmlFor="sms-auth-contact-email"
-                  style={{
-                    display: 'block',
-                    marginBottom: 6,
-                    fontSize: 14,
-                    color: '#334155',
-                  }}
-                >
-                  ایمیل (اختیاری)
-                </label>
-                <input
-                  id="sms-auth-contact-email"
-                  type="email"
-                  autoComplete="email"
-                  value={contactEmail}
-                  disabled={loading}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    fontSize: 15,
-                    border: '1px solid #cbd5e1',
-                    borderRadius: 8,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </>
-            )}
-          </>
-        )}
-
-        {otpSent && (
-          <>
-            <label
-              htmlFor="sms-auth-otp"
-              style={{
-                display: 'block',
-                marginBottom: 6,
-                fontSize: 14,
-                color: '#334155',
-              }}
-            >
-              کد تأیید پیامک‌شده
-            </label>
-            <input
-              id="sms-auth-otp"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9۰-۹٠-٩]{4,8}"
-              maxLength={8}
-              required
-              value={otpCode}
-              disabled={loading}
-              onChange={(e) => setOtpCode(e.target.value)}
-              style={{
-                width: '100%',
-                padding: 10,
-                fontSize: 15,
-                border: '1px solid #cbd5e1',
-                borderRadius: 8,
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-            <div style={{ marginTop: 6, fontSize: 12, color: '#64748b' }}>
-              کد را به صورت ۴ تا ۸ رقمی وارد کنید (اعداد فارسی یا انگلیسی قابل پذیرش است).
+          {(useEmailAuth ? emailAuthError : authError) && (
+            <div className="sms-auth-message sms-auth-error" role="alert">
+              {useEmailAuth ? emailAuthError : authError}
             </div>
-          </>
-        )}
-          <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: 10,
-            fontSize: 15,
-            fontWeight: 600,
-            color: '#fff',
-            background: loading ? '#94a3b8' : '#28645a',
-            border: 'none',
-            borderRadius: 8,
-            cursor: loading || authLoading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading
-            ? 'لطفاً صبر کنید…'
-            : otpSent
-              ? isSignUp
-                ? 'تأیید کد و ساخت حساب'
-                : 'تأیید کد و ورود'
-              : 'ارسال کد تأیید'}
-          </button>
-        </form>
-      )}
+          )}
+          {(useEmailAuth ? emailAuthMessage : authMessage) && (
+            <div className="sms-auth-message sms-auth-success" role="status">
+              {useEmailAuth ? emailAuthMessage : authMessage}
+            </div>
+          )}
 
-      {!useEmailAuth && otpSent && (
-        <button
-          type="button"
-          disabled={resendDisabled || loading}
-          onClick={handleResendOtp}
-          style={{
-            width: '100%',
-            marginTop: 10,
-            padding: 10,
-            fontSize: 13,
-            color: resendDisabled ? '#94a3b8' : '#28645a',
-            background: 'transparent',
-            border: '1px solid #cbd5e1',
-            borderRadius: 8,
-            cursor: resendDisabled || loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {resendSeconds > 0
-            ? `ارسال دوباره پس از ${toPersianDigits(resendSeconds)} ثانیه`
-            : 'ارسال دوباره کد'}
-        </button>
-      )}
+          {useEmailAuth ? (
+            <form
+              className="sms-auth-form"
+              onSubmit={isSignUp ? onEmailSignUp : onEmailSignIn}
+            >
+              <label htmlFor="email-auth-email">ایمیل</label>
+              <input
+                id="email-auth-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                disabled={authLoading}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <label htmlFor="email-auth-password">گذرواژه</label>
+              <input
+                id="email-auth-password"
+                type="password"
+                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                minLength={6}
+                required
+                value={password}
+                disabled={authLoading}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button className="sms-auth-primary" type="submit" disabled={authLoading}>
+                {authLoading ? 'لطفاً صبر کنید…' : isSignUp ? 'ثبت‌نام با ایمیل' : 'ورود با ایمیل'}
+                <span aria-hidden="true">←</span>
+              </button>
+            </form>
+          ) : (
+            <form
+              className="sms-auth-form"
+              onSubmit={otpSent ? handleVerifyPhoneOtp : handleRequestPhoneOtp}
+            >
+              {!otpSent && (
+                <>
+                  <label htmlFor="sms-auth-phone">شماره موبایل</label>
+                  <input
+                    id="sms-auth-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="مثلاً ۰۹۱۲۱۲۳۴۵۶۷"
+                    required
+                    value={phone}
+                    disabled={loading || authLoading}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                  {isSignUp && (
+                    <>
+                      <label htmlFor="sms-auth-contact-email">ایمیل <span>(اختیاری)</span></label>
+                      <input
+                        id="sms-auth-contact-email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="name@example.com"
+                        value={contactEmail}
+                        disabled={loading}
+                        onChange={(e) => setContactEmail(e.target.value)}
+                      />
+                    </>
+                  )}
+                </>
+              )}
 
-      {!otpSent && (
-        <button
-          type="button"
-          disabled={loading || authLoading}
-          onClick={handleSwitchMode}
-          style={{
-            width: '100%',
-            marginTop: 12,
-            padding: 10,
-            fontSize: 14,
-            color: '#28645a',
-            background: 'transparent',
-            border: 'none',
-            borderRadius: 8,
-            cursor: loading || authLoading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {isSignUp
-            ? `حساب دارید؟ ورود با ${useEmailAuth ? 'ایمیل' : 'موبایل'}`
-            : `حساب ندارید؟ ثبت‌نام با ${useEmailAuth ? 'ایمیل' : 'موبایل'}`}
-        </button>
-      )}
+              {otpSent && (
+                <>
+                  <label htmlFor="sms-auth-otp">کد تأیید پیامک‌شده</label>
+                  <input
+                    id="sms-auth-otp"
+                    className="sms-auth-otp-input"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9۰-۹٠-٩]{4,8}"
+                    maxLength={8}
+                    placeholder="••••••"
+                    required
+                    value={otpCode}
+                    disabled={loading}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                  />
+                  <div className="sms-auth-hint">
+                    کد ۴ تا ۸ رقمی را وارد کنید؛ اعداد فارسی یا انگلیسی قابل پذیرش است.
+                  </div>
+                </>
+              )}
+              <button className="sms-auth-primary" type="submit" disabled={loading}>
+                {loading
+                  ? 'لطفاً صبر کنید…'
+                  : otpSent
+                    ? isSignUp ? 'تأیید کد و ساخت حساب' : 'تأیید کد و ورود'
+                    : 'ارسال کد تأیید'}
+                <span aria-hidden="true">←</span>
+              </button>
+            </form>
+          )}
 
-      {!otpSent && (
-      <button
-        type="button"
-        disabled={loading || authLoading}
-        onClick={useEmailAuth ? handleSwitchToPhone : handleSwitchToEmail}
-        style={{
-          width: '100%',
-          marginTop: 8,
-          padding: 10,
-          fontSize: 14,
-          color: '#64748b',
-          background: 'transparent',
-          border: '1px solid #cbd5e1',
-          borderRadius: 8,
-          cursor: loading || authLoading ? 'not-allowed' : 'pointer',
-        }}
-      >
-        {useEmailAuth
-          ? isSignUp ? 'ثبت‌نام با شماره موبایل' : 'ورود با شماره موبایل'
-          : isSignUp ? 'ثبت‌نام با ایمیل' : 'ورود با ایمیل'}
-      </button>
-      )}
-    </section>
+          {!useEmailAuth && otpSent && (
+            <button
+              className="sms-auth-secondary"
+              type="button"
+              disabled={resendDisabled || loading}
+              onClick={handleResendOtp}
+            >
+              {resendSeconds > 0
+                ? `ارسال دوباره پس از ${toPersianDigits(resendSeconds)} ثانیه`
+                : 'ارسال دوباره کد'}
+            </button>
+          )}
+
+          {!otpSent && (
+            <div className="sms-auth-actions">
+              <button
+                className="sms-auth-mode-toggle"
+                type="button"
+                disabled={loading || authLoading}
+                onClick={handleSwitchMode}
+              >
+                {isSignUp
+                  ? `حساب دارید؟ ورود با ${useEmailAuth ? 'ایمیل' : 'موبایل'}`
+                  : `حساب ندارید؟ ثبت‌نام با ${useEmailAuth ? 'ایمیل' : 'موبایل'}`}
+              </button>
+              <div className="sms-auth-divider"><span>یا</span></div>
+              <button
+                className="sms-auth-secondary"
+                type="button"
+                disabled={loading || authLoading}
+                onClick={useEmailAuth ? handleSwitchToPhone : handleSwitchToEmail}
+              >
+                {useEmailAuth
+                  ? isSignUp ? 'ثبت‌نام با شماره موبایل' : 'ورود با شماره موبایل'
+                  : isSignUp ? 'ثبت‌نام با ایمیل' : 'ورود با ایمیل'}
+              </button>
+            </div>
+          )}
+          <p className="sms-auth-privacy">ورود امن و سریع، برای مدیریت بهتر مراسم شما</p>
+        </div>
+
+        <aside className="sms-auth-showcase">
+          <div className="sms-auth-showcase-top">
+            <img src="/azho-logo.png" alt="" />
+            <span>آژو <small>مدیریت هوشمند مراسم</small></span>
+          </div>
+          <div className="sms-auth-showcase-copy">
+            <span className="sms-auth-showcase-label">همه‌چیز برای یک مراسم بی‌نقص</span>
+            <h2>با خیال آسوده،<br />مراسم را مدیریت کنید.</h2>
+            <p>از برنامه‌ریزی تا حساب‌وکتاب؛ همه ابزارهای کسب‌وکار شما در یک فضای ساده و یکپارچه.</p>
+          </div>
+          <div className="sms-auth-showcase-card">
+            <span className="sms-auth-showcase-icon" aria-hidden="true">✦</span>
+            <div>
+              <strong>کسب‌وکار شما، همیشه منظم</strong>
+              <span>مشتری‌ها، سفارش‌ها و گزارش‌ها در یک نگاه</span>
+            </div>
+          </div>
+          <span className="sms-auth-showcase-footer">فضای کاری یکپارچه برای تشریفات آژو</span>
+        </aside>
+      </section>
+    </main>
   );
 }
