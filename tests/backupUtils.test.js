@@ -189,14 +189,21 @@ test('restore merges records by ID without deleting existing data', async () => 
 
 test('restore remaps offline account and invoice IDs before importing cash transactions', async () => {
   const tables = Object.fromEntries(BACKUP_TABLES.map((table) => [table, []]));
+  tables.events = [{ id: 'offline:event', event_type: 'عروسی' }];
   tables.financial_accounts = [{ id: 'offline:account', account_name: 'صندوق', account_type: 'cash' }];
-  tables.invoices = [{ id: 'offline:invoice', customer_name: 'مشتری', total_price: 1000 }];
+  tables.invoices = [{
+    id: 'offline:invoice',
+    customer_name: 'مشتری',
+    total_price: 1000,
+    event_id: 'offline:event',
+  }];
   tables.cash_transactions = [{
     id: 'offline:transaction',
     transaction_type: 'income',
     amount: 100,
     account_id: 'offline:account',
     invoice_id: 'offline:invoice',
+    event_id: 'offline:event',
     transfer_to_account_id: null,
     category: null,
     description: 'دریافت',
@@ -210,7 +217,7 @@ test('restore remaps offline account and invoice IDs before importing cash trans
     organizationId: 'organization-1',
   });
   const inserts = [];
-  const ids = { financial_accounts: 10, invoices: 20, cash_transactions: 30 };
+  const ids = { events: 5, financial_accounts: 10, invoices: 20, cash_transactions: 30 };
 
   await restoreBackupDocument(backup, {
     userId: 'user-1',
@@ -227,7 +234,55 @@ test('restore remaps offline account and invoice IDs before importing cash trans
   const restoredTransaction = inserts.find((entry) => entry.table === 'cash_transactions').rows[0];
   assert.equal(restoredTransaction.account_id, 10);
   assert.equal(restoredTransaction.invoice_id, 20);
+  assert.equal(restoredTransaction.event_id, 5);
+  const restoredInvoice = inserts.find((entry) => entry.table === 'invoices').rows[0];
+  assert.equal(restoredInvoice.event_id, 5);
   assert.equal(restoredTransaction.id, undefined);
+});
+
+test('restore only updates the event link on an existing immutable cash transaction', async () => {
+  const tables = Object.fromEntries(BACKUP_TABLES.map((table) => [table, []]));
+  tables.events = [{ id: 5, event_type: 'عروسی' }];
+  tables.cash_transactions = [{
+    id: 30,
+    transaction_type: 'expense',
+    amount: 250,
+    account_id: 10,
+    invoice_id: null,
+    event_id: 5,
+    category: 'حمل‌ونقل',
+    description: 'کرایه',
+    transaction_date: '2026-09-23',
+    offline_sync_id: 'b6f299d8-f05b-4c8f-a12a-ddf30487a2fd',
+  }];
+  const backup = createBackupDocument(tables, {
+    exportedAt: '2026-10-23T00:00:00.000Z',
+    userId: 'user-1',
+    projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
+  });
+  const updates = [];
+
+  const counts = await restoreBackupDocument(backup, {
+    userId: 'user-1',
+    organizationId: 'organization-1',
+    projectUrl: 'https://example.supabase.co',
+    readTable: async (table) => ({
+      data: table === 'events' ? [{ id: 5, event_type: 'عروسی' }]
+        : table === 'cash_transactions' ? [{ ...tables.cash_transactions[0], event_id: null }]
+          : [],
+      error: null,
+    }),
+    updateRows: async (...args) => { updates.push(args); return { error: null }; },
+    insertRows: async () => ({ data: [], error: null }),
+  });
+
+  assert.deepEqual(updates.filter((args) => args[0] === 'cash_transactions'), [[
+    'cash_transactions',
+    { event_id: 5 },
+    [{ column: 'id', operator: 'eq', value: 30 }],
+  ]]);
+  assert.deepEqual(counts.cash_transactions, { updated: 1, inserted: 0 });
 });
 
 test('restore remaps invoice expense account and cash transaction references', async () => {

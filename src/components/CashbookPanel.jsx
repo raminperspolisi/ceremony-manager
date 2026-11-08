@@ -51,6 +51,7 @@ const newTransactionForm = () => ({
   account_id: '',
   transfer_to_account_id: '',
   invoice_id: '',
+  event_id: '',
   category: EXPENSE_CATEGORIES[0],
   description: '',
   reference_number: '',
@@ -62,6 +63,8 @@ export default function CashbookPanel() {
   const [accounts, setAccounts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [invoiceExpenseTransactionIds, setInvoiceExpenseTransactionIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -84,6 +87,7 @@ export default function CashbookPanel() {
   const [dateTo, setDateTo] = useState(() => localIsoDate(new Date()));
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [periodDetailsType, setPeriodDetailsType] = useState(null);
+  const [savingEventTransactionId, setSavingEventTransactionId] = useState(null);
 
   const balances = useMemo(
     () => calculateAccountBalances(accounts, transactions),
@@ -151,20 +155,31 @@ export default function CashbookPanel() {
 
   const refreshData = async () => {
     setLoading(true);
-    const [accountResult, transactionResult, invoiceResult] = await Promise.all([
+    const [accountResult, transactionResult, invoiceResult, eventResult, invoiceExpenseResult] = await Promise.all([
       readTable('financial_accounts', { orderBy: 'id', ascending: false }),
       readAllRows('cash_transactions', 'transaction_date'),
       readAllRows('invoices', 'created_at'),
+      readAllRows('events', 'event_date'),
+      readAllRows('invoice_expenses', 'expense_date'),
     ]);
     const failures = [
       accountResult.error && `حساب‌ها: ${accountResult.error.message}`,
       transactionResult.error && `گردش‌ها: ${transactionResult.error.message}`,
       invoiceResult.error && `فاکتورها: ${invoiceResult.error.message}`,
+      eventResult.error && `مراسم‌ها: ${eventResult.error.message}`,
+      invoiceExpenseResult.error && `هزینه‌های فاکتور: ${invoiceExpenseResult.error.message}`,
     ].filter(Boolean);
     setLoadError(failures.join('؛ '));
     if (!accountResult.error) setAccounts(accountResult.data || []);
     if (!transactionResult.error) setTransactions(transactionResult.data || []);
     if (!invoiceResult.error) setInvoices(invoiceResult.data || []);
+    if (!eventResult.error) setEvents(eventResult.data || []);
+    if (!invoiceExpenseResult.error) {
+      setInvoiceExpenseTransactionIds(new Set((invoiceExpenseResult.data || [])
+        .map((expense) => expense.cash_transaction_id)
+        .filter((id) => id !== null && id !== undefined)
+        .map(String)));
+    }
     setLoading(false);
   };
 
@@ -377,6 +392,13 @@ export default function CashbookPanel() {
       }
       transaction.invoice_id = invoice.id;
     }
+    if (
+      transactionForm.event_id
+      && (transactionForm.transaction_type === 'expense'
+        || (transactionForm.transaction_type === 'income' && !transaction.invoice_id))
+    ) {
+      transaction.event_id = transactionForm.event_id;
+    }
 
     const result = await recordCashTransaction(transaction);
     setBusy(false);
@@ -390,6 +412,25 @@ export default function CashbookPanel() {
     setTransactionForm(newTransactionForm());
     setTransactionModalOpen(false);
     await refreshData();
+  };
+
+  const handleTransactionEventChange = async (transaction, eventId) => {
+    setSavingEventTransactionId(transaction.id);
+    setErrorMessage('');
+    const result = await updateRows('cash_transactions', {
+      event_id: eventId || null,
+    }, [{ column: 'id', operator: 'eq', value: transaction.id }]);
+    setSavingEventTransactionId(null);
+    if (result.error) {
+      setErrorMessage(`اتصال گردش به مراسم ذخیره نشد: ${result.error.message}`);
+      return;
+    }
+    setTransactions((current) => current.map((item) => (
+      String(item.id) === String(transaction.id)
+        ? { ...item, event_id: eventId || null }
+        : item
+    )));
+    window.dispatchEvent(new Event('offline-data-updated'));
   };
 
   const accountOptions = accounts.map((account) => (
@@ -819,6 +860,7 @@ export default function CashbookPanel() {
                   ...current,
                   transaction_type: event.target.value,
                   invoice_id: '',
+                  event_id: '',
                   transfer_to_account_id: '',
                 }))}
               >
@@ -861,7 +903,11 @@ export default function CashbookPanel() {
             {transactionForm.transaction_type === 'income' && (
               <label>
                 دریافت بابت فاکتور (اختیاری)
-                <select value={transactionForm.invoice_id} onChange={(event) => setTransactionForm((current) => ({ ...current, invoice_id: event.target.value }))}>
+                <select value={transactionForm.invoice_id} onChange={(event) => setTransactionForm((current) => ({
+                  ...current,
+                  invoice_id: event.target.value,
+                  event_id: '',
+                }))}>
                   <option value="">دریافت متفرقه / بدون فاکتور</option>
                   {invoices.filter((invoice) => Number(invoice.total_price || invoice.total_amount || 0) > Number(invoice.paid_amount || 0)).map((invoice) => (
                     <option key={invoice.id} value={invoice.id}>
@@ -870,6 +916,25 @@ export default function CashbookPanel() {
                   ))}
                 </select>
                 <small className="cashbook-sensitive-note">با انتخاب فاکتور، مبلغ دریافتی هم به ماندهٔ این حساب و هم به پرداختی فاکتور اضافه می‌شود.</small>
+              </label>
+            )}
+            {(transactionForm.transaction_type === 'expense'
+              || (transactionForm.transaction_type === 'income' && !transactionForm.invoice_id)) && (
+              <label>
+                اتصال به مراسم (اختیاری)
+                <select
+                  value={transactionForm.event_id}
+                  onChange={(event) => setTransactionForm((current) => ({ ...current, event_id: event.target.value }))}
+                >
+                  <option value="">هزینه / درآمد عمومی</option>
+                  {events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.customer_name || event.event_type || 'مراسم بدون نام'}
+                      {event.event_date ? ` · ${formatJalaliDate(event.event_date)}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <small className="cashbook-sensitive-note">برای گزارش سود و زیان، هزینه را فقط به مراسمی وصل کنید که واقعاً مربوط به آن است.</small>
               </label>
             )}
             <label>
@@ -947,13 +1012,15 @@ export default function CashbookPanel() {
           <div className="cashbook-table-wrap">
             <table className="cashbook-table">
               <thead>
-                <tr><th>تاریخ</th><th>نوع</th><th>حساب</th><th>دسته / مرجع</th><th>توضیحات و رسید</th><th>مبلغ</th></tr>
+                <tr><th>تاریخ</th><th>نوع</th><th>حساب</th><th>دسته / مرجع</th><th>مراسم</th><th>توضیحات و رسید</th><th>مبلغ</th></tr>
               </thead>
               <tbody>
                 {visibleTransactions.map((transaction) => {
                   const sourceAccount = accounts.find((account) => String(account.id) === String(transaction.account_id));
                   const destinationAccount = accounts.find((account) => String(account.id) === String(transaction.transfer_to_account_id));
                   const invoice = invoices.find((item) => String(item.id) === String(transaction.invoice_id));
+                  const linkedEvent = events.find((item) => String(item.id) === String(transaction.event_id));
+                  const isInvoiceExpenseTransaction = invoiceExpenseTransactionIds.has(String(transaction.id));
                   const typeLabel = TRANSACTION_TYPES.find((type) => type.value === transaction.transaction_type)?.label || transaction.transaction_type;
                   return (
                     <tr key={transaction.id}>
@@ -963,6 +1030,26 @@ export default function CashbookPanel() {
                         ? `${sourceAccount?.account_name || 'حساب'} ← ${destinationAccount?.account_name || 'حساب'}`
                         : sourceAccount?.account_name || 'حساب حذف‌شده'}</td>
                       <td>{transaction.category || (invoice ? `فاکتور #${invoiceDisplayNumber(invoice)}` : '—')}</td>
+                      <td>
+                        {transaction.transaction_type === 'transfer' || transaction.invoice_id || isInvoiceExpenseTransaction ? (
+                          linkedEvent?.customer_name || (transaction.invoice_id || isInvoiceExpenseTransaction ? 'از روی فاکتور' : '—')
+                        ) : (
+                          <select
+                            aria-label="اتصال گردش به مراسم"
+                            value={transaction.event_id || ''}
+                            disabled={String(savingEventTransactionId) === String(transaction.id)}
+                            onChange={(event) => { void handleTransactionEventChange(transaction, event.target.value); }}
+                          >
+                            <option value="">عمومی / بدون مراسم</option>
+                            {events.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.customer_name || item.event_type || 'مراسم بدون نام'}
+                                {item.event_date ? ` · ${formatJalaliDate(item.event_date)}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
                       <td>
                         {transaction.description || transaction.receipt_note || '—'}
                         {transaction.reference_number && <small className="cashbook-ledger-reference">پیگیری: {transaction.reference_number}</small>}

@@ -1260,7 +1260,6 @@ def validate_settings():
     required = {
         "TELEGRAM_BOT_TOKEN": TELEGRAM_TOKEN,
         "TELEGRAM_ADMIN_CHAT_ID": TELEGRAM_ADMIN_CHAT_ID,
-        "TELEGRAM_ORDER_APPROVAL_SECRET": ORDER_APPROVAL_SECRET,
         "SUPABASE_URL": SUPABASE_URL,
         "SUPABASE_ANON_KEY": SUPABASE_KEY,
     }
@@ -1298,6 +1297,11 @@ def main():
     validate_settings()
     offset = 0
     print("Telegram catalog bot is ready.")
+    if not ORDER_APPROVAL_SECRET:
+        print(
+            "TELEGRAM_ORDER_APPROVAL_SECRET is not configured; "
+            "admin order actions are unavailable."
+        )
     process_pending_payment_notifications()
 
     while True:

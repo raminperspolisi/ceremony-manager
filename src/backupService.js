@@ -104,12 +104,13 @@ export async function restoreBackupDocument(
     const references = table === 'event_tasks'
       ? [['event_id', 'events']]
       : table === 'invoices'
-      ? [['quotation_id', 'quotations']]
+      ? [['quotation_id', 'quotations'], ['event_id', 'events']]
       : table === 'cash_transactions'
         ? [
           ['account_id', 'financial_accounts'],
           ['transfer_to_account_id', 'financial_accounts'],
           ['invoice_id', 'invoices'],
+          ['event_id', 'events'],
         ]
         : table === 'invoice_expenses'
           ? [
@@ -186,10 +187,22 @@ export async function restoreBackupDocument(
           || (table === 'invoice_expenses' && (existingRow.is_paid || row.is_paid))) {
           const comparableRow = rewriteReferences(table, row);
           const changed = Object.keys(comparableRow)
-            .filter((field) => !['organization_id', 'id', 'offline_sync_id', 'created_at'].includes(field))
+            .filter((field) => !['organization_id', 'id', 'offline_sync_id', 'created_at']
+              .includes(field) && !(table === 'cash_transactions' && field === 'event_id'))
             .some((field) => String(existingRow[field] ?? '') !== String(comparableRow[field] ?? ''));
           if (changed) {
             throw new Error(`${TABLE_LABELS[table]} با شناسهٔ ${row.id} با دفتر ثبت موجود یکسان نیست و بازنویسی نشد.`);
+          }
+          if (table === 'cash_transactions'
+            && Object.hasOwn(comparableRow, 'event_id')
+            && String(existingRow.event_id ?? '') !== String(comparableRow.event_id ?? '')) {
+            const { error } = await updateRows(table, {
+              event_id: comparableRow.event_id ?? null,
+            }, [{ column: 'id', operator: 'eq', value: existingRow.id }]);
+            if (error) {
+              throw new Error(`اتصال گردش مالی ${row.id} به مراسم بازیابی نشد: ${error.message}`);
+            }
+            restoredCounts[table].updated += 1;
           }
           continue;
         }

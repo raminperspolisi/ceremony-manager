@@ -77,8 +77,10 @@ const numberOrNull = (value) => {
 };
 
 export const getInvoiceSalesCost = (invoice) => {
-  const items = [invoice?.items_data, invoice?.items_json, invoice?.items]
-    .find((value) => Array.isArray(value)) || [];
+  const itemLists = [invoice?.items_data, invoice?.items_json, invoice?.items];
+  const items = itemLists.find((value) => Array.isArray(value) && value.length > 0)
+    || itemLists.find(Array.isArray)
+    || [];
   return items.reduce((total, item) => {
     if (['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type || item.type)) return total;
     const quantity = Number(item.qty || item.quantity || item.requestedQuantity || 1);

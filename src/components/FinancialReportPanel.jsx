@@ -6,10 +6,19 @@ import {
   calculateInvoiceItemsTotal,
   getInvoiceItems,
   getInvoiceItemDetails,
+  summarizeCeremonyProfit,
   summarizeInvoiceRevenue,
 } from '../financialReportUtils';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fa-IR');
+const formatEventDate = (value) => {
+  const date = String(value || '');
+  if (/^(13|14)\d{2}[/-]/.test(date)) return toPersianDigits(date.replace(/-/g, '/'));
+  if (/^\d{4}-\d{2}-\d{2}/.test(date)) {
+    return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString('fa-IR');
+  }
+  return 'ثبت نشده';
+};
 const toPersianDigits = (value) => String(value).replace(/[0-9٠-٩]/g, (digit) => {
   const asciiDigit = digit >= '٠' && digit <= '٩'
     ? String(digit.charCodeAt(0) - 1632)
@@ -19,8 +28,15 @@ const toPersianDigits = (value) => String(value).replace(/[0-9٠-٩]/g, (digit) 
 
 export default function FinancialReportPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
   const [invoices, setInvoices] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [cashTransactions, setCashTransactions] = useState([]);
+  const [invoiceExpenses, setInvoiceExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [expenseLoadError, setExpenseLoadError] = useState('');
+  const [profitabilityLoadError, setProfitabilityLoadError] = useState('');
+  const [invoiceLinkError, setInvoiceLinkError] = useState('');
+  const [savingInvoiceLinkId, setSavingInvoiceLinkId] = useState(null);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   const [newItemTitle, setNewItemTitle] = useState('');
@@ -29,16 +45,53 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
   const [newItemPrice, setNewItemPrice] = useState('');
 
   const fetchFinancialData = useCallback(async () => {
-    const { data, error } = await readTable('invoices', { orderBy: 'created_at', ascending: true });
+    const [invoiceResult, expenseResult, eventResult, transactionResult] = await Promise.all([
+      readTable('invoices', { orderBy: 'created_at', ascending: true }),
+      readTable('invoice_expenses', { orderBy: 'expense_date', ascending: true }),
+      readTable('events', { orderBy: 'event_date', ascending: true }),
+      readTable('cash_transactions', { orderBy: 'transaction_date', ascending: true }),
+    ]);
 
-    if (error) {
-      setLoadError(`بارگذاری فاکتورهای مالی ناموفق بود: ${error.message}`);
+    if (invoiceResult.error) {
+      setLoadError(`بارگذاری فاکتورهای مالی ناموفق بود: ${invoiceResult.error.message}`);
     } else {
-      setInvoices(data || []);
+      setInvoices(invoiceResult.data || []);
       setLoadError('');
     }
+    if (expenseResult.error) {
+      setExpenseLoadError(`بارگذاری هزینه‌های فاکتورها ناموفق بود: ${expenseResult.error.message}`);
+    } else {
+      setInvoiceExpenses(expenseResult.data || []);
+      setExpenseLoadError('');
+    }
+    const reportErrors = [
+      eventResult.error && `مراسم‌ها: ${eventResult.error.message}`,
+      transactionResult.error && `گردش‌های مالی: ${transactionResult.error.message}`,
+    ].filter(Boolean);
+    setProfitabilityLoadError(reportErrors.join('؛ '));
+    if (!eventResult.error) setEvents(eventResult.data || []);
+    if (!transactionResult.error) setCashTransactions(transactionResult.data || []);
     setLoading(false);
   }, []);
+
+  const handleInvoiceEventChange = async (invoice, eventId) => {
+    setSavingInvoiceLinkId(invoice.id);
+    setInvoiceLinkError('');
+    const result = await updateRows('invoices', {
+      event_id: eventId || null,
+    }, [{ column: 'id', operator: 'eq', value: invoice.id }]);
+    setSavingInvoiceLinkId(null);
+    if (result.error) {
+      setInvoiceLinkError(`اتصال فاکتور به مراسم ذخیره نشد: ${result.error.message}`);
+      return;
+    }
+    setInvoices((current) => current.map((item) => (
+      String(item.id) === String(invoice.id)
+        ? { ...item, event_id: eventId || null }
+        : item
+    )));
+    window.dispatchEvent(new Event('offline-data-updated'));
+  };
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => { void fetchFinancialData(); }, 0);
@@ -248,6 +301,8 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
   const totalSaleRevenue = revenueSummary.saleRevenue;
   const totalRentRevenue = revenueSummary.rentRevenue;
   const unclassifiedRevenue = revenueSummary.unclassifiedRevenue;
+  const profitReport = summarizeCeremonyProfit(events, invoices, invoiceExpenses, cashTransactions);
+  const profitTotals = profitReport.totals;
 
   const ceremonyStats = {};
   const productPerformance = {};
@@ -302,7 +357,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     .slice(0, 5);
 
   return (
-    <div style={{ background: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', fontFamily: '"IRANSans", Tahoma, sans-serif', direction: 'rtl' }}>
+    <div className="financial-report-panel" style={{ background: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', fontFamily: '"IRANSans", Tahoma, sans-serif', direction: 'rtl' }}>
       <h3 style={{ margin: '0 0 15px 0', color: '#1e293b', fontSize: '16px' }}>گزارش مالی و تحلیل پیشرفته تشریفات</h3>
       {loadError && <p role="alert" style={{ color: '#b91c1c' }}>{loadError}</p>}
 
@@ -377,6 +432,70 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
         این ارقام درآمد فاکتور هستند، نه سود خالص؛ هزینه‌های جاری، بهای تمام‌شدهٔ اجاره و مبالغ وصول‌شده در این جمع کسر یا محاسبه نشده‌اند.
       </p>
 
+      <section aria-labelledby="ceremony-profit-title" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '15px', borderRadius: '8px', marginBottom: '25px' }}>
+        <h4 id="ceremony-profit-title" style={{ margin: '0 0 8px', color: '#0f172a', fontSize: '14px' }}>
+          سود و زیان هر مراسم
+        </h4>
+        <p style={{ margin: '0 0 12px', color: '#64748b', fontSize: '11px' }}>
+          درآمد فاکتور بر مبنای مبلغ کل فاکتور است، نه مبلغ وصول‌شده؛ درآمدهای متفرقهٔ ثبت‌شده، هزینه‌های فاکتور، هزینه‌های صندوق/بانک و بهای تمام‌شدهٔ اقلام فروشی هم محاسبه می‌شوند. انتقال بین حساب‌ها درآمد یا هزینه نیست و هزینهٔ پرداخت‌شدهٔ فاکتور دوباره‌شماری نمی‌شود.
+        </p>
+        {expenseLoadError && <p role="alert" style={{ color: '#b91c1c' }}>{expenseLoadError}</p>}
+        {profitabilityLoadError && <p role="alert" style={{ color: '#b91c1c' }}>بارگذاری اطلاعات سود و زیان ناموفق بود: {profitabilityLoadError}</p>}
+        {invoiceLinkError && <p role="alert" style={{ color: '#b91c1c' }}>{invoiceLinkError}</p>}
+        {!expenseLoadError && !profitabilityLoadError && !loading && (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px', fontSize: '12px' }}>
+              <span style={{ background: '#eff6ff', padding: '7px 10px', borderRadius: '6px' }}>کل درآمد: <strong>{formatNumber(profitTotals.revenue)} تومان</strong></span>
+              <span style={{ background: '#fff7ed', padding: '7px 10px', borderRadius: '6px' }}>کل هزینه: <strong>{formatNumber(profitTotals.expenses)} تومان</strong></span>
+              <span style={{ background: profitTotals.profit >= 0 ? '#f0fdf4' : '#fef2f2', padding: '7px 10px', borderRadius: '6px' }}>
+                سود/زیان کل: <strong>{formatNumber(profitTotals.profit)} تومان</strong>
+              </span>
+            </div>
+            {(profitReport.unassigned.revenue > 0 || profitReport.unassigned.expenses > 0) && (
+              <p style={{ margin: '0 0 12px', color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', padding: '9px', borderRadius: '6px', fontSize: '11px' }}>
+                موارد بدون اتصال به مراسم — درآمد: {formatNumber(profitReport.unassigned.revenue)} تومان، هزینه: {formatNumber(profitReport.unassigned.expenses)} تومان؛ این مبالغ در سود کل حساب شده‌اند. از جدول فاکتورها و دفتر صندوق/بانک، موارد مربوط را به مراسم وصل کنید.
+              </p>
+            )}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '11px', background: '#fff' }}>
+                <thead>
+                  <tr style={{ background: '#e2e8f0' }}>
+                    <th style={{ padding: '8px' }}>تاریخ مراسم</th>
+                    <th style={{ padding: '8px' }}>مراسم / مشتری</th>
+                    <th style={{ padding: '8px' }}>تعداد فاکتور</th>
+                    <th style={{ padding: '8px' }}>درآمد</th>
+                    <th style={{ padding: '8px' }}>هزینه‌های ثبت‌شده</th>
+                    <th style={{ padding: '8px' }}>بهای کالای فروشی</th>
+                    <th style={{ padding: '8px' }}>کل هزینه</th>
+                    <th style={{ padding: '8px' }}>سود/زیان</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {profitReport.rows.length ? profitReport.rows.map((row) => (
+                    <tr key={row.eventId} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      <td style={{ padding: '8px' }}>
+                        {formatEventDate(row.eventDate)}
+                      </td>
+                      <td style={{ padding: '8px' }}>{row.eventName}{row.eventType ? ` · ${row.eventType}` : ''}</td>
+                      <td style={{ padding: '8px' }}>{formatNumber(row.invoiceCount)}</td>
+                      <td style={{ padding: '8px' }}>{formatNumber(row.revenue)}</td>
+                      <td style={{ padding: '8px' }}>{formatNumber(row.invoiceExpenses + row.otherExpenses)}</td>
+                      <td style={{ padding: '8px' }}>{formatNumber(row.goodsCost)}</td>
+                      <td style={{ padding: '8px' }}>{formatNumber(row.totalExpenses)}</td>
+                      <td style={{ padding: '8px', fontWeight: 'bold', color: row.profit >= 0 ? '#15803d' : '#b91c1c' }}>
+                        {formatNumber(row.profit)}
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="8" style={{ padding: '14px', textAlign: 'center', color: '#64748b' }}>هنوز درآمد یا هزینه‌ای به مراسم‌ها وصل نشده است.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
       <div style={{ overflowX: 'auto' }}>
         <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>💡 لیست فاکتورهای صادر شده:</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
@@ -386,17 +505,18 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
               <th style={{ padding: '10px' }}>نام مشتری</th>
               <th style={{ padding: '10px' }}>تاریخ ثبت رسمی</th>
               <th style={{ padding: '10px' }}>مبلغ کل (تومان)</th>
+              <th style={{ padding: '10px' }}>اتصال به مراسم</th>
               <th style={{ padding: '10px', textAlign: 'center' }}>عملیات</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>در حال بارگذاری اطلاعات...</td>
+                <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>در حال بارگذاری اطلاعات...</td>
               </tr>
             ) : invoices.length === 0 ? (
               <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>هیچ فاکتور رسمی تاکنون صادر نشده است.</td>
+                <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>هیچ فاکتور رسمی تاکنون صادر نشده است.</td>
               </tr>
             ) : (
               invoices.map((inv, idx) => {
@@ -417,6 +537,22 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
                     </td>
                     <td style={{ padding: '10px' }}>{new Date(inv.created_at).toLocaleDateString('fa-IR')}</td>
                     <td style={{ padding: '10px', color: '#0369a1', fontWeight: 'bold' }}>{formatNumber(inv.total_price || inv.total_amount)}</td>
+                    <td style={{ padding: '10px' }}>
+                      <select
+                        aria-label={`اتصال فاکتور ${formatNumber(invoiceNumber)} به مراسم`}
+                        value={inv.event_id || ''}
+                        disabled={String(savingInvoiceLinkId) === String(inv.id)}
+                        onChange={(event) => { void handleInvoiceEventChange(inv, event.target.value); }}
+                      >
+                        <option value="">بدون اتصال به مراسم</option>
+                        {events.map((event) => (
+                          <option key={event.id} value={event.id}>
+                            {event.customer_name || event.event_type || 'مراسم بدون نام'}
+                            {event.event_date ? ` · ${formatEventDate(event.event_date)}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td style={{ padding: '10px', textAlign: 'center' }}>
                       <button 
                         onClick={() => setSelectedInvoice({ ...inv, invoiceNumber })}

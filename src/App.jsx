@@ -32,6 +32,7 @@ const DEFAULT_BUSINESS_NAME = 'تشریفات آژو';
 const DEFAULT_LOGO_URL = '/azho-logo.png';
 const BUSINESS_LOGO_BUCKET = 'business-logos';
 const APP_SECTION_HISTORY_KEY = '__ceremonyManagerSection';
+const APP_SECTION_POPUP_HISTORY_KEY = '__ceremonyManagerPopupSection';
 const getInitialActiveSection = () => {
   const section = window.history.state?.[APP_SECTION_HISTORY_KEY];
   return typeof section === 'string' ? section : 'dashboard';
@@ -98,6 +99,24 @@ const SECTION_THEME_ICONS = {
   'organization-management': '👤',
   'organization-creation': '🏢',
   contact: '💬',
+};
+const SECTION_TITLES = {
+  dashboard: 'داشبورد',
+  customers: 'مشتریان',
+  inventory: 'موجودی انبار',
+  'bot-orders': 'سفارش‌های ربات',
+  quotations: 'پیش‌فاکتور',
+  official: 'فاکتور رسمی',
+  reports: 'گزارش مالی',
+  analytics: 'آنالیز پیشرفته و سود و زیان',
+  calendar: 'تقویم مراسم‌ها',
+  reminders: 'یادآوری مراسم و پیگیری تسویه',
+  tutorial: 'آموزش نرم‌افزار',
+  backup: 'پشتیبان‌گیری و بازیابی',
+  cashbook: 'صندوق و بانک',
+  'organization-management': 'مدیریت کاربران و دسترسی',
+  'organization-creation': 'ساخت فضای کاری جدید',
+  contact: 'ارتباط با ما',
 };
 
 const normalizeSearchText = (value) => String(value ?? '')
@@ -191,6 +210,14 @@ export default function App() {
   const [activeSection, setActiveSection] = useState(getInitialActiveSection);
   const activeSectionRef = useRef(activeSection);
   activeSectionRef.current = activeSection;
+  const [sectionPopup, setSectionPopup] = useState(() => {
+    const section = window.history.state?.[APP_SECTION_POPUP_HISTORY_KEY];
+    return typeof section === 'string' ? section : null;
+  });
+  const sectionPopupRef = useRef(sectionPopup);
+  const sectionPopupTriggerRef = useRef(null);
+  const sectionPopupCloseButtonRef = useRef(null);
+  const handleSectionChangeRef = useRef(null);
   const [visitedSections, setVisitedSections] = useState(() => new Set([getInitialActiveSection()]));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [offlineStatus, setOfflineStatus] = useState(getOfflineSyncStatus);
@@ -201,7 +228,7 @@ export default function App() {
   const [globalSearchResults, setGlobalSearchResults] = useState([]);
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const backLayerStateRef = useRef({});
-  backLayerStateRef.current = { profileOpen, profileLoading, mobileMenuOpen, globalSearchOpen };
+  backLayerStateRef.current = { profileOpen, profileLoading, mobileMenuOpen, globalSearchOpen, sectionPopup };
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
   const [globalSearchError, setGlobalSearchError] = useState('');
   const [globalSearchRevision, setGlobalSearchRevision] = useState(0);
@@ -221,6 +248,47 @@ export default function App() {
     const permission = SECTION_PERMISSION_BY_NAV[section] || section;
     return Boolean(activeOrganizationMembership?.section_permissions?.[permission]);
   }, [activeOrganizationMembership, isOrganizationAdmin]);
+  useEffect(() => {
+    sectionPopupRef.current = sectionPopup;
+  }, [sectionPopup]);
+  function handleSectionChange(section) {
+    if (
+      (section === 'organization-management' && !isOrganizationAdmin)
+      || (section !== 'organization-management' && !hasSectionAccess(section))
+    ) return;
+    if (section === activeSection && !sectionPopup) {
+      setMobileMenuOpen(false);
+      return;
+    }
+
+    if (!sectionPopup) {
+      const trigger = mobileMenuOpen
+        ? document.querySelector('.mobile-menu-toggle')
+        : document.activeElement;
+      if (trigger instanceof HTMLElement) sectionPopupTriggerRef.current = trigger;
+    }
+    const nextHistoryState = {
+      ...(window.history.state || {}),
+      [APP_SECTION_HISTORY_KEY]: activeSection,
+      [APP_SECTION_POPUP_HISTORY_KEY]: section,
+    };
+    if (sectionPopup) window.history.replaceState(nextHistoryState, '');
+    else window.history.pushState(nextHistoryState, '');
+    setSectionPopup(section);
+    setVisitedSections((visited) => new Set(visited).add(section));
+    setMobileMenuOpen(false);
+    if (profileOpen) setProfileOpen(false);
+  }
+  useEffect(() => {
+    handleSectionChangeRef.current = handleSectionChange;
+  });
+  const closeSectionPopup = useCallback(() => {
+    if (!sectionPopup) return;
+    const nextHistoryState = { ...(window.history.state || {}) };
+    delete nextHistoryState[APP_SECTION_POPUP_HISTORY_KEY];
+    window.history.replaceState(nextHistoryState, '');
+    setSectionPopup(null);
+  }, [sectionPopup]);
   const offlineScopeId = sessionUserId && activeOrganizationId
     ? `${sessionUserId}:${activeOrganizationId}`
     : null;
@@ -361,6 +429,15 @@ export default function App() {
     isOrganizationAdmin,
     hasSectionAccess,
   ]);
+
+  useEffect(() => {
+    if (!sectionPopup) return;
+    if (
+      (sectionPopup === 'organization-management' && isOrganizationAdmin)
+      || (sectionPopup !== 'organization-management' && hasSectionAccess(sectionPopup))
+    ) return;
+    closeSectionPopup();
+  }, [closeSectionPopup, hasSectionAccess, isOrganizationAdmin, sectionPopup]);
 
   useEffect(() => {
     if (session && activeOrganizationId && hasSectionAccess('inventory')) fetchData();
@@ -638,16 +715,7 @@ export default function App() {
       if (!session || !section || !hasSectionAccess(section) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || profileOpen) return;
 
       event.preventDefault();
-      if (activeSectionRef.current !== section) {
-        window.history.pushState({
-          ...(window.history.state || {}),
-          [APP_SECTION_HISTORY_KEY]: section,
-        }, '');
-        activeSectionRef.current = section;
-        setActiveSection(section);
-      }
-      setVisitedSections((visited) => new Set(visited).add(section));
-      setMobileMenuOpen(false);
+      handleSectionChangeRef.current?.(section);
     };
 
     window.addEventListener('keydown', handleFunctionKey, true);
@@ -675,11 +743,16 @@ export default function App() {
         setGlobalSearchOpen(false);
         return;
       }
-      window.dispatchEvent(new CustomEvent('app-escape', { detail: activeSection, cancelable: true }));
+      const escapeEvent = new CustomEvent('app-escape', {
+        detail: sectionPopup || activeSection,
+        cancelable: true,
+      });
+      window.dispatchEvent(escapeEvent);
+      if (!escapeEvent.defaultPrevented && sectionPopup) closeSectionPopup();
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [activeSection, globalSearchOpen, mobileMenuOpen, profileLoading, profileOpen]);
+  }, [activeSection, closeSectionPopup, globalSearchOpen, mobileMenuOpen, profileLoading, profileOpen, sectionPopup]);
 
   useEffect(() => {
     if (!mobileMenuOpen) return undefined;
@@ -696,6 +769,24 @@ export default function App() {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
+    if (!sectionPopup) {
+      sectionPopupTriggerRef.current?.focus();
+      sectionPopupTriggerRef.current = null;
+      return undefined;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    sectionPopupCloseButtonRef.current?.focus();
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+    };
+  }, [sectionPopup]);
+
+  useEffect(() => {
     if (!sessionUserId) return undefined;
 
     window.history.replaceState({
@@ -704,7 +795,47 @@ export default function App() {
     }, '');
 
     const handlePopState = (event) => {
-      const { profileOpen: isProfileOpen, profileLoading: isProfileLoading, mobileMenuOpen: isMobileMenuOpen, globalSearchOpen: isGlobalSearchOpen } = backLayerStateRef.current;
+      const {
+        profileOpen: isProfileOpen,
+        profileLoading: isProfileLoading,
+        mobileMenuOpen: isMobileMenuOpen,
+        globalSearchOpen: isGlobalSearchOpen,
+        sectionPopup: openSectionPopup,
+      } = backLayerStateRef.current;
+      if (openSectionPopup) {
+        const appEscapeEvent = new CustomEvent('app-escape', {
+          detail: openSectionPopup,
+          cancelable: true,
+        });
+        window.dispatchEvent(appEscapeEvent);
+        if (!appEscapeEvent.defaultPrevented) {
+          sectionPopupRef.current = null;
+          setSectionPopup(null);
+        }
+        const nextHistoryState = {
+          ...(window.history.state || {}),
+          [APP_SECTION_HISTORY_KEY]: activeSectionRef.current,
+        };
+        if (appEscapeEvent.defaultPrevented) {
+          nextHistoryState[APP_SECTION_POPUP_HISTORY_KEY] = openSectionPopup;
+        } else {
+          delete nextHistoryState[APP_SECTION_POPUP_HISTORY_KEY];
+        }
+        window.history.pushState(nextHistoryState, '');
+        return;
+      }
+
+      const popupSectionFromHistory = event.state?.[APP_SECTION_POPUP_HISTORY_KEY];
+      if (typeof popupSectionFromHistory === 'string') {
+        if (
+          (popupSectionFromHistory === 'organization-management' && !isOrganizationAdmin)
+          || (popupSectionFromHistory !== 'organization-management' && !hasSectionAccess(popupSectionFromHistory))
+        ) return;
+        sectionPopupRef.current = popupSectionFromHistory;
+        setSectionPopup(popupSectionFromHistory);
+        return;
+      }
+
       let backConsumed = false;
       if (isProfileOpen) {
         if (!isProfileLoading) setProfileOpen(false);
@@ -725,10 +856,12 @@ export default function App() {
       }
 
       if (backConsumed) {
-        window.history.pushState({
+        const nextHistoryState = {
           ...(window.history.state || {}),
           [APP_SECTION_HISTORY_KEY]: activeSectionRef.current,
-        }, '');
+        };
+        if (openSectionPopup) nextHistoryState[APP_SECTION_POPUP_HISTORY_KEY] = openSectionPopup;
+        window.history.pushState(nextHistoryState, '');
         return;
       }
 
@@ -738,6 +871,8 @@ export default function App() {
       if (section === 'organization-management' && !isOrganizationAdmin) return;
       activeSectionRef.current = section;
       setActiveSection(section);
+      sectionPopupRef.current = null;
+      setSectionPopup(null);
       setVisitedSections((visited) => new Set(visited).add(section));
       setMobileMenuOpen(false);
       setGlobalSearchOpen(false);
@@ -753,23 +888,6 @@ export default function App() {
     hasSectionAccess,
   ]);
 
-  function handleSectionChange(section) {
-    if (
-      (section === 'organization-management' && !isOrganizationAdmin)
-      || (section !== 'organization-management' && !hasSectionAccess(section))
-    ) return;
-    if (activeSectionRef.current !== section) {
-      window.history.pushState({
-        ...(window.history.state || {}),
-        [APP_SECTION_HISTORY_KEY]: section,
-      }, '');
-      activeSectionRef.current = section;
-      setActiveSection(section);
-    }
-    setVisitedSections((visited) => new Set(visited).add(section));
-    setMobileMenuOpen(false);
-  };
-
   const handleOrganizationChange = (event) => {
     const nextOrganizationId = event.target.value;
     const nextMembership = organizationMemberships.find(
@@ -777,6 +895,7 @@ export default function App() {
     );
     if (!nextMembership) return;
 
+    closeSectionPopup();
     setActiveOrganizationId(nextOrganizationId);
     setOfflineOrganization(nextOrganizationId);
     setOfflineCacheUserId(null);
@@ -798,6 +917,7 @@ export default function App() {
   };
 
   const handleOrganizationCreated = async (organization) => {
+    closeSectionPopup();
     await refreshOrganizationMemberships(organization?.id);
     setActiveSection('dashboard');
     activeSectionRef.current = 'dashboard';
@@ -846,6 +966,7 @@ export default function App() {
   };
 
   const handleSignOut = async () => {
+    closeSectionPopup();
     setAuthError('');
     const { error } = await supabase.auth.signOut();
     if (error) setAuthError('خطا در خروج: ' + error.message);
@@ -1120,6 +1241,125 @@ export default function App() {
     );
   }
 
+  const renderSectionPage = (section, isPopup = false) => {
+    let panelContent;
+    if (section === 'organization-creation') {
+      panelContent = (
+        <OrganizationManagementPanel
+          organization={null}
+          membership={null}
+          onOrganizationCreated={handleOrganizationCreated}
+          onMembershipChanged={() => refreshOrganizationMemberships()}
+        />
+      );
+    } else if (section === 'organization-management' && isOrganizationAdmin) {
+      panelContent = (
+        <OrganizationManagementPanel
+          key={activeOrganizationId}
+          organization={activeOrganization}
+          membership={activeOrganizationMembership}
+          onOrganizationCreated={handleOrganizationCreated}
+          onMembershipChanged={() => refreshOrganizationMemberships(activeOrganizationId)}
+        />
+      );
+    } else if (!hasSectionAccess(section)) {
+      panelContent = <p role="alert">به این بخش دسترسی ندارید. برای دریافت دسترسی با مدیر فضای کاری تماس بگیرید.</p>;
+    } else {
+      panelContent = (
+        <>
+          {section === 'dashboard' && (
+            <DashboardPanel
+              onNavigate={handleSectionChange}
+              businessName={businessName}
+              businessContact={businessContact}
+              onEditProfile={handleOpenProfile}
+              canViewCalendar={hasSectionAccess('calendar')}
+            />
+          )}
+          {section === 'customers' && <CustomersPanel businessName={businessName} />}
+          {section === 'inventory' && (
+            <InventoryPanel
+              items={inventory}
+              organizationId={activeOrganizationId}
+              refresh={fetchData}
+              onItemUpdated={handleItemUpdated}
+              onItemsReordered={setInventory}
+            />
+          )}
+          {section === 'bot-orders' && <BotOrdersPanel />}
+          {section === 'quotations' && (
+            <QuotationPanel
+              inventoryItems={inventory}
+              onItemSelected={handleSelectItem}
+              selectedItems={selectedItems}
+              setSelectedItems={setSelectedItems}
+              businessName={businessName}
+              logoUrl={logoUrl}
+              businessContact={businessContact}
+            />
+          )}
+          {section === 'official' && (
+            <OfficialInvoicesPanel
+              businessName={businessName}
+              logoUrl={logoUrl}
+              businessContact={businessContact}
+            />
+          )}
+          {section === 'backup' && (
+            <BackupPanel userId={sessionUserId} organizationId={activeOrganizationId} />
+          )}
+          {section === 'cashbook' && <CashbookPanel />}
+          {section === 'reports' && <FinancialReportPanel businessName={businessName} logoUrl={logoUrl} />}
+          {section === 'analytics' && <AnalyticsPanel />}
+          {section === 'calendar' && <CalendarPanel active />}
+          {section === 'reminders' && (
+            <RemindersPanel businessName={businessName} logoUrl={logoUrl} active />
+          )}
+          {section === 'tutorial' && <TutorialPanel />}
+          {section === 'contact' && <ContactPanel />}
+          {!isPopup && section !== 'calendar' && visitedSections.has('calendar') && hasSectionAccess('calendar') && (
+            <div style={{ display: 'none' }}>
+              <CalendarPanel active={false} />
+            </div>
+          )}
+          {!isPopup && section !== 'reminders' && visitedSections.has('reminders') && hasSectionAccess('reminders') && (
+            <div style={{ display: 'none' }}>
+              <RemindersPanel businessName={businessName} logoUrl={logoUrl} active={false} />
+            </div>
+          )}
+        </>
+      );
+    }
+
+    return (
+      <section className={`main-content page-theme-${section}${isPopup ? ' section-popup-content' : ''}`}>
+        <div className="page-heading">
+          <div className="page-heading-title">
+            <span className="page-heading-icon" aria-hidden="true">
+              {SECTION_THEME_ICONS[section] || '✨'}
+            </span>
+            <div>
+              <p className="page-eyebrow">مدیریت {businessName}</p>
+              <h2 id={isPopup ? 'section-popup-title' : undefined}>
+                {SECTION_TITLES[section] || 'بخش برنامه'}
+              </h2>
+            </div>
+          </div>
+          <div className="page-heading-actions">
+            {section === 'inventory' && (
+              <button type="button" className="refresh-button" onClick={fetchData}>
+                ↻ تازه‌سازی
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="panel-container">{panelContent}</div>
+      </section>
+    );
+  };
+
+  const navigationSection = sectionPopup || activeSection;
+
   return (
     <>
       <main
@@ -1172,7 +1412,7 @@ export default function App() {
             </button>
           </div>
         </div>
-      <header className="app-header">
+      <header className="app-header" inert={Boolean(sectionPopup)}>
         <button
           type="button"
           className="mobile-menu-toggle"
@@ -1422,7 +1662,7 @@ export default function App() {
                   )}
                   <button
                     type="button"
-                    className={`nav-button ${activeSection === 'organization-creation' ? 'active' : ''}`}
+                    className={`nav-button ${navigationSection === 'organization-creation' ? 'active' : ''}`}
                     onClick={() => handleSectionChange('organization-creation')}
                   >
                     <span className="nav-icon">＋</span>
@@ -1470,7 +1710,7 @@ export default function App() {
 
       {authError && <div role="alert" style={{ margin: '12px 20px', padding: 10, borderRadius: 6, color: '#b91c1c', background: '#fee2e2' }}>{authError}</div>}
 
-      <div className={`app-layout page-theme-${activeSection}`}>
+      <div className={`app-layout page-theme-${activeSection}`} inert={Boolean(sectionPopup)}>
         {mobileMenuOpen && (
           <button
             type="button"
@@ -1530,7 +1770,7 @@ export default function App() {
           <nav className="section-nav" aria-label="بخش‌های برنامه">
             <button
               type="button"
-              className={`nav-button ${activeSection === "dashboard" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "dashboard" ? "active" : ""}`}
               hidden={!hasSectionAccess('dashboard')}
               aria-keyshortcuts="F9"
               onClick={() => handleSectionChange("dashboard")}
@@ -1543,7 +1783,7 @@ export default function App() {
             {/* 1. مشتریان */}
             <button
               type="button"
-              className={`nav-button ${activeSection === "customers" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "customers" ? "active" : ""}`}
               hidden={!hasSectionAccess('customers')}
               aria-keyshortcuts="F1"
               onClick={() => handleSectionChange("customers")}
@@ -1556,7 +1796,7 @@ export default function App() {
             {/* 2. موجودی انبار */}
             <button
               type="button"
-              className={`nav-button ${activeSection === "inventory" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "inventory" ? "active" : ""}`}
               hidden={!hasSectionAccess('inventory')}
               aria-keyshortcuts="F2"
               onClick={() => handleSectionChange("inventory")}
@@ -1569,7 +1809,7 @@ export default function App() {
 
             <button
               type="button"
-              className={`nav-button ${activeSection === "bot-orders" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "bot-orders" ? "active" : ""}`}
               hidden={!hasSectionAccess('bot-orders')}
               onClick={() => handleSectionChange("bot-orders")}
             >
@@ -1580,7 +1820,7 @@ export default function App() {
             {/* 3. پیش‌فاکتور */}
             <button
               type="button"
-              className={`nav-button ${activeSection === "quotations" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "quotations" ? "active" : ""}`}
               hidden={!hasSectionAccess('quotations')}
               aria-keyshortcuts="F3"
               onClick={() => handleSectionChange("quotations")}
@@ -1594,7 +1834,7 @@ export default function App() {
             {/* 4. فاکتور رسمی */}
             <button
               type="button"
-              className={`nav-button ${activeSection === "official" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "official" ? "active" : ""}`}
               hidden={!hasSectionAccess('official')}
               aria-keyshortcuts="F4"
               onClick={() => handleSectionChange("official")}
@@ -1606,7 +1846,7 @@ export default function App() {
 
             <button
               type="button"
-              className={`nav-button ${activeSection === "backup" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "backup" ? "active" : ""}`}
               hidden={!hasSectionAccess('backup')}
               onClick={() => handleSectionChange("backup")}
             >
@@ -1616,7 +1856,7 @@ export default function App() {
 
             <button
               type="button"
-              className={`nav-button ${activeSection === "cashbook" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "cashbook" ? "active" : ""}`}
               hidden={!hasSectionAccess('cashbook')}
               onClick={() => handleSectionChange("cashbook")}
             >
@@ -1627,7 +1867,7 @@ export default function App() {
             {/* 5. گزارش مالی */}
             <button
               type="button"
-              className={`nav-button ${activeSection === "reports" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "reports" ? "active" : ""}`}
               hidden={!hasSectionAccess('reports')}
               aria-keyshortcuts="F5"
               onClick={() => handleSectionChange("reports")}
@@ -1640,7 +1880,7 @@ export default function App() {
             {/* 6. آنالیز پیشرفته */}
             <button
               type="button"
-              className={`nav-button ${activeSection === "analytics" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "analytics" ? "active" : ""}`}
               hidden={!hasSectionAccess('analytics')}
               aria-keyshortcuts="F6"
               onClick={() => handleSectionChange("analytics")}
@@ -1653,7 +1893,7 @@ export default function App() {
             {/* 7. تقویم مراسم‌ها */}
             <button
               type="button"
-              className={`nav-button ${activeSection === "calendar" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "calendar" ? "active" : ""}`}
               hidden={!hasSectionAccess('calendar')}
               aria-keyshortcuts="F7"
               onClick={() => handleSectionChange("calendar")}
@@ -1666,7 +1906,7 @@ export default function App() {
             {/* 8. یادآوری مراسم و تسویه */}
             <button
               type="button"
-              className={`nav-button ${activeSection === "reminders" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "reminders" ? "active" : ""}`}
               hidden={!hasSectionAccess('reminders')}
               aria-keyshortcuts="F8"
               onClick={() => handleSectionChange("reminders")}
@@ -1678,7 +1918,7 @@ export default function App() {
 
             <button
               type="button"
-              className={`nav-button ${activeSection === "tutorial" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "tutorial" ? "active" : ""}`}
               hidden={!hasSectionAccess('tutorial')}
               onClick={() => handleSectionChange("tutorial")}
             >
@@ -1688,7 +1928,7 @@ export default function App() {
 
             <button
               type="button"
-              className={`nav-button ${activeSection === "contact" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === "contact" ? "active" : ""}`}
               hidden={!hasSectionAccess('contact')}
               onClick={() => handleSectionChange("contact")}
             >
@@ -1698,7 +1938,7 @@ export default function App() {
             {isOrganizationAdmin && (
               <button
                 type="button"
-                className={`nav-button ${activeSection === 'organization-management' ? 'active' : ''}`}
+                className={`nav-button ${navigationSection === 'organization-management' ? 'active' : ''}`}
                 onClick={() => handleSectionChange('organization-management')}
               >
                 <span className="nav-icon">⚙</span>
@@ -1713,134 +1953,38 @@ export default function App() {
           </div>
         </aside>
 
-        <section className={`main-content page-theme-${activeSection}`}>
-          <div className="page-heading">
-            <div className="page-heading-title">
-              <span className="page-heading-icon" aria-hidden="true">
-                {SECTION_THEME_ICONS[activeSection] || '✨'}
-              </span>
-              <div>
-                <p className="page-eyebrow">داشبورد مدیریت</p>
-                <h2>
-                {activeSection === "customers"
-                  ? "مشتریان"
-                  : activeSection === "dashboard"
-                  ? "داشبورد"
-                  : activeSection === "inventory"
-                  ? "موجودی انبار"
-                  : activeSection === "bot-orders"
-                  ? "سفارش‌های ربات"
-                  : activeSection === "quotations"
-                  ? "پیش‌فاکتور"
-                  : activeSection === "official"
-                  ? "فاکتور رسمی"
-                  : activeSection === "reports"
-                  ? "گزارش مالی"
-                  : activeSection === "analytics"
-                  ? "آنالیز پیشرفته و سود و زیان"
-                  : activeSection === "calendar"
-                  ? "تقویم مراسم‌ها"
-                  : activeSection === "reminders"
-                  ? "یادآوری مراسم و پیگیری تسویه"
-                  : activeSection === "tutorial"
-                  ? "آموزش نرم‌افزار"
-                  : activeSection === "backup"
-                  ? "پشتیبان‌گیری و بازیابی"
-                  : activeSection === "cashbook"
-                  ? "صندوق و بانک"
-                  : activeSection === "organization-management"
-                  ? "مدیریت کاربران و دسترسی"
-                  : activeSection === "organization-creation"
-                  ? "ساخت فضای کاری جدید"
-                  : "ارتباط با ما"}
-                </h2>
-              </div>
-            </div>
-
-            <div className="page-heading-actions">
-              {activeSection === "inventory" && (
-                <button type="button" className="refresh-button" onClick={fetchData}>
-                  ↻ تازه‌سازی
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="panel-container">
-            {activeSection === 'organization-creation' ? (
-              <OrganizationManagementPanel
-                organization={null}
-                membership={null}
-                onOrganizationCreated={handleOrganizationCreated}
-                onMembershipChanged={() => refreshOrganizationMemberships()}
-              />
-            ) : activeSection === 'organization-management' && isOrganizationAdmin ? (
-              <OrganizationManagementPanel
-                key={activeOrganizationId}
-                organization={activeOrganization}
-                membership={activeOrganizationMembership}
-                onOrganizationCreated={handleOrganizationCreated}
-                onMembershipChanged={() => refreshOrganizationMemberships(activeOrganizationId)}
-              />
-            ) : hasSectionAccess(activeSection) ? (
-              <>
-                {activeSection === "dashboard" && (
-                  <DashboardPanel
-                    onNavigate={handleSectionChange}
-                    businessName={businessName}
-                    businessContact={businessContact}
-                    onEditProfile={handleOpenProfile}
-                    canViewCalendar={hasSectionAccess('calendar')}
-                  />
-                )}
-                {activeSection === "customers" && <CustomersPanel businessName={businessName} />}
-                {activeSection === "inventory" && (
-                  <InventoryPanel
-                    items={inventory}
-                    organizationId={activeOrganizationId}
-                    refresh={fetchData}
-                    onItemUpdated={handleItemUpdated}
-                    onItemsReordered={setInventory}
-                  />
-                )}
-                {activeSection === "bot-orders" && <BotOrdersPanel />}
-                {activeSection === "quotations" && (
-                  <QuotationPanel
-                    inventoryItems={inventory}
-                    onItemSelected={handleSelectItem}
-                    selectedItems={selectedItems}
-                    setSelectedItems={setSelectedItems}
-                    businessName={businessName}
-                    logoUrl={logoUrl}
-                    businessContact={businessContact}
-                  />
-                )}
-                {activeSection === "official" && <OfficialInvoicesPanel businessName={businessName} logoUrl={logoUrl} businessContact={businessContact} />}
-                {activeSection === "backup" && (
-                  <BackupPanel userId={sessionUserId} organizationId={activeOrganizationId} />
-                )}
-                {activeSection === "cashbook" && <CashbookPanel />}
-                {activeSection === "reports" && <FinancialReportPanel businessName={businessName} logoUrl={logoUrl} />}
-                {activeSection === "analytics" && <AnalyticsPanel />}
-                {visitedSections.has("calendar") && hasSectionAccess('calendar') && (
-                  <div style={{ display: activeSection === "calendar" ? "block" : "none" }}>
-                    <CalendarPanel active={activeSection === "calendar"} />
-                  </div>
-                )}
-                {visitedSections.has("reminders") && hasSectionAccess('reminders') && (
-                  <div style={{ display: activeSection === "reminders" ? "block" : "none" }}>
-                    <RemindersPanel businessName={businessName} logoUrl={logoUrl} active={activeSection === "reminders"} />
-                  </div>
-                )}
-                {activeSection === "tutorial" && <TutorialPanel />}
-                {activeSection === "contact" && <ContactPanel />}
-              </>
-            ) : (
-              <p role="alert">به این بخش دسترسی ندارید. برای دریافت دسترسی با مدیر فضای کاری تماس بگیرید.</p>
-            )}
-          </div>
-        </section>
+        {renderSectionPage(activeSection)}
       </div>
+      {sectionPopup && (
+        <div
+          className="section-page-popup-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeSectionPopup();
+          }}
+        >
+          <section
+            className="section-page-popup"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="section-popup-title"
+            dir="rtl"
+          >
+            <header className="section-page-popup-toolbar">
+              <button
+                ref={sectionPopupCloseButtonRef}
+                type="button"
+                className="section-page-popup-close"
+                aria-label={`بستن ${SECTION_TITLES[sectionPopup] || 'صفحه'}`}
+                title="بستن صفحه"
+                onClick={closeSectionPopup}
+              >
+                ×
+              </button>
+            </header>
+            {renderSectionPage(sectionPopup, true)}
+          </section>
+        </div>
+      )}
       </main>
       {windowMode === 'minimized' && (
         <main className="minimized-site-view" dir="rtl">

@@ -368,7 +368,7 @@ export default function InventoryPanel({
   );
 
   return (
-    <div style={{ padding: '15px', backgroundColor: '#f8fafc', fontSize: '13px', direction: 'rtl' }}>
+    <div className="inventory-panel" style={{ padding: '15px', backgroundColor: '#f8fafc', fontSize: '13px', direction: 'rtl' }}>
       <div className="inventory-panel-heading">
         <h2>مدیریت موجودی انبار</h2>
       </div>
@@ -398,7 +398,7 @@ export default function InventoryPanel({
                 ×
               </button>
             </header>
-            <form onSubmit={handleSave} style={{ background: '#ffffff', padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', alignItems: 'end', overflowY: 'auto' }}>
+            <form className="inventory-create-form" onSubmit={handleSave} style={{ background: '#ffffff', padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', alignItems: 'end', overflowY: 'auto' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '4px', color: '#475569', fontWeight: 'bold' }}>نام کالا / خدمت</label>
           <input 
@@ -514,10 +514,10 @@ export default function InventoryPanel({
         </div>
       )}
 
-      <div style={{ background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 12px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+      <div className="inventory-list-surface" style={{ background: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+        <div className="inventory-list-toolbar" style={{ padding: '10px 12px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 'bold', color: '#334155' }}>لیست اقلام انبار ({formatDisplay(filteredItems.length)} از {formatDisplay(items.length)})</span>
+            <span className="inventory-list-title" style={{ fontWeight: 'bold', color: '#334155' }}>لیست اقلام انبار ({formatDisplay(filteredItems.length)} از {formatDisplay(items.length)})</span>
             
             {/* کادر جستجوی محصول */}
             <input 

@@ -151,11 +151,20 @@ const localizeRows = async (userId, table, rows) => {
   ]));
   const referenceTables = {
     event_tasks: { event_id: 'events' },
-    invoices: { quotation_id: 'quotations' },
+    invoices: {
+      quotation_id: 'quotations',
+      event_id: 'events',
+    },
+    invoice_expenses: {
+      invoice_id: 'invoices',
+      account_id: 'financial_accounts',
+      cash_transaction_id: 'cash_transactions',
+    },
     cash_transactions: {
       account_id: 'financial_accounts',
       transfer_to_account_id: 'financial_accounts',
       invoice_id: 'invoices',
+      event_id: 'events',
     },
     inventory_stock_movements: {
       inventory_id: 'inventory',
@@ -810,6 +819,7 @@ export async function warmOfflineCache() {
     'inventory',
     'quotations',
     'invoices',
+    'invoice_expenses',
     'financial_accounts',
     'cash_transactions',
     'bot_catalog_items',
