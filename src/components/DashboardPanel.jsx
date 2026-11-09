@@ -1,12 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'jalali-moment';
 import { readTable } from '../offlineSync';
-import { formatDisplay, formatPersianDigits } from '../styles';
+import { formatDisplay, formatMoney, formatPersianDigits } from '../styles';
 import { formatDashboardDate, getPendingEventTasks, toDashboardIsoDate } from '../dashboardUtils';
 import BusinessContactCard from './BusinessContactCard';
 
 const PAGE_SIZE = 1000;
-const money = (value) => `${formatDisplay(Math.round(Number(value) || 0))} تومان`;
+const money = (value) => formatMoney(value);
+
+function DashboardListSkeleton() {
+  return (
+    <div className="home-dashboard-skeleton" role="status" aria-label="در حال بارگذاری">
+      <span />
+      <span />
+      <span />
+    </div>
+  );
+}
 
 async function readAllRows(table, orderBy) {
   const rows = [];
@@ -167,6 +177,13 @@ export default function DashboardPanel({
           <strong>{loading ? '—' : formatDisplay(customers.length)}</strong>
           <small>رفتن به فهرست مشتریان</small>
         </button>
+        {canViewCalendar && (
+          <button type="button" className="home-metric-card home-metric-tasks" onClick={() => navigate('calendar')}>
+            <span>کارهای باقی‌ماندهٔ مراسم</span>
+            <strong>{loading ? '—' : formatDisplay(pendingEventTasks.length)}</strong>
+            <small>پیگیری در تقویم مراسم‌ها</small>
+          </button>
+        )}
       </section>
 
       <div className="home-dashboard-columns">
@@ -175,8 +192,12 @@ export default function DashboardPanel({
             <div><span>پیگیری</span><h4>یادآوری‌های مالی</h4></div>
             <button type="button" onClick={() => navigate('reminders')}>همهٔ یادآوری‌ها</button>
           </div>
-          {loading ? <p className="home-dashboard-empty">در حال بارگذاری…</p> : pendingReminders.length === 0 ? (
-            <p className="home-dashboard-empty">موردی برای پیگیری پرداخت وجود ندارد.</p>
+          {loading ? <DashboardListSkeleton /> : pendingReminders.length === 0 ? (
+            <div className="home-dashboard-empty-state">
+              <span aria-hidden="true">✓</span>
+              <p>موردی برای پیگیری پرداخت وجود ندارد.</p>
+              <button type="button" onClick={() => navigate('reminders')}>مشاهدهٔ یادآوری‌ها</button>
+            </div>
           ) : (
             <div className="home-reminder-list">
               {pendingReminders.map((invoice) => (
@@ -200,8 +221,12 @@ export default function DashboardPanel({
             <div><span>برنامه‌ریزی</span><h4>مراسم‌های نزدیک</h4></div>
             <button type="button" onClick={() => navigate('calendar')}>تقویم</button>
           </div>
-          {loading ? <p className="home-dashboard-empty">در حال بارگذاری…</p> : upcomingCeremonies.length === 0 ? (
-            <p className="home-dashboard-empty">تا ۳۰ روز آینده مراسمی ثبت نشده است.</p>
+          {loading ? <DashboardListSkeleton /> : upcomingCeremonies.length === 0 ? (
+            <div className="home-dashboard-empty-state">
+              <span aria-hidden="true">▦</span>
+              <p>تا ۳۰ روز آینده مراسمی ثبت نشده است.</p>
+              <button type="button" onClick={() => navigate('calendar')}>ثبت مراسم جدید</button>
+            </div>
           ) : (
             <div className="home-ceremony-list">
               {upcomingCeremonies.map((ceremony) => (
@@ -221,8 +246,12 @@ export default function DashboardPanel({
             <div><span>پروندهٔ اجرایی</span><h4>کارهای انجام‌نشدهٔ مراسم</h4></div>
             <button type="button" onClick={() => navigate('calendar')}>تقویم مراسم‌ها</button>
           </div>
-          {loading ? <p className="home-dashboard-empty">در حال بارگذاری…</p> : pendingEventTasks.length === 0 ? (
-            <p className="home-dashboard-empty">همهٔ کارهای ثبت‌شده انجام شده‌اند.</p>
+          {loading ? <DashboardListSkeleton /> : pendingEventTasks.length === 0 ? (
+            <div className="home-dashboard-empty-state">
+              <span aria-hidden="true">✓</span>
+              <p>همهٔ کارهای ثبت‌شده انجام شده‌اند.</p>
+              <button type="button" onClick={() => navigate('calendar')}>تقویم مراسم‌ها</button>
+            </div>
           ) : (
             <div className="home-event-task-list">
               {pendingEventTasks.map((task) => (
@@ -251,6 +280,11 @@ export default function DashboardPanel({
       <section className="home-dashboard-shortcuts" aria-label="دسترسی سریع">
         <h4>دسترسی سریع</h4>
         <div>
+          {canViewCalendar && (
+            <button type="button" className="home-dashboard-shortcut-primary" onClick={() => navigate('calendar')}>
+              ثبت مراسم جدید
+            </button>
+          )}
           <button type="button" onClick={() => navigate('customers')}>ثبت یا جستجوی مشتری</button>
           <button type="button" onClick={() => navigate('official')}>فاکتورهای رسمی</button>
           <button type="button" onClick={() => navigate('cashbook')}>صندوق و بانک</button>

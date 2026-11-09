@@ -5,9 +5,10 @@ import { formatPersianDate } from '../dateUtils';
 import { getInventoryQuantity, getReservedQuantity } from '../inventoryUtils';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
-import { convertQuotationToInvoice, deleteSelectedDocuments, updateQuotation } from '../quotationInvoice';
+import { calculateQuotationTotals, convertQuotationToInvoice, deleteSelectedDocuments, updateQuotation } from '../quotationInvoice';
 import { renderBusinessContactHtml } from '../profileLinks';
 import { buildInvoicePrintHtml } from '../invoicePrintTemplate';
+import { parseNumericInput } from '../numberUtils';
 
 const win95Style = {
   window: { 
@@ -265,17 +266,16 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
   }
 
   const getQuantity = (val) => {
-    const quantity = Number(val);
+    const quantity = parseNumericInput(val, true);
     return Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
   };
 
-  const total1 = items.reduce((sum, item) => sum + (Number(item.price_level1) || 0) * getQuantity(item.requestedQuantity), 0);
-  const total2 = items.reduce((sum, item) => sum + (Number(item.price_level2) || 0) * getQuantity(item.requestedQuantity), 0);
-  const total3 = items.reduce((sum, item) => sum + (Number(item.price_level3) || 0) * getQuantity(item.requestedQuantity), 0);
-  const numericDiscount = Math.max(0, Number(discountAmount) || 0);
-  const finalTotal = Math.max(0, total1 - numericDiscount);
-  const paidAmount = 0;
-  const remainingAmount = Math.max(0, finalTotal - paidAmount);
+  const quotationTotals = calculateQuotationTotals(items, discountAmount);
+  const [total1, total2, total3] = quotationTotals.totals;
+  const [finalTotal, finalTotal2, finalTotal3] = quotationTotals.finalTotals;
+  const [remainingAmount, remainingAmount2, remainingAmount3] = quotationTotals.remainingTotals;
+  const numericDiscount = quotationTotals.discount;
+  const paidAmount = quotationTotals.paid;
   const filteredInventoryItems = inventoryItems.filter((item) => (
     item.title?.toLowerCase().includes(inventorySearchTerm.trim().toLowerCase())
   ));
@@ -325,9 +325,9 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
     const updatedItem = {
       title: inventoryEditForm.title.trim(),
       item_type: inventoryEditForm.item_type || 'sale',
-      price_level1: Number(inventoryEditForm.price_level1) || 0,
-      price_level2: Number(inventoryEditForm.price_level2) || 0,
-      price_level3: Number(inventoryEditForm.price_level3) || 0,
+      price_level1: parseNumericInput(inventoryEditForm.price_level1),
+      price_level2: parseNumericInput(inventoryEditForm.price_level2),
+      price_level3: parseNumericInput(inventoryEditForm.price_level3),
     };
 
     setSavingInventoryItem(true);
@@ -387,9 +387,9 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         item_type: newInventoryForm.item_type,
         sort_order: Math.max(0, ...inventoryItems.map((item) => Number(item.sort_order) || 0)) + 1,
         base_cost: baseCost,
-        price_level1: Number(newInventoryForm.price_level1) || 0,
-        price_level2: Number(newInventoryForm.price_level2) || 0,
-        price_level3: Number(newInventoryForm.price_level3) || 0,
+        price_level1: parseNumericInput(newInventoryForm.price_level1),
+        price_level2: parseNumericInput(newInventoryForm.price_level2),
+        price_level3: parseNumericInput(newInventoryForm.price_level3),
       }]);
       if (error) throw error;
       createdItem = data?.[0];
@@ -475,8 +475,10 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       const itemsPayload = items.map(i => {
         const qty = getQuantity(i.requestedQuantity);
         const inventoryReference = i.inventory_id || i.id;
-        const unitPrice = Number(i.price_level1) || 0;
-        const unitCost = Number(i.base_cost) || 0;
+        const unitPrice = parseNumericInput(i.price_level1);
+        const unitPrice2 = parseNumericInput(i.price_level2);
+        const unitPrice3 = parseNumericInput(i.price_level3);
+        const unitCost = parseNumericInput(i.base_cost);
         const lineTotal = unitPrice * qty;
         const lineCost = unitCost * qty;
         const typeNormalized = (i.item_type === 'rent' || i.item_type === 'اجاره' || i.item_type === 'اجاره‌ای') ? 'rent' : 'sale';
@@ -487,9 +489,9 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
             ? { inventory_id: inventoryReference }
             : {}),
           qty: qty,
-          p1: Number(i.price_level1) || 0,
-          p2: Number(i.price_level2) || 0,
-          p3: Number(i.price_level3) || 0,
+          p1: unitPrice,
+          p2: unitPrice2,
+          p3: unitPrice3,
           cost: unitCost,
           item_type: typeNormalized,
           unit_price: unitPrice,
@@ -540,17 +542,19 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         const quotationRows = items.map((item) => {
           const quantity = getQuantity(item.requestedQuantity);
           const isRent = ['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type);
-          const rentalDates = isRent
-            ? `تحویل: ${formatPersianDate(item.rental_checkout_date)} | عودت: ${formatPersianDate(item.rental_return_date)}`
-            : '';
+          const unitPrice1 = parseNumericInput(item.price_level1);
+          const unitPrice2 = parseNumericInput(item.price_level2);
+          const unitPrice3 = parseNumericInput(item.price_level3);
           return {
             title: item.title,
-            details: [isRent ? 'اجاره‌ای' : 'فروشی', rentalDates].filter(Boolean).join(' | '),
+            type: isRent ? 'اجاره‌ای' : 'فروشی',
+            rentalCheckoutDate: isRent ? formatPersianDate(item.rental_checkout_date) : '',
+            rentalReturnDate: isRent ? formatPersianDate(item.rental_return_date) : '',
             quantity,
             prices: [
-              { label: 'درجه ۱', unit: item.price_level1, total: Number(item.price_level1 || 0) * quantity },
-              { label: 'درجه ۲', unit: item.price_level2, total: Number(item.price_level2 || 0) * quantity },
-              { label: 'درجه ۳', unit: item.price_level3, total: Number(item.price_level3 || 0) * quantity },
+              { label: 'درجه ۱', unit: unitPrice1, total: unitPrice1 * quantity },
+              { label: 'درجه ۲', unit: unitPrice2, total: unitPrice2 * quantity },
+              { label: 'درجه ۳', unit: unitPrice3, total: unitPrice3 * quantity },
             ],
           };
         });
@@ -571,11 +575,16 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
             { label: 'جمع کل · درجه ۳', value: total3 },
             { label: 'تخفیف', value: numericDiscount },
             { label: 'مبلغ نهایی · درجه ۱', value: finalTotal, emphasis: true },
+            { label: 'مبلغ نهایی · درجه ۲', value: finalTotal2, emphasis: true },
+            { label: 'مبلغ نهایی · درجه ۳', value: finalTotal3, emphasis: true },
             { label: 'مبلغ پرداختی / پیش‌پرداخت', value: paidAmount },
-            { label: 'مانده حساب', value: remainingAmount },
+            { label: 'مانده درجه ۱', value: remainingAmount },
+            { label: 'مانده درجه ۲', value: remainingAmount2 },
+            { label: 'مانده درجه ۳', value: remainingAmount3 },
           ],
           note: 'این پیش‌فاکتور جهت برآورد هزینه صادر شده و دریافت وجه پس از صدور فاکتور رسمی ثبت می‌شود.',
           contactHtml: renderBusinessContactHtml(businessContact),
+          priceLevelLabel: '',
           autoPrint: true,
         });
         printWindow.document.write(quotationHtml);
@@ -663,10 +672,10 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       inventory_id: item.inventory_id,
       title: item.title, 
       requestedQuantity: item.qty, 
-      price_level1: item.p1 || item.unit_price || 0, 
-      price_level2: item.p2 || 0, 
-      price_level3: item.p3 || 0, 
-      base_cost: item.cost || 0,
+      price_level1: item.p1 ?? item.price_level1 ?? item.unit_price ?? item.price ?? 0,
+      price_level2: item.p2 ?? item.price_level2 ?? 0,
+      price_level3: item.p3 ?? item.price_level3 ?? 0,
+      base_cost: item.cost ?? item.base_cost ?? 0,
       item_type: item.item_type || 'sale',
       rental_checkout_date: item.rental_checkout_date || '',
       rental_return_date: item.rental_return_date || '',
@@ -870,7 +879,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
           <table className="quotation-items-table" style={{ width: "100%", borderCollapse: "collapse", textAlign: "right", fontSize: '12px' }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                <th style={{ ...win95Style.tableHeader, textAlign: 'center', width: '60px' }}>حذف</th>
+                <th className="quotation-item-delete-cell" style={{ ...win95Style.tableHeader, textAlign: 'center', width: '60px' }}>حذف</th>
                 <th style={{ ...win95Style.tableHeader, width: '45px', textAlign: 'center' }}>ردیف</th>
                 <th style={win95Style.tableHeader}>نام کالا / خدمت</th>
                 <th style={{ ...win95Style.tableHeader, textAlign: 'center', width: '90px' }}>نوع کالا</th>
@@ -892,7 +901,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
               ) : (
                 items.map((item, index) => (
                   <tr key={item.id || index}>
-                    <td data-label="حذف" style={{ ...win95Style.tableCell, textAlign: 'center' }}>
+                    <td className="quotation-item-delete-cell" data-label="حذف" style={{ ...win95Style.tableCell, textAlign: 'center' }}>
                       <button
                         className="invoice-item-remove-button"
                         onClick={() => handleRemoveItem(item.id)}>
@@ -927,7 +936,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                         </span>
                       )}
                     </td>
-                    <td data-label="تعداد" style={{ ...win95Style.tableCell, width: '85px' }}>
+                    <td className="quotation-item-quantity-cell" data-label="تعداد" style={{ ...win95Style.tableCell, width: '85px' }}>
                       <FormattedNumberInput
                         allowDecimal={false}
                         value={item.requestedQuantity ?? ""} 
@@ -935,59 +944,56 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                         style={{ ...win95Style.input, width: '100%', textAlign: 'center' }} 
                       />
                     </td>
-                    <td data-label="بازهٔ اجاره" style={{ ...win95Style.tableCell, minWidth: '180px' }}>
+                    <td className="quotation-item-rental-cell" data-label="بازهٔ اجاره" style={{ ...win95Style.tableCell, minWidth: '180px' }}>
                       {['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type)
                         && hasInventoryReference(item.inventory_id || item.id) ? (
-                        <div style={{ display: 'grid', gap: '4px' }}>
-                          <label>
-                            <span>تحویل </span>
+                        <div className="quotation-item-date-fields">
+                          <label className="quotation-item-date-field">
+                            <span>تحویل</span>
                             <PersianDateInput
+                              className="quotation-item-date-value"
                               value={item.rental_checkout_date || ''}
                               onChange={(value) => handleQuotationItemChange(item.id, 'rental_checkout_date', value)}
                             />
                           </label>
-                          <label>
-                            <span>عودت </span>
+                          <span className="quotation-item-date-divider" aria-hidden="true" />
+                          <label className="quotation-item-date-field">
+                            <span>عودت</span>
                             <PersianDateInput
+                              className="quotation-item-date-value"
                               value={item.rental_return_date || ''}
                               onChange={(value) => handleQuotationItemChange(item.id, 'rental_return_date', value)}
                             />
                           </label>
                         </div>
-                      ) : '—'}
+                      ) : <span className="quotation-item-no-rental">—</span>}
                     </td>
                     <td data-label="درجه ۱ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {editingQuotationId ? (
-                        <FormattedNumberInput
-                          allowDecimal={false}
-                          aria-label={`قیمت درجهٔ یک ردیف ${index + 1}`}
-                          value={item.price_level1 ?? 0}
-                          onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level1', value)}
-                          style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
-                        />
-                      ) : formatDisplay(item.price_level1)}
+                      <FormattedNumberInput
+                        allowDecimal={false}
+                        aria-label={`قیمت درجهٔ یک ردیف ${index + 1}`}
+                        value={item.price_level1 ?? 0}
+                        onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level1', value)}
+                        style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
+                      />
                     </td>
                     <td data-label="درجه ۲ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {editingQuotationId ? (
-                        <FormattedNumberInput
-                          allowDecimal={false}
-                          aria-label={`قیمت درجهٔ دو ردیف ${index + 1}`}
-                          value={item.price_level2 ?? 0}
-                          onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level2', value)}
-                          style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
-                        />
-                      ) : formatDisplay(item.price_level2)}
+                      <FormattedNumberInput
+                        allowDecimal={false}
+                        aria-label={`قیمت درجهٔ دو ردیف ${index + 1}`}
+                        value={item.price_level2 ?? 0}
+                        onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level2', value)}
+                        style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
+                      />
                     </td>
                     <td data-label="درجه ۳ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {editingQuotationId ? (
-                        <FormattedNumberInput
-                          allowDecimal={false}
-                          aria-label={`قیمت درجهٔ سه ردیف ${index + 1}`}
-                          value={item.price_level3 ?? 0}
-                          onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level3', value)}
-                          style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
-                        />
-                      ) : formatDisplay(item.price_level3)}
+                      <FormattedNumberInput
+                        allowDecimal={false}
+                        aria-label={`قیمت درجهٔ سه ردیف ${index + 1}`}
+                        value={item.price_level3 ?? 0}
+                        onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level3', value)}
+                        style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
+                      />
                     </td>
                     {showBuyingPrice && (
                       <td data-label="قیمت خرید (تومان)" style={{ ...win95Style.tableCell, color: '#475569' }}>
@@ -1015,15 +1021,15 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
           <div className="quotation-total-list">
             <div className="quotation-total-row">
               <span>مجموع کل · درجه ۱</span>
-              <strong>{total1.toLocaleString('fa-IR')} <small>تومان</small></strong>
+              <strong className={total1 === 0 ? 'is-zero' : undefined}>{total1.toLocaleString('fa-IR')} <small>تومان</small></strong>
             </div>
             <div className="quotation-total-row">
               <span>مجموع کل · درجه ۲</span>
-              <strong>{total2.toLocaleString('fa-IR')} <small>تومان</small></strong>
+              <strong className={total2 === 0 ? 'is-zero' : undefined}>{total2.toLocaleString('fa-IR')} <small>تومان</small></strong>
             </div>
             <div className="quotation-total-row">
               <span>مجموع کل · درجه ۳</span>
-              <strong>{total3.toLocaleString('fa-IR')} <small>تومان</small></strong>
+              <strong className={total3 === 0 ? 'is-zero' : undefined}>{total3.toLocaleString('fa-IR')} <small>تومان</small></strong>
             </div>
             <label className="quotation-discount-field">
               تخفیف (تومان)
@@ -1036,19 +1042,35 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
             </label>
             <div className="quotation-total-row discount">
               <span>مبلغ تخفیف</span>
-              <strong>{formatDisplay(numericDiscount)} <small>تومان</small></strong>
+              <strong className={numericDiscount === 0 ? 'is-zero' : undefined}>{formatDisplay(numericDiscount)} <small>تومان</small></strong>
             </div>
             <div className="quotation-total-row final">
               <span>مبلغ نهایی · درجه ۱</span>
-              <strong>{formatDisplay(finalTotal)} <small>تومان</small></strong>
+              <strong className={finalTotal === 0 ? 'is-zero' : undefined}>{formatDisplay(finalTotal)} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row final">
+              <span>مبلغ نهایی · درجه ۲</span>
+              <strong className={finalTotal2 === 0 ? 'is-zero' : undefined}>{formatDisplay(finalTotal2)} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row final">
+              <span>مبلغ نهایی · درجه ۳</span>
+              <strong className={finalTotal3 === 0 ? 'is-zero' : undefined}>{formatDisplay(finalTotal3)} <small>تومان</small></strong>
             </div>
             <div className="quotation-total-row">
               <span>مبلغ پرداختی</span>
-              <strong>{formatDisplay(paidAmount)} <small>تومان</small></strong>
+              <strong className={paidAmount === 0 ? 'is-zero' : undefined}>{formatDisplay(paidAmount)} <small>تومان</small></strong>
             </div>
             <div className="quotation-total-row remaining">
-              <span>مانده حساب</span>
-              <strong>{formatDisplay(remainingAmount)} <small>تومان</small></strong>
+              <span>مانده · درجه ۱</span>
+              <strong className={remainingAmount === 0 ? 'is-zero' : undefined}>{formatDisplay(remainingAmount)} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row remaining">
+              <span>مانده · درجه ۲</span>
+              <strong className={remainingAmount2 === 0 ? 'is-zero' : undefined}>{formatDisplay(remainingAmount2)} <small>تومان</small></strong>
+            </div>
+            <div className="quotation-total-row remaining">
+              <span>مانده · درجه ۳</span>
+              <strong className={remainingAmount3 === 0 ? 'is-zero' : undefined}>{formatDisplay(remainingAmount3)} <small>تومان</small></strong>
             </div>
           </div>
           <p className="quotation-summary-note">

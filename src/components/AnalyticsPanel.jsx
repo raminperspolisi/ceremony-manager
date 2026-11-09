@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'jalali-moment';
 import { readTable } from '../offlineSync';
 import { getInvoiceExpenses, sumInvoiceExpenses } from '../invoiceExpenseUtils';
+import { formatMoney } from '../styles';
 
 const PERIODS = [
   { value: 'month', label: 'ماه جاری' },
@@ -51,7 +52,6 @@ const getItemUnitCost = (item, quantity) => {
 
 const isRentItem = (item) => ['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type || item.type);
 
-const formatMoney = (value) => `${Math.round(value || 0).toLocaleString('fa-IR')} تومان`;
 const formatDate = (value) => value ? moment(value).locale('fa').format('jYYYY/jMM/jDD') : '—';
 const normalizeSearch = (value) => String(value ?? '')
   .replace(/[۰-۹]/g, (digit) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(digit))

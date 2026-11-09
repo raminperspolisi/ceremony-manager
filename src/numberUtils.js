@@ -21,10 +21,26 @@ export const normalizeNumber = (value, allowDecimal, allowNegative = false) => {
   return `${isNegative ? '-' : ''}${integerPart}.${decimalPart}`;
 };
 
+export const parseNumericInput = (value, allowDecimal = false, allowNegative = false) => {
+  const normalized = normalizeNumber(value ?? '', allowDecimal, allowNegative);
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export const formatGroupedNumber = (value) => {
   if (value === null || value === undefined || value === '') return '';
   const [integerPart, decimalPart] = String(value).split('.');
   const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '٬');
   const formatted = decimalPart === undefined ? groupedInteger : `${groupedInteger}.${decimalPart}`;
   return toPersianDigits(formatted);
+};
+
+export const formatMoney = (
+  value,
+  { nullText = '۰', maximumFractionDigits = 0 } = {},
+) => {
+  if (value === null || value === undefined || value === '') return nullText;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return nullText;
+  return `${amount.toLocaleString('fa-IR', { maximumFractionDigits })} تومان`;
 };

@@ -1,3 +1,23 @@
+import { parseNumericInput } from './numberUtils.js';
+
+export function calculateQuotationTotals(items, discountAmount, paidAmount = 0) {
+  const totals = [1, 2, 3].map((level) => items.reduce((sum, item) => (
+    sum
+    + parseNumericInput(item[`price_level${level}`]) * parseNumericInput(item.requestedQuantity, true)
+  ), 0));
+  const discount = Math.max(0, parseNumericInput(discountAmount));
+  const paid = Math.max(0, parseNumericInput(paidAmount));
+  const finalTotals = totals.map((total) => Math.max(0, total - discount));
+
+  return {
+    totals,
+    discount,
+    paid,
+    finalTotals,
+    remainingTotals: finalTotals.map((total) => Math.max(0, total - paid)),
+  };
+}
+
 export async function convertQuotationToInvoice(quotation, { readTable, insertRows }) {
   if (!quotation || quotation.id === undefined || quotation.id === null) {
     throw new Error('شناسهٔ پیش‌فاکتور معتبر نیست.');

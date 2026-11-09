@@ -47,14 +47,14 @@
 
 /* ۳. متغیرهای رنگی برای یکپارچگی طراحی شما */
 :root {
-  --primary-color: #2563eb;
-  --secondary-color: #64748b;
-  --success-color: #22c55e;
-  --danger-color: #ef4444;
-  --background-color: #f8fafc;
-  --text-color: #1e293b;
-  --border-color: #e2e8f0;
-  --font-main: 'IRANSans', Tahoma, sans-serif;
+  --primary-color: var(--color-brand);
+  --secondary-color: var(--color-neutral);
+  --success-color: var(--color-success);
+  --danger-color: var(--color-danger);
+  --background-color: var(--color-surface-subtle);
+  --text-color: var(--color-text-primary);
+  --border-color: var(--color-border);
+  --font-main: var(--font-family);
 }
 
 /* ۴. تنظیمات اصلی بدنه سایت */
@@ -64,7 +64,7 @@ body {
   color: var(--text-color);
   direction: rtl; /* این خط سایت را راست‌چین می‌کند */
   text-align: right;
-  line-height: 1.6;
+  line-height: var(--line-height-fa);
 }
 
 /* ۵. استایل‌های پایه برای جداول */

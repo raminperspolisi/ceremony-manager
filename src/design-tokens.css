@@ -1,0 +1,62 @@
+:root {
+  color-scheme: light;
+  --color-brand: #28645a;
+  --color-brand-hover: #1e5048;
+  --color-brand-soft: #eef5f3;
+  --color-accent-warm: #8a5a16;
+  --color-success: #216e4e;
+  --color-warning: #85520a;
+  --color-danger: #a63d3d;
+  --color-danger-soft: #fff1f0;
+  --color-danger-border: rgb(166 61 61 / 45%);
+  --color-neutral: #53665f;
+  --color-on-brand: #fff;
+  --color-focus-ring: rgb(40 100 90 / 24%);
+  --color-focus-shadow: rgb(40 100 90 / 12%);
+  --color-input-inset: rgb(23 43 39 / 8%);
+  --color-row-hover: #f1f7f4;
+  --color-sale-badge: #e8f3ee;
+  --color-sale-badge-text: #17473f;
+  --color-rent-badge: #fbf5e9;
+  --color-rent-badge-text: #704300;
+  --color-text-primary: #1f2a28;
+  --color-text-secondary: #4b5b57;
+  --color-surface: #fff;
+  --color-surface-subtle: #f7faf8;
+  --color-border: #d5e1da;
+  --font-family: "IRANSans", Tahoma, sans-serif;
+  --font-size-small: 12px;
+  --font-size-body: 14px;
+  --font-size-label: 13px;
+  --font-size-section: 16px;
+  --font-size-emphasis: 22px;
+  --line-height-fa: 1.7;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-small: 8px;
+  --radius-medium: 12px;
+  --radius-large: 16px;
+  --shadow-subtle: 0 2px 8px rgb(23 43 39 / 6%);
+  --shadow-raised: 0 8px 24px rgb(23 43 39 / 10%);
+  --transition-fast: 150ms ease;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-family);
+}
+
+body {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-fa);
+  font-variant-numeric: tabular-nums;
+}

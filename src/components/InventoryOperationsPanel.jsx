@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { readTable } from '../offlineSync';
 import { supabase } from '../supabaseClient';
+import { formatMoney as formatCurrency } from '../styles';
 import {
   getInventoryAdjustment,
   getInventoryQuantity,
@@ -924,5 +925,5 @@ function formatNumber(value) {
 }
 
 function formatMoney(value) {
-  return `${Number(value || 0).toLocaleString('fa-IR')} تومان`;
+  return formatCurrency(value, { maximumFractionDigits: 3 });
 }

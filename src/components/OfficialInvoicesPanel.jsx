@@ -726,19 +726,13 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       const price = getActiveUnitPrice(item);
       const isRent = item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای';
       const levelText = item.price_level === '2' ? 'درجه ۲' : item.price_level === '3' ? 'درجه ۳' : 'درجه ۱';
-      const details = [
-        isRent ? 'اجاره‌ای' : 'فروشی',
-        `سطح قیمت: ${levelText}`,
-        ...(isRent ? [
-          `تحویل: ${formatPersianDate(item.rental_checkout_date)}`,
-          `عودت: ${formatPersianDate(item.rental_return_date)}`,
-        ] : []),
-      ].join(' | ');
       return {
         title: item.title,
-        details,
+        type: isRent ? 'اجاره‌ای' : 'فروشی',
+        rentalCheckoutDate: isRent ? formatPersianDate(item.rental_checkout_date) : '',
+        rentalReturnDate: isRent ? formatPersianDate(item.rental_return_date) : '',
         quantity,
-        prices: [{ label: '', unit: price, total: quantity * price }],
+        prices: [{ label: levelText, unit: price, total: quantity * price }],
       };
     });
 

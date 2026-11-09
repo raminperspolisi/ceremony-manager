@@ -37,3 +37,5 @@ export const formatDisplay = (num) => {
   if (!num && num !== 0) return '۰';
   return Number(num).toLocaleString('fa-IR');
 };
+
+export { formatMoney } from './numberUtils.js';

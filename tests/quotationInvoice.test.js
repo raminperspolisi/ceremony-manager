@@ -1,12 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  calculateQuotationTotals,
   convertQuotationToInvoice,
   deleteSelectedDocuments,
   getInvoiceDeletionErrorMessage,
   updateOfficialInvoice,
   updateQuotation,
 } from '../src/quotationInvoice.js';
+
+test('quotation totals calculate all price levels from Persian grouped input', () => {
+  const totals = calculateQuotationTotals([
+    {
+      requestedQuantity: '۲',
+      price_level1: '۱۰۰٬۰۰۰',
+      price_level2: '۲۰۰٬۰۰۰',
+      price_level3: '۳۰۰٬۰۰۰',
+    },
+    {
+      requestedQuantity: '۳',
+      price_level1: '۵۰٬۰۰۰',
+      price_level2: '۸۰٬۰۰۰',
+      price_level3: '۹۰٬۰۰۰',
+    },
+  ], '۵۰٬۰۰۰');
+
+  assert.deepEqual(totals, {
+    totals: [350000, 640000, 870000],
+    discount: 50000,
+    paid: 0,
+    finalTotals: [300000, 590000, 820000],
+    remainingTotals: [300000, 590000, 820000],
+  });
+});
 
 test('conversion creates a linked invoice when no invoice exists', async () => {
   let inserted;

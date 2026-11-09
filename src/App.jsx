@@ -1954,6 +1954,54 @@ export default function App() {
           </div>
         </aside>
 
+        <nav className="mobile-bottom-nav" aria-label="ناوبری سریع">
+          <button
+            type="button"
+            className={navigationSection === 'dashboard' ? 'active' : ''}
+            hidden={!hasSectionAccess('dashboard')}
+            aria-current={navigationSection === 'dashboard' ? 'page' : undefined}
+            onClick={() => handleSectionChange('dashboard')}
+          >
+            <span aria-hidden="true">⌂</span><small>داشبورد</small>
+          </button>
+          <button
+            type="button"
+            className={navigationSection === 'customers' ? 'active' : ''}
+            hidden={!hasSectionAccess('customers')}
+            aria-current={navigationSection === 'customers' ? 'page' : undefined}
+            onClick={() => handleSectionChange('customers')}
+          >
+            <span aria-hidden="true">♙</span><small>مشتریان</small>
+          </button>
+          <button
+            type="button"
+            className={navigationSection === 'calendar' ? 'active' : ''}
+            hidden={!hasSectionAccess('calendar')}
+            aria-current={navigationSection === 'calendar' ? 'page' : undefined}
+            onClick={() => handleSectionChange('calendar')}
+          >
+            <span aria-hidden="true">▦</span><small>مراسم‌ها</small>
+          </button>
+          <button
+            type="button"
+            className={navigationSection === 'reminders' ? 'active' : ''}
+            hidden={!hasSectionAccess('reminders')}
+            aria-current={navigationSection === 'reminders' ? 'page' : undefined}
+            onClick={() => handleSectionChange('reminders')}
+          >
+            <span aria-hidden="true">◷</span><small>یادآوری</small>
+          </button>
+          <button
+            type="button"
+            className={mobileMenuOpen ? 'active' : ''}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="main-navigation"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span aria-hidden="true">•••</span><small>بیشتر</small>
+          </button>
+        </nav>
+
         {renderSectionPage(activeSection)}
       </div>
       {sectionPopup && (

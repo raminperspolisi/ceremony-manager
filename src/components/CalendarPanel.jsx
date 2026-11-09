@@ -1,55 +1,8 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { deleteRows, insertRows, readTable, updateRows } from "../offlineSync";
 import { formatPersianDigits } from "../styles";
+import { gregorianISOToJalali, jalaliToGregorianISO, normalizeJalaliDate } from "../calendarDateUtils";
 import moment from "jalali-moment";
-
-// تابع نرمال‌سازی تاریخ شمسی
-export function normalizeJalaliDate(input) {
-  if (input === null || input === undefined || input === "") return "";
-  if (input instanceof Date && !isNaN(input)) {
-    return moment(input).locale("fa").format("YYYY/MM/DD");
-  }
-  let s = String(input).trim();
-  s = s.replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
-  s = s.replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d));
-  s = s.replace(/[\/\-\.،,\s]+/g, "/").replace(/^\/+|\/+$/g, "");
-
-  if (/^\d{8}$/.test(s)) s = `${s.slice(0, 4)}/${s.slice(4, 6)}/${s.slice(6, 8)}`;
-  if (/^\d{6}$/.test(s)) s = `${s.slice(0, 2)}/${s.slice(2, 4)}/${s.slice(4, 6)}`;
-
-  const parts = s.split("/").filter(Boolean);
-  if (parts.length === 3) {
-    let [y, m, d] = parts.map((p) => p.replace(/\D/g, ""));
-    if (y.length === 2) y = `13${y}`;
-    if (y.length === 3) y = `1${y}`;
-    y = String(Math.min(Math.max(parseInt(y || "0", 10), 1300), 1500));
-    m = String(Math.min(Math.max(parseInt(m || "1", 10), 1), 12)).padStart(2, "0");
-    d = String(Math.min(Math.max(parseInt(d || "1", 10), 1), 31)).padStart(2, "0");
-    return `${y}/${m}/${d}`;
-  }
-  return "";
-}
-
-export function jalaliToGregorianISO(jy, jm, jd) {
-  jy = parseInt(jy, 10);
-  jm = parseInt(jm, 10);
-  jd = parseInt(jd, 10);
-  if (!jy || !jm || !jd) return null;
-  try {
-    return moment(`${jy}/${jm}/${jd}`, "jYYYY/jM/jD").format("YYYY-MM-DD");
-  } catch (e) {
-    return null;
-  }
-}
-
-export function gregorianISOToJalali(iso) {
-  if (!iso) return "";
-  try {
-    return moment(iso).locale("fa").format("YYYY/MM/DD");
-  } catch (e) {
-    return "";
-  }
-}
 
 const JMONTHS = [
   "فروردین","اردیبهشت","خرداد","تیر","مرداد","شهریور",
@@ -201,7 +154,7 @@ export default function CalendarPanel() {
     setShowForm(!hasEvents);
     setForm((f) => ({
       ...f,
-      event_date: normalized,
+      event_date: formatPersianDigits(normalized),
     }));
     setError("");
   }, []);
@@ -217,11 +170,16 @@ export default function CalendarPanel() {
       setError("لطفاً تاریخ مراسم را تعیین کنید.");
       return;
     }
+    const normalizedJalali = normalizeJalaliDate(form.event_date);
+    if (!normalizedJalali) {
+      setError("تاریخ شمسی معتبر نیست؛ تاریخ را به‌شکل سال/ماه/روز وارد کنید.");
+      return;
+    }
     setSaving(true);
     try {
-      const normalizedJalali = normalizeJalaliDate(form.event_date);
       const [jy, jm, jd] = normalizedJalali.split("/").map((x) => parseInt(x, 10));
       const iso = jalaliToGregorianISO(jy, jm, jd);
+      if (!iso) throw new Error("تبدیل تاریخ شمسی به میلادی انجام نشد.");
 
       const payload = {
         customer_id: form.customer_id || null,
@@ -262,7 +220,6 @@ export default function CalendarPanel() {
   // محاسبات روزهای ماه برای تقویم گرافیکی
   const daysInMonth = useMemo(() => {
     const startMom = moment(`${jYear}/${jMonth}/1`, "jYYYY/jM/jD");
-    const startWeekDay = startMom.day(); // 0 شنبه تا 6 جمعه در jalali-moment یا برعکس
     // محاسبه دقیق روزهای هفته شمسی
     let jsDay = (startMom.day() + 1) % 7; // شنبه = 0
     const totalDays = jMonth <= 6 ? 31 : jMonth <= 11 ? 30 : (moment.jIsLeapYear && moment.jIsLeapYear(jYear) ? 30 : 29);
@@ -490,6 +447,10 @@ export default function CalendarPanel() {
               type="text"
               value={form.event_date}
               onChange={(e) => setForm({ ...form, event_date: e.target.value })}
+              onBlur={() => {
+                const normalized = normalizeJalaliDate(form.event_date);
+                if (normalized) setForm((current) => ({ ...current, event_date: formatPersianDigits(normalized) }));
+              }}
               placeholder="مثلاً ۱۴۰۵/۰۲/۱۰"
               inputMode="numeric"
               aria-label="تاریخ مراسم به شمسی"

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { readTable } from '../offlineSync';
 import moment from 'jalali-moment';
 import html2canvas from 'html2canvas';
-import { formatPersianDigits } from '../styles';
+import { formatMoney, formatPersianDigits } from '../styles';
 import { attachCustomerPhones } from '../remindersUtils';
 
 const getInvoiceItems = (invoice) => (
@@ -20,7 +20,6 @@ const getUnitPrice = (item) => {
   return Number(item.p1 ?? item.unit_price ?? item.price ?? 0);
 };
 
-const formatMoney = (value) => `${Math.round(Number(value) || 0).toLocaleString('fa-IR')} تومان`;
 const formatDate = (value) => {
   if (!value) return 'ثبت نشده';
 

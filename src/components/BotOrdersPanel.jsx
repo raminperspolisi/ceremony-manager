@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { readTable, updateRows } from '../offlineSync';
 import PersianDateInput from './PersianDateInput';
+import { formatMoney as formatCurrency } from '../styles';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'جدید' },
@@ -12,11 +13,10 @@ const ORDER_STATUSES = [
   { value: 'cancelled', label: 'لغوشده' },
 ];
 
-const formatMoney = (value) => (
-  value === null || value === undefined
-    ? 'توافقی'
-    : `${Number(value).toLocaleString('fa-IR')} تومان`
-);
+const formatMoney = (value) => formatCurrency(value, {
+  nullText: 'توافقی',
+  maximumFractionDigits: 3,
+});
 
 const formatDate = (value) => {
   const date = new Date(value);
