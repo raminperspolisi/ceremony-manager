@@ -72,3 +72,15 @@ export async function updateOfficialInvoice(id, updates, { updateRows }) {
   const { error } = await updateRows('invoices', updates, [{ column: 'id', operator: 'eq', value: id }]);
   if (error) throw error;
 }
+
+export async function updateQuotation(id, updates, { updateRows }) {
+  if (id === undefined || id === null || id === '') {
+    throw new Error('شناسهٔ پیش‌فاکتور معتبر نیست.');
+  }
+  const { data, error } = await updateRows('quotations', updates, [
+    { column: 'id', operator: 'eq', value: id },
+  ]);
+  if (error) throw error;
+  if (!data?.length) throw new Error('پیش‌فاکتور برای ذخیرهٔ تغییرات پیدا نشد.');
+  return data;
+}

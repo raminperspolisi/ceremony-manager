@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatPersianDate } from '../dateUtils';
+import { getInventoryQuantity, getReservedQuantity } from '../inventoryUtils';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
-import { convertQuotationToInvoice, deleteSelectedDocuments } from '../quotationInvoice';
+import { convertQuotationToInvoice, deleteSelectedDocuments, updateQuotation } from '../quotationInvoice';
 import { renderBusinessContactHtml } from '../profileLinks';
 import { buildInvoicePrintHtml } from '../invoicePrintTemplate';
 
@@ -74,7 +75,7 @@ const hasInventoryReference = (value) => (
   && !String(value).startsWith('restored-')
 );
 
-export default function QuotationPanel({ inventoryItems = [], onItemSelected, selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
+export default function QuotationPanel({ inventoryItems = [], onItemSelected, onInventoryChanged, selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
   const items = selectedItems || [];
   const [customers, setCustomers] = useState([]);
   const [inventoryPickerOpen, setInventoryPickerOpen] = useState(false);
@@ -82,6 +83,26 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
   const [editingInventoryItemId, setEditingInventoryItemId] = useState(null);
   const [inventoryEditForm, setInventoryEditForm] = useState({});
   const [savingInventoryItem, setSavingInventoryItem] = useState(false);
+  const [inventoryCreateOpen, setInventoryCreateOpen] = useState(false);
+  const [savingNewInventoryItem, setSavingNewInventoryItem] = useState(false);
+  const [newInventoryForm, setNewInventoryForm] = useState({
+    title: '',
+    item_type: 'sale',
+    warehouse_id: '',
+    initial_quantity: '',
+    base_cost: '',
+    price_level1: '',
+    price_level2: '',
+    price_level3: '',
+  });
+  const [pickerWarehouses, setPickerWarehouses] = useState([]);
+  const [pickerWarehouseId, setPickerWarehouseId] = useState('');
+  const [pickerMovements, setPickerMovements] = useState([]);
+  const [pickerReservations, setPickerReservations] = useState([]);
+  const [pickerStockLoading, setPickerStockLoading] = useState(false);
+  const [pickerStockError, setPickerStockError] = useState('');
+  const [pickerStockOffline, setPickerStockOffline] = useState(false);
+  const [pickerQuantities, setPickerQuantities] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -97,6 +118,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
   const [savedInvoices, setSavedInvoices] = useState([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
   const [convertingQuotationId, setConvertingQuotationId] = useState(null);
+  const [editingQuotationId, setEditingQuotationId] = useState(null);
 
   useEffect(() => {
     fetchCustomers();
@@ -113,7 +135,9 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
     const handleAppEscape = (event) => {
       if (inventoryPickerOpen) {
         event.preventDefault();
-        if (editingInventoryItemId !== null) {
+        if (inventoryCreateOpen) {
+          setInventoryCreateOpen(false);
+        } else if (editingInventoryItemId !== null) {
           setEditingInventoryItemId(null);
           setInventoryEditForm({});
         } else {
@@ -135,7 +159,45 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
-  }, [editingInventoryItemId, inventoryPickerOpen, isSearching, showAddCustomerForm]);
+  }, [editingInventoryItemId, inventoryCreateOpen, inventoryPickerOpen, isSearching, showAddCustomerForm]);
+
+  useEffect(() => {
+    if (!inventoryPickerOpen) return undefined;
+    let active = true;
+    Promise.all([
+      readTable('inventory_warehouses', { orderBy: 'name', ascending: true }),
+      readTable('inventory_stock_movements', { orderBy: 'created_at', ascending: false }),
+      readTable('inventory_reservations', { orderBy: 'created_at', ascending: false }),
+    ]).then(([warehouseResult, movementResult, reservationResult]) => {
+      const failed = [warehouseResult, movementResult, reservationResult].find((result) => result.error);
+      if (failed) throw failed.error;
+      if (!active) return;
+      const warehouses = warehouseResult.data || [];
+      setPickerWarehouses(warehouses);
+      setPickerMovements(movementResult.data || []);
+      setPickerReservations(reservationResult.data || []);
+      setPickerStockOffline(Boolean(warehouseResult.offline || movementResult.offline || reservationResult.offline));
+      setPickerStockError('');
+      setPickerWarehouseId((current) => (
+        warehouses.some((warehouse) => String(warehouse.id) === String(current))
+          ? current
+          : String((warehouses.find((warehouse) => warehouse.is_default) || warehouses[0])?.id || '')
+      ));
+      setNewInventoryForm((current) => ({
+        ...current,
+        warehouse_id: warehouses.some((warehouse) => String(warehouse.id) === String(current.warehouse_id))
+          ? current.warehouse_id
+          : String((warehouses.find((warehouse) => warehouse.is_default) || warehouses[0])?.id || ''),
+      }));
+    }).catch((error) => {
+      if (active) setPickerStockError(`دریافت موجودی انبار ناموفق بود: ${error.message}`);
+    }).finally(() => {
+      if (active) setPickerStockLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [inventoryPickerOpen]);
 
   async function fetchCustomers() {
     try {
@@ -218,6 +280,31 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
     item.title?.toLowerCase().includes(inventorySearchTerm.trim().toLowerCase())
   ));
 
+  const handleAddPickerItem = (item) => {
+    const quantity = Number(pickerQuantities[item.id] ?? 1);
+    if (!Number.isFinite(quantity) || quantity <= 0 || (String(quantity).split('.')[1] || '').length > 3) {
+      alert('تعداد باید عددی بیشتر از صفر و حداکثر با سه رقم اعشار باشد.');
+      return;
+    }
+    if (setSelectedItems) {
+      setSelectedItems((currentItems) => {
+        const existing = currentItems.find((currentItem) => (
+          String(currentItem.inventory_id || currentItem.id) === String(item.id)
+        ));
+        if (existing) {
+          return currentItems.map((currentItem) => (
+            currentItem === existing
+              ? { ...currentItem, requestedQuantity: quantity, quantity }
+              : currentItem
+          ));
+        }
+        return [...currentItems, { ...item, requestedQuantity: quantity, quantity }];
+      });
+    } else {
+      onItemSelected?.({ ...item, requestedQuantity: quantity, quantity });
+    }
+  };
+
   const handleStartInventoryItemEdit = (item) => {
     setEditingInventoryItemId(item.id);
     setInventoryEditForm({
@@ -260,10 +347,97 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
       setEditingInventoryItemId(null);
       setInventoryEditForm({});
       window.dispatchEvent(new Event('offline-data-updated'));
+      onInventoryChanged?.();
     } catch (error) {
       alert(`خطا در ویرایش کالا: ${error.message}`);
     } finally {
       setSavingInventoryItem(false);
+    }
+  };
+
+  const handleCreateInventoryItem = async (event) => {
+    event.preventDefault();
+    const title = newInventoryForm.title.trim();
+    const initialQuantity = newInventoryForm.initial_quantity === ''
+      ? 0
+      : Number(newInventoryForm.initial_quantity);
+    const baseCost = newInventoryForm.base_cost === '' ? 0 : Number(newInventoryForm.base_cost);
+    if (!title) {
+      alert('نام کالا یا خدمت را وارد کنید.');
+      return;
+    }
+    if (!Number.isFinite(initialQuantity) || initialQuantity < 0
+      || (String(newInventoryForm.initial_quantity).split('.')[1] || '').length > 3) {
+      alert('موجودی اولیه باید عددی نامنفی با حداکثر سه رقم اعشار باشد.');
+      return;
+    }
+    if (!Number.isSafeInteger(baseCost) || baseCost < 0) {
+      alert('قیمت خرید باید عدد صحیح و نامنفی باشد.');
+      return;
+    }
+    if (initialQuantity > 0 && !newInventoryForm.warehouse_id) {
+      alert('برای ثبت موجودی اولیه، یک انبار انتخاب کنید.');
+      return;
+    }
+    setSavingNewInventoryItem(true);
+    let createdItem = null;
+    try {
+      const { data, error } = await insertRows('inventory', [{
+        title,
+        item_type: newInventoryForm.item_type,
+        sort_order: Math.max(0, ...inventoryItems.map((item) => Number(item.sort_order) || 0)) + 1,
+        base_cost: baseCost,
+        price_level1: Number(newInventoryForm.price_level1) || 0,
+        price_level2: Number(newInventoryForm.price_level2) || 0,
+        price_level3: Number(newInventoryForm.price_level3) || 0,
+      }]);
+      if (error) throw error;
+      createdItem = data?.[0];
+      if (!createdItem?.id) throw new Error('کالا ذخیره شد اما شناسهٔ آن دریافت نشد.');
+
+      if (initialQuantity > 0) {
+        const movementResult = await insertRows('inventory_stock_movements', [{
+          inventory_id: createdItem.id,
+          warehouse_id: Number(newInventoryForm.warehouse_id),
+          movement_type: 'opening',
+          quantity_delta: initialQuantity,
+          unit_cost: baseCost || null,
+          note: 'موجودی اولیه هنگام ثبت کالا',
+          source_type: 'manual',
+          source_id: null,
+          offline_sync_id: crypto.randomUUID(),
+        }]);
+        if (movementResult.error) {
+          throw new Error(`کالا ثبت شد، اما ثبت موجودی اولیه ناموفق بود: ${movementResult.error.message}`);
+        }
+        setPickerMovements((current) => [...current, ...(movementResult.data || [])]);
+      }
+
+      const quotationItem = { ...createdItem, requestedQuantity: 1, quantity: 1 };
+      setSelectedItems?.((currentItems) => [...currentItems, quotationItem]);
+      setPickerQuantities((current) => ({ ...current, [createdItem.id]: '1' }));
+      setNewInventoryForm({
+        title: '',
+        item_type: 'sale',
+        warehouse_id: newInventoryForm.warehouse_id,
+        initial_quantity: '',
+        base_cost: '',
+        price_level1: '',
+        price_level2: '',
+        price_level3: '',
+      });
+      setInventoryCreateOpen(false);
+      window.dispatchEvent(new Event('inventory-data-updated'));
+      await onInventoryChanged?.();
+      alert('کالای جدید ثبت و به پیش‌فاکتور اضافه شد.');
+    } catch (error) {
+      if (createdItem) {
+        window.dispatchEvent(new Event('inventory-data-updated'));
+        await onInventoryChanged?.();
+      }
+      alert(`ثبت کالای جدید ناموفق بود: ${error.message}`);
+    } finally {
+      setSavingNewInventoryItem(false);
     }
   };
 
@@ -331,19 +505,35 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
         };
       });
 
-      const { data: savedQuotations, error } = await insertRows("quotations", [
-        { 
-          customer_name: selectedCustomer["Full name"], 
-          customer_phone: selectedCustomer.phone || '',
-          items_json: itemsPayload, 
-          total_price: finalTotal,
-          discount_amount: numericDiscount,
+      const quotationPayload = {
+        customer_name: selectedCustomer["Full name"],
+        customer_phone: selectedCustomer.phone || '',
+        items_json: itemsPayload,
+        total_price: finalTotal,
+        discount_amount: numericDiscount,
+      };
+      let savedQuotations;
+      if (editingQuotationId) {
+        const linkedInvoice = savedInvoices.find((invoice) => (
+          invoice.type === 'official' && String(invoice.quotation_id) === editingQuotationId
+        ));
+        if (linkedInvoice) {
+          throw new Error('این پیش‌فاکتور قبلاً رسمی شده و امکان ویرایش آن وجود ندارد.');
         }
-      ]);
-
-      if (error) throw error;
-      alert("پیش‌فاکتور با موفقیت ذخیره شد.");
-      fetchInvoices();
+        savedQuotations = await updateQuotation(
+          editingQuotationId,
+          quotationPayload,
+          { updateRows },
+        );
+        alert('تغییرات پیش‌فاکتور با موفقیت ذخیره شد.');
+        setEditingQuotationId(null);
+      } else {
+        const { data, error } = await insertRows('quotations', [quotationPayload]);
+        if (error) throw error;
+        savedQuotations = data;
+        alert('پیش‌فاکتور با موفقیت ذخیره شد.');
+      }
+      await fetchInvoices();
 
       const printWindow = window.open("", "_blank");
       if (printWindow) {
@@ -460,7 +650,13 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
     }
   };
 
-  const handleLoadInvoice = (inv) => {
+  const handleLoadInvoice = (inv, { editing = false, notify = true, discardChanges = true } = {}) => {
+    if (
+      editingQuotationId
+      && (String(editingQuotationId) !== String(inv.id) || !editing)
+      && discardChanges
+      && !window.confirm('تغییرات ذخیره‌نشده کنار گذاشته شود؟')
+    ) return;
     const itemsData = inv.items_json || inv.items_data || [];
     const restoredItems = itemsData.map((item, index) => ({
       id: item.id || `restored-${index}-${Date.now()}`, 
@@ -479,10 +675,40 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
     if (setSelectedItems) {
       setSelectedItems(restoredItems);
     }
+    const matchingCustomer = customers.find((customer) => (
+      customer['Full name'] === inv.customer_name
+    ));
     setDiscountAmount(String(inv.discount_amount || 0));
     setSearchTerm(inv.customer_name || '');
-    setSelectedCustomer({ "Full name": inv.customer_name });
-    alert(`پیش‌فاکتور مشتری «${inv.customer_name}» بارگذاری شد.`);
+    setSelectedCustomer(matchingCustomer || {
+      'Full name': inv.customer_name || '',
+      phone: inv.customer_phone || '',
+    });
+    setEditingQuotationId(editing && inv.type !== 'official' ? String(inv.id) : null);
+    if (notify) alert(`پیش‌فاکتور مشتری «${inv.customer_name}» بارگذاری شد.`);
+  };
+
+  const handleEditQuotation = (event, quotation) => {
+    event.stopPropagation();
+    const linkedInvoice = savedInvoices.find((invoice) => (
+      invoice.type === 'official' && String(invoice.quotation_id) === String(quotation.id)
+    ));
+    if (linkedInvoice) {
+      alert('این پیش‌فاکتور قبلاً رسمی شده و امکان ویرایش آن وجود ندارد.');
+      return;
+    }
+    handleLoadInvoice(quotation, { editing: true });
+  };
+
+  const handleCancelQuotationEdit = () => {
+    const quotation = savedInvoices.find((invoice) => (
+      invoice.type !== 'official' && String(invoice.id) === editingQuotationId
+    ));
+    if (quotation) {
+      handleLoadInvoice(quotation, { notify: false, discardChanges: false });
+    } else {
+      setEditingQuotationId(null);
+    }
   };
 
   const handleToggleSelectInvoice = (e, id) => {
@@ -527,12 +753,21 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
           className="quotation-new-button"
           onClick={() => {
             setInventorySearchTerm('');
+            setPickerStockLoading(true);
+            setPickerStockError('');
             setInventoryPickerOpen(true);
           }}
         >
-          صدور پیش‌فاکتور جدید
+          {editingQuotationId ? 'افزودن کالا به پیش‌فاکتور' : 'صدور پیش‌فاکتور جدید'}
         </button>
       </header>
+
+      {editingQuotationId && (
+        <div className="quotation-editing-banner" role="status">
+          <span>در حال ویرایش پیش‌فاکتور شمارهٔ {formatPersianDigits(editingQuotationId)}؛ برای افزودن کالا از دکمهٔ بالا استفاده کنید.</span>
+          <button type="button" onClick={handleCancelQuotationEdit}>لغو ویرایش</button>
+        </div>
+      )}
 
       <div className="quotation-workspace">
         <main className="quotation-editor">
@@ -556,6 +791,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
+                  setSelectedCustomer(null);
                   setIsSearching(true);
                 }}
               />
@@ -664,18 +900,32 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                       </button>
                     </td>
                     <td data-label="ردیف" style={{ ...win95Style.tableCell, textAlign: 'center', color: '#64748b' }}>{formatDisplay(index + 1)}</td>
-                    <td data-label="نام کالا / خدمت" style={{ ...win95Style.tableCell, fontWeight: '500', color: '#1e293b' }}>{item.title}</td>
+                    <td data-label="نام کالا / خدمت" style={{ ...win95Style.tableCell, fontWeight: '500', color: '#1e293b' }}>
+                      {editingQuotationId ? (
+                        <input
+                          aria-label={`نام کالای ردیف ${index + 1}`}
+                          value={item.title || ''}
+                          onChange={(event) => handleQuotationItemChange(item.id, 'title', event.target.value)}
+                          style={{ ...win95Style.input, width: '100%', minWidth: '130px', margin: 0 }}
+                        />
+                      ) : item.title}
+                    </td>
                     <td data-label="نوع کالا" style={{ ...win95Style.tableCell, textAlign: 'center' }}>
-                      <span style={{
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        fontSize: '11px',
-                        backgroundColor: (item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای') ? '#e2e3ff' : '#e6f4ea',
-                        color: (item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای') ? '#383a8b' : '#137333',
-                        display: 'inline-block'
-                      }}>
-                        {(item.item_type === 'rent' || item.item_type === 'اجاره' || item.item_type === 'اجاره‌ای') ? 'اجاره‌ای' : 'فروشی'}
-                      </span>
+                      {editingQuotationId ? (
+                        <select
+                          className="quotation-item-type-select"
+                          aria-label={`نوع کالای ردیف ${index + 1}`}
+                          value={['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type) ? 'rent' : 'sale'}
+                          onChange={(event) => handleQuotationItemChange(item.id, 'item_type', event.target.value)}
+                        >
+                          <option value="sale">فروشی</option>
+                          <option value="rent">اجاره‌ای</option>
+                        </select>
+                      ) : (
+                        <span className={`quotation-item-type-badge ${['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type) ? 'is-rent' : 'is-sale'}`}>
+                          {['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type) ? 'اجاره‌ای' : 'فروشی'}
+                        </span>
+                      )}
                     </td>
                     <td data-label="تعداد" style={{ ...win95Style.tableCell, width: '85px' }}>
                       <FormattedNumberInput
@@ -707,13 +957,37 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                       ) : '—'}
                     </td>
                     <td data-label="درجه ۱ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {formatDisplay(item.price_level1)}
+                      {editingQuotationId ? (
+                        <FormattedNumberInput
+                          allowDecimal={false}
+                          aria-label={`قیمت درجهٔ یک ردیف ${index + 1}`}
+                          value={item.price_level1 ?? 0}
+                          onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level1', value)}
+                          style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
+                        />
+                      ) : formatDisplay(item.price_level1)}
                     </td>
                     <td data-label="درجه ۲ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {formatDisplay(item.price_level2)}
+                      {editingQuotationId ? (
+                        <FormattedNumberInput
+                          allowDecimal={false}
+                          aria-label={`قیمت درجهٔ دو ردیف ${index + 1}`}
+                          value={item.price_level2 ?? 0}
+                          onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level2', value)}
+                          style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
+                        />
+                      ) : formatDisplay(item.price_level2)}
                     </td>
                     <td data-label="درجه ۳ (تومان)" style={{ ...win95Style.tableCell, color: '#0369a1', fontWeight: '500' }}>
-                      {formatDisplay(item.price_level3)}
+                      {editingQuotationId ? (
+                        <FormattedNumberInput
+                          allowDecimal={false}
+                          aria-label={`قیمت درجهٔ سه ردیف ${index + 1}`}
+                          value={item.price_level3 ?? 0}
+                          onValueChange={(value) => handleQuotationItemChange(item.id, 'price_level3', value)}
+                          style={{ ...win95Style.input, width: '100%', minWidth: '100px', margin: 0 }}
+                        />
+                      ) : formatDisplay(item.price_level3)}
                     </td>
                     {showBuyingPrice && (
                       <td data-label="قیمت خرید (تومان)" style={{ ...win95Style.tableCell, color: '#475569' }}>
@@ -784,7 +1058,11 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
             className="quotation-save-button"
             onClick={handleSaveAndPrint}
             disabled={isSaving}>
-            {isSaving ? 'در حال ذخیره‌سازی...' : 'چاپ و ذخیره پیش‌فاکتور'}
+            {isSaving
+              ? 'در حال ذخیره‌سازی...'
+              : editingQuotationId
+                ? 'ذخیره تغییرات و چاپ'
+                : 'چاپ و ذخیره پیش‌فاکتور'}
           </button>
         </aside>
       </div>
@@ -809,14 +1087,114 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                 <h2 id="quotation-inventory-picker-title">اقلام پیش‌فاکتور</h2>
                 <p>{formatDisplay(inventoryItems.length)} کالا در انبار ثبت شده است.</p>
               </div>
-              <button
-                type="button"
-                aria-label="بستن فهرست اقلام"
-                onClick={() => setInventoryPickerOpen(false)}
-              >
-                ×
-              </button>
+              <div className="quotation-inventory-picker-heading-actions">
+                <button
+                  type="button"
+                  className="quotation-inventory-picker-add-button"
+                  onClick={() => {
+                    if (inventoryCreateOpen) setInventoryCreateOpen(false);
+                    else setInventoryCreateOpen(true);
+                  }}
+                >
+                  {inventoryCreateOpen ? 'بستن ثبت کالا' : '+ ثبت کالای جدید'}
+                </button>
+                <button
+                  type="button"
+                  aria-label="بستن فهرست اقلام"
+                  onClick={() => setInventoryPickerOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
             </header>
+            {inventoryCreateOpen && (
+              <form className="quotation-inventory-create-form" onSubmit={handleCreateInventoryItem}>
+                <div className="quotation-inventory-create-heading">
+                  <strong>ثبت کالا در انبار و افزودن به پیش‌فاکتور</strong>
+                  <span>کالای ثبت‌شده با تعداد ۱ به پیش‌فاکتور اضافه می‌شود؛ تعداد را بعداً می‌توانید تغییر دهید.</span>
+                </div>
+                <label>
+                  نام کالا / خدمت
+                  <input
+                    autoFocus
+                    required
+                    value={newInventoryForm.title}
+                    onChange={(event) => setNewInventoryForm((current) => ({ ...current, title: event.target.value }))}
+                    placeholder="نام کالا"
+                  />
+                </label>
+                <label>
+                  نوع
+                  <select
+                    value={newInventoryForm.item_type}
+                    onChange={(event) => setNewInventoryForm((current) => ({ ...current, item_type: event.target.value }))}
+                  >
+                    <option value="sale">فروشی</option>
+                    <option value="rent">اجاره‌ای</option>
+                  </select>
+                </label>
+                <label>
+                  نرخ سطح ۱
+                  <FormattedNumberInput
+                    allowDecimal={false}
+                    value={newInventoryForm.price_level1}
+                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level1: value }))}
+                  />
+                </label>
+                <label>
+                  نرخ سطح ۲
+                  <FormattedNumberInput
+                    allowDecimal={false}
+                    value={newInventoryForm.price_level2}
+                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level2: value }))}
+                  />
+                </label>
+                <label>
+                  نرخ سطح ۳
+                  <FormattedNumberInput
+                    allowDecimal={false}
+                    value={newInventoryForm.price_level3}
+                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level3: value }))}
+                  />
+                </label>
+                <label>
+                  قیمت خرید
+                  <FormattedNumberInput
+                    allowDecimal={false}
+                    value={newInventoryForm.base_cost}
+                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, base_cost: value }))}
+                  />
+                </label>
+                <label>
+                  انبار موجودی اولیه
+                  <select
+                    value={newInventoryForm.warehouse_id}
+                    onChange={(event) => setNewInventoryForm((current) => ({ ...current, warehouse_id: event.target.value }))}
+                    disabled={pickerStockLoading || pickerWarehouses.length === 0}
+                  >
+                    <option value="">{pickerStockLoading ? 'در حال دریافت انبارها...' : 'انتخاب انبار'}</option>
+                    {pickerWarehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}{warehouse.is_default ? ' (اصلی)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  موجودی اولیه
+                  <FormattedNumberInput
+                    value={newInventoryForm.initial_quantity}
+                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, initial_quantity: value }))}
+                    placeholder="مثلاً ۱۰"
+                  />
+                </label>
+                <div className="quotation-inventory-create-actions">
+                  <button type="submit" disabled={savingNewInventoryItem || pickerStockLoading}>
+                    {savingNewInventoryItem ? 'در حال ثبت...' : 'ثبت کالا و افزودن'}
+                  </button>
+                </div>
+              </form>
+            )}
             <label className="quotation-inventory-picker-search">
               <span>جستجوی کالا</span>
               <input
@@ -824,9 +1202,35 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                 value={inventorySearchTerm}
                 onChange={(event) => setInventorySearchTerm(event.target.value)}
                 placeholder="نام کالا را وارد کنید..."
-                autoFocus
+                autoFocus={!inventoryCreateOpen}
               />
             </label>
+            <div className="quotation-inventory-stock-toolbar">
+              <label>
+                نمایش موجودی انبار
+                <select
+                  value={pickerWarehouseId}
+                  onChange={(event) => setPickerWarehouseId(event.target.value)}
+                  disabled={pickerStockLoading || pickerWarehouses.length === 0}
+                >
+                  <option value="">انتخاب انبار</option>
+                  {pickerWarehouses.map((warehouse) => (
+                    <option key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}{warehouse.is_default ? ' (اصلی)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span>
+                {pickerStockLoading
+                  ? 'در حال دریافت موجودی...'
+                  : pickerStockOffline
+                    ? 'موجودی آفلاین؛ ممکن است به‌روز نباشد'
+                    : pickerWarehouses.find((warehouse) => String(warehouse.id) === pickerWarehouseId)?.name || 'انبار انتخاب نشده'}
+              </span>
+              <small>آزاد = موجودی کل منهای رزروهای فعال</small>
+            </div>
+            {pickerStockError && <p className="quotation-inventory-stock-error" role="alert">{pickerStockError}</p>}
             <div className="quotation-inventory-picker-list">
               {filteredInventoryItems.length === 0 ? (
                 <p className="quotation-inventory-picker-empty">
@@ -839,28 +1243,43 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                       <th>ردیف</th>
                       <th>عنوان کالا / خدمت</th>
                       <th>نوع کالا</th>
+                      <th>موجودی</th>
+                      <th>رزرو</th>
+                      <th>آزاد</th>
                       <th>نرخ سطح ۱</th>
                       <th>نرخ سطح ۲</th>
                       <th>نرخ سطح ۳</th>
+                      <th>تعداد</th>
                       <th>عملیات</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredInventoryItems.map((item, index) => {
-                      const isSelected = items.some((draft) => String(draft.id) === String(item.id));
+                      const isSelected = items.some((draft) => (
+                        String(draft.inventory_id || draft.id) === String(item.id)
+                      ));
                       const isEditing = String(editingInventoryItemId) === String(item.id);
                       const isRent = ['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type);
+                      const onHand = pickerWarehouseId
+                        ? getInventoryQuantity(pickerMovements, item.id, pickerWarehouseId)
+                        : null;
+                      const reserved = pickerWarehouseId
+                        ? getReservedQuantity(pickerReservations, item.id, pickerWarehouseId)
+                        : null;
+                      const available = onHand === null || reserved === null
+                        ? null
+                        : Math.max(0, onHand - reserved);
                       return (
                         <tr
                           key={item.id}
                           className={`${isSelected ? 'selected' : ''}${isEditing ? ' editing' : ''}`}
                           onClick={() => {
-                            if (!isEditing && !isSelected) onItemSelected?.(item);
+                            if (!isEditing) handleAddPickerItem(item);
                           }}
                           onDoubleClick={() => {
                             if (!savingInventoryItem) handleStartInventoryItemEdit(item);
                           }}
-                          title={isEditing ? 'ویرایش کالا' : 'برای افزودن کلیک کنید؛ دابل‌کلیک برای ویرایش'}
+                          title={isEditing ? 'ویرایش کالا' : 'برای افزودن، تعداد را وارد و دکمهٔ افزودن را بزنید'}
                         >
                           <td>{isSelected ? '✓' : formatDisplay(index + 1)}</td>
                           <td onClick={(event) => event.stopPropagation()}>
@@ -889,6 +1308,33 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                               </span>
                             )}
                           </td>
+                          <td className="quotation-inventory-stock-cell">
+                            {pickerStockLoading
+                              ? '…'
+                              : pickerStockError
+                                ? 'نامشخص'
+                                : onHand === null
+                                  ? '—'
+                                  : formatDisplay(onHand)}
+                          </td>
+                          <td className="quotation-inventory-stock-cell">
+                            {pickerStockLoading
+                              ? '…'
+                              : pickerStockError
+                                ? 'نامشخص'
+                                : reserved === null
+                                  ? '—'
+                                  : formatDisplay(reserved)}
+                          </td>
+                          <td className="quotation-inventory-stock-cell">
+                            {pickerStockLoading
+                              ? '…'
+                              : pickerStockError
+                                ? 'نامشخص'
+                                : available === null
+                                  ? '—'
+                                  : formatDisplay(available)}
+                          </td>
                           {['price_level1', 'price_level2', 'price_level3'].map((priceField, priceIndex) => (
                             <td key={priceField} onClick={(event) => event.stopPropagation()}>
                               {isEditing ? (
@@ -903,6 +1349,18 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                               )}
                             </td>
                           ))}
+                          <td onClick={(event) => event.stopPropagation()}>
+                            <FormattedNumberInput
+                              aria-label={`تعداد ${item.title}`}
+                              allowDecimal
+                              value={pickerQuantities[item.id] ?? (
+                                items.find((draft) => String(draft.inventory_id || draft.id) === String(item.id))
+                                  ?.requestedQuantity ?? '1'
+                              )}
+                              onValueChange={(value) => setPickerQuantities((current) => ({ ...current, [item.id]: value }))}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </td>
                           <td onClick={(event) => event.stopPropagation()}>
                             {isEditing ? (
                               <div className="quotation-inventory-picker-edit-actions">
@@ -926,13 +1384,22 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                                 </button>
                               </div>
                             ) : (
-                              <button
-                                type="button"
-                                className="quotation-inventory-picker-edit-button"
-                                onClick={() => handleStartInventoryItemEdit(item)}
-                              >
-                                ویرایش
-                              </button>
+                              <div className="quotation-inventory-picker-row-actions">
+                                <button
+                                  type="button"
+                                  className="quotation-inventory-picker-select-button"
+                                  onClick={() => handleAddPickerItem(item)}
+                                >
+                                  {isSelected ? 'ثبت تعداد' : 'افزودن'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="quotation-inventory-picker-edit-button"
+                                  onClick={() => handleStartInventoryItemEdit(item)}
+                                >
+                                  ویرایش
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -1001,6 +1468,15 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, se
                     );
                     return (
                       <div className="recent-invoice-actions">
+                        {!linkedInvoice && (
+                          <button
+                            type="button"
+                            className="recent-invoice-edit-button"
+                            onClick={(event) => handleEditQuotation(event, inv)}
+                          >
+                            ویرایش
+                          </button>
+                        )}
                         {linkedInvoice ? (
                           <span role="status" style={{ color: '#15803d', fontSize: '11px', fontWeight: 'bold' }}>
                             صادرشده · #{formatPersianDigits(linkedInvoice.id)}

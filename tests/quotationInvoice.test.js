@@ -5,6 +5,7 @@ import {
   deleteSelectedDocuments,
   getInvoiceDeletionErrorMessage,
   updateOfficialInvoice,
+  updateQuotation,
 } from '../src/quotationInvoice.js';
 
 test('conversion creates a linked invoice when no invoice exists', async () => {
@@ -95,6 +96,24 @@ test('invoice edit writes the supplied fields to the selected invoice', async ()
     'invoices',
     { total_price: 900, payment_status: 'paid' },
     [{ column: 'id', operator: 'eq', value: 40 }],
+  ]);
+});
+
+test('quotation edit writes the supplied fields to the selected quotation', async () => {
+  let call;
+  const updatedRows = [{ id: 12, customer_name: 'مشتری جدید' }];
+  const result = await updateQuotation(12, { customer_name: 'مشتری جدید' }, {
+    updateRows: async (...args) => {
+      call = args;
+      return { data: updatedRows, error: null };
+    },
+  });
+
+  assert.deepEqual(result, updatedRows);
+  assert.deepEqual(call, [
+    'quotations',
+    { customer_name: 'مشتری جدید' },
+    [{ column: 'id', operator: 'eq', value: 12 }],
   ]);
 });
 

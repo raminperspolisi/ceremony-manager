@@ -1291,6 +1291,7 @@ export default function App() {
             <QuotationPanel
               inventoryItems={inventory}
               onItemSelected={handleSelectItem}
+              onInventoryChanged={fetchData}
               selectedItems={selectedItems}
               setSelectedItems={setSelectedItems}
               businessName={businessName}
