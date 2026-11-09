@@ -52,6 +52,14 @@ test('invoice print template keeps the shared A4 layout and customer-facing colu
   assert.equal((html.match(/class="empty-row"/g) || []).length, 0);
 });
 
+test('invoice print template displays phone numbers with Persian digits', () => {
+  const asciiDigitsHtml = makeDocument({ customerPhone: '09196957762' });
+  const arabicDigitsHtml = makeDocument({ customerPhone: '٠٩١٩٦٩٥٧٧٦٢' });
+
+  assert.match(asciiDigitsHtml, /<strong>تلفن:<\/strong> ۰۹۱۹۶۹۵۷۷۶۲/);
+  assert.match(arabicDigitsHtml, /<strong>تلفن:<\/strong> ۰۹۱۹۶۹۵۷۷۶۲/);
+});
+
 test('invoice print template escapes document data and fits a 50-row invoice', () => {
   const html = makeDocument({
     customerName: '<script>alert(1)</script>',

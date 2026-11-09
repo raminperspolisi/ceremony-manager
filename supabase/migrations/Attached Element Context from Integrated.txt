@@ -1,0 +1,123 @@
+Attached Element Context from Integrated Browser
+
+Element: section.main-content.page-theme-reports.section-popup-content
+
+URL: http://localhost:5173/
+
+HTML Path: div#root > main.app-container.window-normal > div.section-page-popup-backdrop > section.section-page-popup > section.main-content.page-theme-reports.section-popup-content
+
+Outer HTML:
+```html
+<section class="main-content page-theme-reports section-popup-content"><div class="page-heading"><div class="page-heading-title"><span class="page-heading-icon" aria-hidden="true">📈</span><div><p class="page-eyebrow">مدیریت مدریت گالری آژو</p><h2 id="section-popup-title">گزارش مالی</h2></div></div><div class="page-heading-actions"></div></div><div class="panel-container"><div class="financial-report-panel" style="background: rgb(255, 255, 255); padding: 20px; border-radius: 8px; border: 1px solid rgb(226, 232, 240); font-family: IRANSans, Tahoma, sans-serif; direction: rtl;"><h3 style="margin: 0px 0px 15px; color: rgb(30, 41, 59); font-size: 16px;">گزارش مالی و تحلیل پیشرفته تشریفات</h3><div style="background: rgb(248, 250, 252); border: 1px solid rgb(203, 213, 225); padding: 15px; border-radius: 8px; margin-bottom: 25px;"><h4 style="margin: 0px 0px 12px; color: rgb(15, 23, 42); font-size: 14px; border-bottom: 1px solid rgb(226, 232, 240); padding-bottom: 8px;">📊 تحلیل هوشمند و عملکرد مراسم‌ها و محصولات</h4><div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px;"><div style="background: rgb(255, 255, 255); border: 1px solid rgb(226, 232, 240); padding: 12px; border-radius: 6px;"><div style="font-size: 12px; font-weight: bold; color: rgb(3, 105, 161); margin-bottom: 8px;">🏆 بالاترین مبلغ فاکتور به تفکیک مشتری</div><div style="font-size: 11px; color: rgb(148, 163, 184);">داده‌ای ثبت نشده است.</div></div><div style="background: rgb(255, 255, 255); border: 1px solid rgb(226, 232, 240); padding: 12px; border-radius: 6px;"><div style="font-size: 12px; font-weight: bold; color: rgb(124, 58, 237); margin-bottom: 8px;">📦 مقایسه اجاره و فروش محصولات</div><div style="font-size: 11px; color: rgb(148, 163, 184);">محصولی در فاکتورها ثبت نشده است.</div></div></div></div><div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 25px;"><div style="background: rgb(248, 250, 252); border: 1px solid rgb(203, 213, 225); padding: 15px; border-radius: 6px;"><div style="font-size: 12px; color: rgb(100, 116, 139); margin-bottom: 8px;">مجموع کل درآمد فاکتورهای رسمی</div><div style="font-size: 18px; font-weight: bold; color: rgb(3, 105, 161);">۰ تومان</div></div><div style="background: rgb(240, 253, 244); border: 1px solid rgb(187, 247, 208); padding: 15px; border-radius: 6px;"><div style="font-size: 12px; color: rgb(22, 101, 52); margin-bottom: 8px;">درآمد اقلام اجاره‌ای</div><div style="font-size: 18px; font-weight: bold; color: rgb(21, 128, 61);">۰ تومان</div></div><div style="background: rgb(239, 246, 255); border: 1px solid rgb(191, 219, 254); padding: 15px; border-radius: 6px;"><div style="font-size: 12px; color: rgb(30, 64, 175); margin-bottom: 8px;">درآمد اقلام فروشی</div><div style="font-size: 18px; font-weight: bold; color: rgb(29, 78, 216);">۰ تومان</div></div><div style="background: rgb(254, 242, 242); border: 1px solid rgb(254, 202, 202); padding: 15px; border-radius: 6px;"><div style="font-size: 12px; color: rgb(153, 27, 27); margin-bottom: 8px;">درآمد بدون دسته‌بندی</div><div style="font-size: 18px; font-weight: bold; color: rgb(220, 38, 38);">۰ تومان</div></div></div><p style="margin: -12px 0px 20px; color: rgb(100, 116, 139); font-size: 11px;">این ارقام درآمد فاکتور هستند، نه سود خالص؛ هزینه‌های جاری، بهای تمام‌شدهٔ اجاره و مبالغ وصول‌شده در این جمع کسر یا محاسبه نشده‌اند.</p><section aria-labelledby="ceremony-profit-title" style="background: rgb(248, 250, 252); border: 1px solid rgb(203, 213, 225); padding: 15px; border-radius: 8px; margin-bottom: 25px;"><h4 id="ceremony-profit-title" style="margin: 0px 0px 8px; color: rgb(15, 23, 42); font-size: 14px;">سود و زیان هر مراسم</h4><p style="margin: 0px 0px 12px; color: rgb(100, 116, 139); font-size: 11px;">درآمد فاکتور بر مبنای مبلغ کل فاکتور است، نه مبلغ وصول‌شده؛ درآمدهای متفرقهٔ ثبت‌شده، هزینه‌های فاکتور، هزینه‌های صندوق/بانک و بهای تمام‌شدهٔ اقلام فروشی هم محاسبه می‌شوند. انتقال بین حساب‌ها درآمد یا هزینه نیست و هزینهٔ پرداخت‌شدهٔ فاکتور دوباره‌شماری نمی‌شود.</p><div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 12px;"><span style="background: rgb(239, 246, 255); padding: 7px 10px; border-radius: 6px;">کل درآمد: <strong>۰ تومان</strong></span><span style="background: rgb(255, 247, 237); padding: 7px 10px; border-radius: 6px;">کل هزینه: <strong>۰ تومان</strong></span><span style="background: rgb(240, 253, 244); padding: 7px 10px; border-radius: 6px;">سود/زیان کل: <strong>۰ تومان</strong></span></div><div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; text-align: right; font-size: 11px; background: rgb(255, 255, 255);"><thead><tr style="background: rgb(226, 232, 240);"><th style="padding: 8px;">تاریخ مراسم</th><th style="padding: 8px;">مراسم / مشتری</th><th style="padding: 8px;">تعداد فاکتور</th><th style="padding: 8px;">درآمد</th><th style="padding: 8px;">هزینه‌های ثبت‌شده</th><th style="padding: 8px;">بهای کالای فروشی</th><th style="padding: 8px;">کل هزینه</th><th style="padding: 8px;">سود/زیان</th></tr></thead><tbody><tr><td colspan="8" style="padding: 14px; text-align: center; color: rgb(100, 116, 139);">هنوز درآمد یا هزینه‌ای به مراسم‌ها وصل نشده است.</td></tr></tbody></table></div></section><div style="overflow-x: auto;"><div style="font-size: 12px; color: rgb(100, 116, 139); margin-bottom: 8px;">💡 لیست فاکتورهای صادر شده:</div><table style="width: 100%; border-collapse: collapse; text-align: right; font-size: 12px;"><thead><tr style="background: rgb(248, 250, 252); border-bottom: 1px solid rgb(226, 232, 240);"><th style="padding: 10px;">شماره فاکتور</th><th style="padding: 10px;">نام مشتری</th><th style="padding: 10px;">تاریخ ثبت رسمی</th><th style="padding: 10px;">مبلغ کل (تومان)</th><th style="padding: 10px;">اتصال به مراسم</th><th style="padding: 10px; text-align: center;">عملیات</th></tr></thead><tbody><tr><td colspan="6" style="text-align: center; padding: 20px; color: rgb(148, 163, 184);">هیچ فاکتور رسمی تاکنون صادر نشده است.</td></tr></tbody></table></div></div></div></section>
+```
+
+Dimensions:
+- top: 46px
+- left: 12px
+- width: 464px
+- height: 1009px
+
+CSS:
+```css
+* { margin: 0;
+  padding: 0;
+  box-sizing: border-box; }
+* { box-sizing: border-box; }
+.main-content { min-width: 0;
+  max-width: 100%;
+  padding: 30px 32px 18px;
+  background: var(--app-background); }
+.main-content { padding: 22px 20px; }
+.main-content { padding: 18px 12px 24px; }
+.page-theme-reports { --page-accent: #32816d !important; --page-tint: #e9f5ef !important; }
+.main-content { min-width: 0;
+    padding-bottom: max(24px, env(safe-area-inset-bottom, 0px)); }
+.main-content { padding-right: max(10px, env(safe-area-inset-right, 0px));
+    padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(10px, env(safe-area-inset-left, 0px)); }
+.main-content { padding-bottom: 104px; }
+.main-content { padding-bottom: 100px; }
+.main-content { color: #dbe5e5; }
+.main-content { color: #1b2b2a !important; }
+.main-content[class*="page-theme-"] { --page-accent: #28645a;
+  --page-tint: #e8f2ef;
+  position: relative;
+  background-color: var(--page-tint);
+  background-image:
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--page-accent) 15%, transparent), transparent 34rem),
+    radial-gradient(ellipse at 92% 38%, color-mix(in srgb, var(--page-accent) 9%, transparent), transparent 30rem),
+    repeating-linear-gradient(135deg, color-mix(in srgb, var(--page-accent) 1.8%, transparent) 0 1px, transparent 1px 18px); }
+.app-layout[class*="page-theme-"], .main-content[class*="page-theme-"] { background-color: transparent; }
+.section-page-popup .section-popup-content { width: 100%;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: clamp(14px, 2vw, 28px);
+  overscroll-behavior: contain; }
+.app-layout[class*="page-theme-"], .main-content[class*="page-theme-"], .app-layout[class*="page-theme-"] .sidebar { background-color: transparent;
+  background-image: none; }
+.section-page-popup .section-popup-content { background: #171e21; }
+.section-page-popup .section-popup-content { min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; }
+.app-layout[class*="page-theme-"], .main-content[class*="page-theme-"], .app-layout[class*="page-theme-"] .sidebar { background: #f2f5f2 !important;
+  background-image: none !important; }
+
+/* Inherited */
+.profile-modal, .section-page-popup, .section-page-popup-toolbar, .login-card, .backup-panel, .organization-management form, .organization-member { color: #e8eeee }
+.app-container :is(.profile-modal, .section-page-popup, .section-page-popup-toolbar, .login-card, .backup-panel, .organization-management form, .organization-member, .customer-form-dialog, .customer-list-dialog, .calendar-panel) { color: #263a32 !important }
+html, body, #root, button, input, select, textarea { font-family: "IRANSans", Tahoma, sans-serif }
+html, body, #root { color: #1b2b2a !important }
+html, body, button, input, select, textarea { font-family: var(--font-family) }
+body { color: var(--color-text-primary); font-size: var(--font-size-body); line-height: var(--line-height-fa) }
+body { font-family: var(--font-main); color: var(--text-color); direction: rtl; line-height: var(--line-height-fa) }
+body { line-height: 1.7 }
+:root { font-family: "IRANSans", Tahoma, sans-serif; color: #253238 }
+
+/* Resolved values */
+margin: 0px;
+padding: 14px;
+background-attachment: scroll;
+background-clip: border-box;
+background-color: rgb(242, 245, 242);
+background-image: none;
+background-origin: padding-box;
+background-position-x: 0%;
+background-position-y: 0%;
+background-repeat: repeat;
+background-size: auto;
+box-sizing: border-box;
+color: rgb(27, 43, 42);
+direction: rtl;
+display: block;
+flex-basis: 0%;
+flex-grow: 1;
+flex-shrink: 1;
+font-family: IRANSans, Tahoma, sans-serif;
+font-size: 14px;
+height: 1009px;
+line-height: 23.8px;
+max-width: 100%;
+min-height: 0px;
+min-width: 0px;
+overflow-x: auto;
+overflow-y: auto;
+overscroll-behavior-x: contain;
+overscroll-behavior-y: contain;
+position: relative;
+text-align: right;
+unicode-bidi: isolate /*UA*/;
+width: 464px;
+
+/* CSS variables */
+--font-main: "IRANSans", Tahoma, sans-serif;
+--line-height-fa: 1.7;
+--page-accent: #32816d;
+--text-color: #1f2a28;
+--font-family: "IRANSans", Tahoma, sans-serif;
+--app-background: #f7faf8;
+--page-tint: #e9f5ef;
+--color-text-primary: #1f2a28;
+--font-size-body: 14px;
+```

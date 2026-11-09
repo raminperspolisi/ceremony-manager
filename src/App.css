@@ -10058,6 +10058,10 @@ textarea {
   backdrop-filter: blur(3px);
 }
 
+.official-invoice-inventory-picker-backdrop {
+  z-index: 1205;
+}
+
 .quotation-inventory-picker {
   display: flex;
   width: min(760px, 100%);
@@ -13628,4 +13632,43 @@ body {
 }
 .app-container .panel-container .financial-report-panel :is(th, td) {
   border-color: var(--color-border) !important;
+}
+
+.financial-report-invoice-backdrop {
+  position: fixed;
+  z-index: 1400;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom));
+  overflow: auto;
+  background: rgb(15 23 42 / 62%);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.financial-report-invoice-modal {
+  width: min(750px, 100%);
+  max-height: calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow: auto;
+  padding: clamp(16px, 3vw, 25px);
+  border: 1px solid #dbe3ea;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 35%);
+  color: #1e293b;
+}
+
+.financial-report-invoice-modal table {
+  min-width: 640px;
+}
+
+@media (max-width: 640px) {
+  .financial-report-invoice-backdrop {
+    place-items: start center;
+  }
+
+  .financial-report-invoice-modal {
+    max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
 }

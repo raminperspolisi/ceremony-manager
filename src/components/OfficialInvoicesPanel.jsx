@@ -74,6 +74,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const [customerSearch, setCustomerSearch] = useState('');
   const [isCustomerListOpen, setIsCustomerListOpen] = useState(false);
   const [customerLoadError, setCustomerLoadError] = useState('');
+  const [inventoryPickerOpen, setInventoryPickerOpen] = useState(false);
+  const [inventorySearchTerm, setInventorySearchTerm] = useState('');
   const [editableItems, setEditableItems] = useState([]);
   const [discountAmount, setDiscountAmount] = useState('');
   const [paidAmount, setPaidAmount] = useState('');
@@ -100,7 +102,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     };
     const fetchInventory = async () => {
       const { data, error } = await readTable('inventory', {
-        columns: 'id, title, item_type',
+        columns: 'id, title, item_type, price_level1, price_level2, price_level3, base_cost',
         orderBy: 'title',
         ascending: true,
       });
@@ -164,6 +166,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
         setInvoicePaymentOpen(false);
         return;
       }
+      if (inventoryPickerOpen) {
+        event.preventDefault();
+        setInventoryPickerOpen(false);
+        return;
+      }
       if (editingId !== null) {
         event.preventDefault();
         handleCancelEdit();
@@ -191,7 +198,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
-  }, [checklistOpenId, detailsInvoice, editingId, invoicePaymentOpen, isCustomerListOpen, printInvoice, whatsAppInvoice]);
+  }, [checklistOpenId, detailsInvoice, editingId, inventoryPickerOpen, invoicePaymentOpen, isCustomerListOpen, printInvoice, whatsAppInvoice]);
 
   const filteredCustomers = customers.filter((customer) => {
     const query = customerSearch.trim().toLocaleLowerCase('fa-IR');
@@ -573,8 +580,8 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     setCustomerSearch(inv.customer_name || '');
     setIsCustomerListOpen(false);
     setCustomerPhone(inv.customer_phone || inv.phone || '');
-    setOrderDate(inv.order_date || '');
-    setCeremonyDate(inv.ceremony_date || '');
+    setOrderDate(isValidIsoDate(inv.order_date) ? inv.order_date : parseJalaliDate(inv.order_date) || '');
+    setCeremonyDate(isValidIsoDate(inv.ceremony_date) ? inv.ceremony_date : parseJalaliDate(inv.ceremony_date) || '');
     setCustomerAddress(inv.customer_address || '');
     setPaidAmount(inv.paid_amount || '');
     setDiscountAmount(String(inv.discount_amount || 0));
@@ -635,22 +642,29 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   };
 
   const handleAddEditableItem = () => {
-    setEditableItems([
-      ...editableItems,
+    setInventorySearchTerm('');
+    setInventoryPickerOpen(true);
+  };
+
+  const handleAddInventoryItemToInvoice = (inventoryItem) => {
+    setEditableItems((current) => [
+      ...current,
       {
-        title: '',
-        item_type: 'sale',
-        inventory_id: '',
+        title: inventoryItem.title || '',
+        item_type: inventoryItem.item_type || 'sale',
+        inventory_id: String(inventoryItem.id),
         rental_checkout_date: '',
         rental_return_date: '',
         price_level: '1',
         qty: 1,
-        p1: '',
-        p2: '',
-        p3: '',
-        base_cost: '',
-      }
+        p1: Number(inventoryItem.price_level1 ?? 0),
+        p2: Number(inventoryItem.price_level2 ?? 0),
+        p3: Number(inventoryItem.price_level3 ?? 0),
+        base_cost: Number(inventoryItem.base_cost ?? 0),
+      },
     ]);
+    setInventoryPickerOpen(false);
+    toast('success', `«${inventoryItem.title}» به اقلام فاکتور اضافه شد.`);
   };
 
   const handleRemoveEditableItem = (index) => {
@@ -783,6 +797,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const handleCancelEdit = () => {
     setEditingId(null);
     setIsCustomerListOpen(false);
+    setInventoryPickerOpen(false);
   };
 
   // داده‌های پاپ‌آپ‌ها
@@ -790,6 +805,10 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const checklistItems = Array.isArray(checklistInvoice?.checklist)
     ? checklistInvoice.checklist
     : getDefaultChecklist();
+  const filteredInventoryItems = inventoryItems.filter((item) => (
+    String(item.title || '').toLocaleLowerCase('fa-IR')
+      .includes(inventorySearchTerm.trim().toLocaleLowerCase('fa-IR'))
+  ));
   const editableTotal = editableItems.reduce((sum, item) => sum + (Number(item.qty || 1) * getActiveUnitPrice(item)), 0);
   const editableNetTotal = Math.max(0, editableTotal - (Number(discountAmount) || 0));
   const whatsAppMessage = whatsAppInvoice ? buildWhatsAppMessage(whatsAppInvoice) : '';
@@ -1010,11 +1029,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               </label>
               <label className="official-invoice-edit-field">
                 <span>تاریخ سفارش</span>
-                <input type="text" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} placeholder="1405/02/15" />
+                <PersianDateInput value={orderDate} onChange={setOrderDate} />
               </label>
               <label className="official-invoice-edit-field">
                 <span>تاریخ مراسم</span>
-                <input type="text" value={ceremonyDate} onChange={(e) => setCeremonyDate(e.target.value)} placeholder="1405/02/15" />
+                <PersianDateInput value={ceremonyDate} onChange={setCeremonyDate} />
               </label>
               <label className="official-invoice-edit-field official-invoice-edit-field-wide">
                 <span>نشانی مشتری</span>
@@ -1173,6 +1192,94 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
               <button type="button" className="official-invoices-apply-button" onClick={() => handleSaveEdit(editingId)}>ذخیره تغییرات</button>
               <button type="button" className="official-invoices-cancel-button" onClick={handleCancelEdit}>انصراف</button>
             </div>
+          </section>
+        </div>
+      )}
+
+      {editingId !== null && inventoryPickerOpen && (
+        <div
+          className="quotation-inventory-picker-backdrop official-invoice-inventory-picker-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setInventoryPickerOpen(false);
+          }}
+        >
+          <section
+            className="quotation-inventory-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="official-invoice-inventory-picker-title"
+            dir="rtl"
+          >
+            <header className="quotation-inventory-picker-heading">
+              <div>
+                <span className="quotation-heading-kicker">انتخاب از موجودی انبار</span>
+                <h2 id="official-invoice-inventory-picker-title">افزودن اقلام به فاکتور</h2>
+                <p>{formatDisplay(inventoryItems.length)} کالا در انبار ثبت شده است.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="بستن فهرست اقلام انبار"
+                onClick={() => setInventoryPickerOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            <label className="quotation-inventory-picker-search">
+              <span>جستجوی کالا</span>
+              <input
+                type="search"
+                value={inventorySearchTerm}
+                onChange={(event) => setInventorySearchTerm(event.target.value)}
+                placeholder="نام کالا را وارد کنید..."
+                autoFocus
+              />
+            </label>
+            {inventoryLoadError && <p className="quotation-inventory-stock-error" role="alert">{inventoryLoadError}</p>}
+            <div className="quotation-inventory-picker-list">
+              {filteredInventoryItems.length === 0 ? (
+                <EmptyState
+                  icon={inventoryItems.length === 0 ? 'box' : 'search'}
+                  title={inventoryItems.length === 0 ? 'هنوز کالایی در انبار ثبت نشده' : 'موردی پیدا نشد'}
+                  description={inventoryItems.length === 0 ? 'ابتدا کالا را در بخش انبار ثبت کنید.' : 'عبارت جستجو را تغییر دهید.'}
+                />
+              ) : (
+                <table className="quotation-inventory-picker-table">
+                  <thead>
+                    <tr>
+                      <th>عنوان کالا</th>
+                      <th>نوع</th>
+                      <th>نرخ سطح ۱</th>
+                      <th>روش افزودن</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredInventoryItems.map((item) => (
+                      <tr
+                        key={item.id}
+                        tabIndex={0}
+                        title="برای افزودن کالا به فاکتور دابل‌کلیک کنید"
+                        onDoubleClick={() => handleAddInventoryItemToInvoice(item)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            handleAddInventoryItemToInvoice(item);
+                          }
+                        }}
+                      >
+                        <td>{item.title}</td>
+                        <td>{item.item_type === 'rent' ? 'اجاره‌ای' : 'فروشی'}</td>
+                        <td>{formatDisplay(item.price_level1 || 0)} تومان</td>
+                        <td>برای افزودن دابل‌کلیک کنید</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <footer className="quotation-inventory-picker-footer">
+              <span>پس از انتخاب اقلام، تعداد و جزئیات را در فاکتور ویرایش کنید.</span>
+              <button type="button" onClick={() => setInventoryPickerOpen(false)}>پایان انتخاب</button>
+            </footer>
           </section>
         </div>
       )}

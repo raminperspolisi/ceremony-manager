@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { readTable, updateRows } from '../offlineSync';
 import FormattedNumberInput from './FormattedNumberInput';
 import { getInvoicePaymentStatus } from '../cashbookUtils';
@@ -572,13 +573,15 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
         </table>
       </div>
 
-      {selectedInvoice && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: '20px' }}>
-          <div style={{ background: '#fff', width: '100%', maxWidth: '750px', maxHeight: '90vh', overflowY: 'auto', borderRadius: '8px', padding: '25px', boxShadow: '0 20px 25px -5px rgb(0 0 15px / 0.1)' }}>
+      {selectedInvoice && createPortal(
+        <div className="financial-report-invoice-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setSelectedInvoice(null);
+        }}>
+          <div className="financial-report-invoice-modal" role="dialog" aria-modal="true" aria-labelledby="financial-report-invoice-title" dir="rtl">
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #0f172a', paddingBottom: '12px', marginBottom: '15px' }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>جزئیات فاکتور رسمی مراسم و تشریفات</h2>
+                <h2 id="financial-report-invoice-title" style={{ margin: 0, fontSize: '18px', color: '#0f172a' }}>جزئیات فاکتور رسمی مراسم و تشریفات</h2>
                 <div style={{ fontSize: '12px', color: '#0369a1', fontWeight: 'bold', marginTop: '4px' }}>شماره فاکتور: #{formatNumber(selectedInvoice.invoiceNumber)}</div>
               </div>
               <button 
@@ -716,7 +719,8 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

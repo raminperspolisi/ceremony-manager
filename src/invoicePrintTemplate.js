@@ -8,6 +8,10 @@ const escapeHtml = (value) => String(value ?? '—').replace(/[&<>"']/g, (charac
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fa-IR');
 
+const toPersianDigits = (value) => String(value).replace(/[0-9٠-٩]/g, (digit) => (
+  String.fromCharCode(digit.charCodeAt(0) + (digit >= '٠' ? 144 : 1728))
+));
+
 const PRINTABLE_HEIGHT_PX = (297 - 20) * 96 / 25.4;
 
 export function buildInvoicePrintHtml({
@@ -185,7 +189,7 @@ export function buildInvoicePrintHtml({
             </div>
             <div class="customer-meta">
               <span><strong>نام مشتری:</strong> ${escapeHtml(customerName)}</span>
-              <span><strong>تلفن:</strong> ${escapeHtml(customerPhone || 'ثبت نشده')}</span>
+              <span><strong>تلفن:</strong> ${escapeHtml(toPersianDigits(customerPhone || 'ثبت نشده'))}</span>
               <span><strong>تاریخ سفارش:</strong> ${escapeHtml(orderDate || '—')}</span>
               <span><strong>تاریخ مراسم:</strong> ${escapeHtml(ceremonyDate || '—')}</span>
               <span style="grid-column: 1 / -1"><strong>نشانی:</strong> ${escapeHtml(customerAddress || 'ثبت نشده')}</span>
