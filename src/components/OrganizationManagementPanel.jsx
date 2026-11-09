@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, SUPABASE_ANON_KEY } from '../supabaseClient';
+import { useToast } from './useToast';
 
 const SECTIONS = [
   ['dashboard', 'داشبورد'],
@@ -39,6 +40,7 @@ export default function OrganizationManagementPanel({
   onOrganizationCreated,
   onMembershipChanged,
 }) {
+  const { confirm, toast } = useToast();
   const [organizationName, setOrganizationName] = useState(organization?.name || '');
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -183,7 +185,7 @@ export default function OrganizationManagementPanel({
   };
 
   const removeMember = async (member) => {
-    if (!window.confirm(`دسترسی ${member.email || 'این کاربر'} از این فضای کاری حذف شود؟`)) return;
+    if (!await confirm(`دسترسی ${member.email || 'این کاربر'} از این فضای کاری حذف شود؟`)) return;
     setBusy(true);
     setErrorMessage('');
     setFeedback('');
@@ -195,8 +197,10 @@ export default function OrganizationManagementPanel({
       if (error) throw error;
       setMembers((current) => current.filter((item) => item.user_id !== member.user_id));
       setFeedback('دسترسی کاربر حذف شد.');
+      toast('success', 'دسترسی کاربر حذف شد.');
     } catch (error) {
       setErrorMessage(`حذف دسترسی کاربر ناموفق بود: ${error.message}`);
+      toast('error', `حذف دسترسی کاربر ناموفق بود: ${error.message}`);
     } finally {
       setBusy(false);
     }

@@ -16,6 +16,7 @@ import CashbookPanel from './components/CashbookPanel';
 import DashboardPanel from './components/DashboardPanel';
 import BotOrdersPanel from './components/BotOrdersPanel';
 import OrganizationManagementPanel from './components/OrganizationManagementPanel';
+import { useToast } from './components/useToast';
 import { formatDisplay } from './styles';
 import { getBusinessContact, normalizeProfileLinks } from './profileLinks';
 import {
@@ -176,6 +177,8 @@ function resizeLogoToWebp(file) {
 }
 
 export default function App() {
+  const { toast } = useToast();
+  const applyServiceWorkerUpdate = useRef(false);
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
@@ -237,6 +240,62 @@ export default function App() {
   const [inventory, setInventory] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
   const sessionUserId = session?.user?.id;
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+    let active = true;
+    let registration;
+    let updateAnnounced = false;
+    const showUpdate = () => {
+      if (!active || updateAnnounced || !registration?.waiting || !navigator.serviceWorker.controller) return;
+      updateAnnounced = true;
+      toast('info', 'نسخهٔ جدید آماده است.', {
+        action: {
+          label: 'بارگذاری مجدد',
+          onClick: () => {
+            applyServiceWorkerUpdate.current = true;
+            registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
+          },
+        },
+      });
+    };
+    const watchInstallingWorker = () => {
+      const installing = registration?.installing;
+      if (!installing) return;
+      installing.addEventListener('statechange', () => {
+        if (installing.state === 'installed') showUpdate();
+        if (installing.state === 'activated') checkForUpdates();
+      });
+    };
+    const reloadAfterUpdate = () => {
+      if (applyServiceWorkerUpdate.current) window.location.reload();
+    };
+    const checkForUpdates = () => {
+      if (!registration?.active || registration.installing || registration.waiting) return;
+      registration.update().catch((error) => console.error('بررسی نسخهٔ جدید ناموفق بود:', error));
+    };
+    const checkWhenVisible = () => {
+      if (document.visibilityState === 'visible') checkForUpdates();
+    };
+    const updateCheckTimer = window.setInterval(checkForUpdates, 60 * 60 * 1000);
+    document.addEventListener('visibilitychange', checkWhenVisible);
+    navigator.serviceWorker.addEventListener('controllerchange', reloadAfterUpdate);
+    navigator.serviceWorker.getRegistration().then((currentRegistration) => {
+      if (!active) return;
+      registration = currentRegistration;
+      if (!registration) return;
+      registration.addEventListener('updatefound', watchInstallingWorker);
+      watchInstallingWorker();
+      showUpdate();
+      checkForUpdates();
+    }).catch((error) => console.error('دریافت وضعیت سرویس‌ورکر ناموفق بود:', error));
+    return () => {
+      active = false;
+      window.clearInterval(updateCheckTimer);
+      document.removeEventListener('visibilitychange', checkWhenVisible);
+      registration?.removeEventListener('updatefound', watchInstallingWorker);
+      navigator.serviceWorker.removeEventListener('controllerchange', reloadAfterUpdate);
+    };
+  }, [toast]);
   const activeOrganizationMembership = organizationMemberships.find(
     (membership) => membership.organization_id === activeOrganizationId,
   ) || null;

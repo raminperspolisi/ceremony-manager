@@ -9,6 +9,7 @@ import {
   summarizeCeremonyProfit,
   summarizeInvoiceRevenue,
 } from '../financialReportUtils';
+import { useToast } from './useToast';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fa-IR');
 const formatEventDate = (value) => {
@@ -27,6 +28,7 @@ const toPersianDigits = (value) => String(value).replace(/[0-9٠-٩]/g, (digit) 
 });
 
 export default function FinancialReportPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png' }) {
+  const { toast } = useToast();
   const [invoices, setInvoices] = useState([]);
   const [events, setEvents] = useState([]);
   const [cashTransactions, setCashTransactions] = useState([]);
@@ -145,7 +147,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     const newTotal = calculateInvoiceItemsTotal(updatedItems);
     const paidAmount = Number(selectedInvoice.paid_amount || 0);
     if (newTotal < paidAmount) {
-      alert('مبلغ کل فاکتور نمی‌تواند از مبلغی که تاکنون دریافت شده کمتر باشد.');
+      toast('error', 'مبلغ کل فاکتور نمی‌تواند از مبلغی که تاکنون دریافت شده کمتر باشد.');
       return false;
     }
 
@@ -156,7 +158,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     }, [{ column: 'id', operator: 'eq', value: selectedInvoice.id }]);
 
     if (error) {
-      alert(`خطا در ذخیره‌سازی اقلام فاکتور: ${error.message}`);
+      toast('error', `خطا در ذخیره‌سازی اقلام فاکتور: ${error.message}`);
       return false;
     }
 
@@ -169,6 +171,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
 
     setSelectedInvoice(updatedInvoiceObj);
     setInvoices(invoices.map(inv => inv.id === selectedInvoice.id ? updatedInvoiceObj : inv));
+    toast('success', 'اقلام فاکتور ذخیره شد.');
     return true;
   }
 
@@ -213,7 +216,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert("مرورگر شما جلوی باز شدن پنجره چاپ را گرفت. لطفاً اجازه Pop-up را بدهید.");
+      toast('warning', 'مرورگر شما جلوی باز شدن پنجره چاپ را گرفت. لطفاً اجازه Pop-up را بدهید.');
       return;
     }
 

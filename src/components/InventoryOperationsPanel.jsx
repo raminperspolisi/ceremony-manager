@@ -11,6 +11,7 @@ import {
 import { formatPersianDate } from '../dateUtils';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
+import { useToast } from './useToast';
 
 const today = () => {
   const date = new Date();
@@ -56,6 +57,7 @@ export default function InventoryOperationsPanel({
   refreshInventory,
   onStockSummaryChange,
 }) {
+  const { confirm } = useToast();
   const [warehouses, setWarehouses] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -189,7 +191,9 @@ export default function InventoryOperationsPanel({
     ]));
     onStockSummaryChange({
       warehouseName: activeWarehouse.name,
+      warehouseId: selectedWarehouseId,
       quantities,
+      reservationRecords: reservations,
       busy: busy || offlineData,
       save: (inventoryId, targetQuantity) => {
         const item = items.find((candidate) => String(candidate.id) === String(inventoryId));
@@ -204,7 +208,7 @@ export default function InventoryOperationsPanel({
         ) ?? Promise.resolve(false);
       },
     });
-  }, [items, movements, onStockSummaryChange, selectedWarehouseId, warehouses, busy, offlineData]);
+  }, [items, movements, onStockSummaryChange, selectedWarehouseId, warehouses, reservations, busy, offlineData]);
   const reservationOptions = useMemo(() => reservations.filter((reservation) => (
     String(reservation.inventory_id) === String(movementForm.inventory_id)
     && String(reservation.warehouse_id) === String(movementForm.warehouse_id)
@@ -466,7 +470,7 @@ export default function InventoryOperationsPanel({
   }, 'انبار اصلی تغییر کرد؛ سفارش‌های بات در این انبار رزرو می‌شوند.');
 
   const cancelReservation = async (reservation) => {
-    if (!window.confirm(`رزرو «${nameForItem(reservation.inventory_id)}» به تعداد ${quantityText(reservation.quantity)} لغو و موجودی آن آزاد شود؟`)) {
+    if (!await confirm(`رزرو «${nameForItem(reservation.inventory_id)}» به تعداد ${quantityText(reservation.quantity)} لغو و موجودی آن آزاد شود؟`)) {
       return;
     }
     if (!organizationId) {

@@ -5,10 +5,14 @@ import { formatPersianDate } from '../dateUtils';
 import { getInventoryQuantity, getReservedQuantity } from '../inventoryUtils';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
-import { calculateQuotationTotals, convertQuotationToInvoice, deleteSelectedDocuments, updateQuotation } from '../quotationInvoice';
+import { calculateQuotationTotals, convertQuotationToInvoice, deleteSelectedDocuments, ensureQuotationInventoryLinks, updateQuotation } from '../quotationInvoice';
 import { renderBusinessContactHtml } from '../profileLinks';
 import { buildInvoicePrintHtml } from '../invoicePrintTemplate';
 import { parseNumericInput } from '../numberUtils';
+import EmptyState from './EmptyState';
+import ImageUpload from './ImageUpload';
+import InventoryThumbnail from './InventoryThumbnail';
+import { useToast } from './useToast';
 
 const win95Style = {
   window: { 
@@ -77,6 +81,7 @@ const hasInventoryReference = (value) => (
 );
 
 export default function QuotationPanel({ inventoryItems = [], onItemSelected, onInventoryChanged, selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
+  const { toast, confirm } = useToast();
   const items = selectedItems || [];
   const [customers, setCustomers] = useState([]);
   const [inventoryPickerOpen, setInventoryPickerOpen] = useState(false);
@@ -95,6 +100,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
     price_level1: '',
     price_level2: '',
     price_level3: '',
+    image: '',
   });
   const [pickerWarehouses, setPickerWarehouses] = useState([]);
   const [pickerWarehouseId, setPickerWarehouseId] = useState('');
@@ -213,7 +219,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
 
   async function handleAddNewCustomer() {
     if (!newCustomerName.trim()) { 
-      alert("نام مشتری الزامی است."); 
+      toast('error', 'نام مشتری الزامی است.');
       return; 
     }
     
@@ -225,7 +231,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
 
       if (error) throw error;
 
-      alert("مشتری جدید با موفقیت اضافه شد.");
+      toast('success', 'مشتری جدید با موفقیت اضافه شد.');
       setSelectedCustomer({ "Full name": newCustomerName.trim(), "phone": newCustomerPhone.trim() });
       setSearchTerm(newCustomerName.trim());
       setNewCustomerName('');
@@ -234,7 +240,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       setIsSearching(false);
       fetchCustomers();
     } catch (error) {
-      alert("خطا در افزودن مشتری: " + error.message);
+      toast('error', `خطا در افزودن مشتری: ${error.message}`);
     }
   }
 
@@ -283,7 +289,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
   const handleAddPickerItem = (item) => {
     const quantity = Number(pickerQuantities[item.id] ?? 1);
     if (!Number.isFinite(quantity) || quantity <= 0 || (String(quantity).split('.')[1] || '').length > 3) {
-      alert('تعداد باید عددی بیشتر از صفر و حداکثر با سه رقم اعشار باشد.');
+      toast('error', 'تعداد باید عددی بیشتر از صفر و حداکثر با سه رقم اعشار باشد.');
       return;
     }
     if (setSelectedItems) {
@@ -310,6 +316,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
     setInventoryEditForm({
       title: item.title || '',
       item_type: item.item_type || 'sale',
+      image: item.image || '',
       price_level1: item.price_level1 ?? 0,
       price_level2: item.price_level2 ?? 0,
       price_level3: item.price_level3 ?? 0,
@@ -318,7 +325,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
 
   const handleSaveInventoryItemEdit = async (item) => {
     if (!inventoryEditForm.title.trim()) {
-      alert('نام کالا یا خدمت را وارد کنید.');
+      toast('error', 'نام کالا یا خدمت را وارد کنید.');
       return;
     }
 
@@ -328,6 +335,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       price_level1: parseNumericInput(inventoryEditForm.price_level1),
       price_level2: parseNumericInput(inventoryEditForm.price_level2),
       price_level3: parseNumericInput(inventoryEditForm.price_level3),
+      image: inventoryEditForm.image || null,
     };
 
     setSavingInventoryItem(true);
@@ -349,7 +357,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       window.dispatchEvent(new Event('offline-data-updated'));
       onInventoryChanged?.();
     } catch (error) {
-      alert(`خطا در ویرایش کالا: ${error.message}`);
+      toast('error', `خطا در ویرایش کالا: ${error.message}`);
     } finally {
       setSavingInventoryItem(false);
     }
@@ -363,20 +371,20 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       : Number(newInventoryForm.initial_quantity);
     const baseCost = newInventoryForm.base_cost === '' ? 0 : Number(newInventoryForm.base_cost);
     if (!title) {
-      alert('نام کالا یا خدمت را وارد کنید.');
+      toast('error', 'نام کالا یا خدمت را وارد کنید.');
       return;
     }
     if (!Number.isFinite(initialQuantity) || initialQuantity < 0
       || (String(newInventoryForm.initial_quantity).split('.')[1] || '').length > 3) {
-      alert('موجودی اولیه باید عددی نامنفی با حداکثر سه رقم اعشار باشد.');
+      toast('error', 'موجودی اولیه باید عددی نامنفی با حداکثر سه رقم اعشار باشد.');
       return;
     }
     if (!Number.isSafeInteger(baseCost) || baseCost < 0) {
-      alert('قیمت خرید باید عدد صحیح و نامنفی باشد.');
+      toast('error', 'قیمت خرید باید عدد صحیح و نامنفی باشد.');
       return;
     }
     if (initialQuantity > 0 && !newInventoryForm.warehouse_id) {
-      alert('برای ثبت موجودی اولیه، یک انبار انتخاب کنید.');
+      toast('error', 'برای ثبت موجودی اولیه، یک انبار انتخاب کنید.');
       return;
     }
     setSavingNewInventoryItem(true);
@@ -390,6 +398,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         price_level1: parseNumericInput(newInventoryForm.price_level1),
         price_level2: parseNumericInput(newInventoryForm.price_level2),
         price_level3: parseNumericInput(newInventoryForm.price_level3),
+        image: newInventoryForm.image || null,
       }]);
       if (error) throw error;
       createdItem = data?.[0];
@@ -425,17 +434,18 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         price_level1: '',
         price_level2: '',
         price_level3: '',
+        image: '',
       });
       setInventoryCreateOpen(false);
       window.dispatchEvent(new Event('inventory-data-updated'));
       await onInventoryChanged?.();
-      alert('کالای جدید ثبت و به پیش‌فاکتور اضافه شد.');
+      toast('success', 'کالای جدید ثبت و به پیش‌فاکتور اضافه شد.');
     } catch (error) {
       if (createdItem) {
         window.dispatchEvent(new Event('inventory-data-updated'));
         await onInventoryChanged?.();
       }
-      alert(`ثبت کالای جدید ناموفق بود: ${error.message}`);
+      toast('error', `ثبت کالای جدید ناموفق بود: ${error.message}`);
     } finally {
       setSavingNewInventoryItem(false);
     }
@@ -443,36 +453,49 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
 
   const handleSaveAndPrint = async () => {
     if (!selectedCustomer) { 
-      alert("لطفاً ابتدا مشتری را انتخاب کنید."); 
+      toast('error', 'لطفاً ابتدا مشتری را انتخاب کنید.');
       return; 
     }
     if (items.length === 0) { 
-      alert("لیست کالاها خالی است."); 
+      toast('warning', 'لیست کالاها خالی است.');
       return; 
     }
     if (!Number.isSafeInteger(numericDiscount) || numericDiscount > total1) {
-      alert('مبلغ تخفیف باید عدد صحیح و بین صفر تا مبلغ کل درجهٔ یک باشد.');
+      toast('error', 'مبلغ تخفیف باید عدد صحیح و بین صفر تا مبلغ کل درجهٔ یک باشد.');
       return;
     }
 
     const rentalItemsWithoutDates = items.filter((item) => {
-      const inventoryReference = item.inventory_id || item.id;
-      const isInventoryItem = hasInventoryReference(inventoryReference);
-      const isRent = ['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type);
-      return isInventoryItem
-        && isRent
+      const isRent = ['rent', 'rental', 'اجاره', 'اجاره‌ای', 'اجاره ای'].includes(item.item_type);
+      return isRent
         && (!item.rental_checkout_date
           || !item.rental_return_date
           || item.rental_return_date < item.rental_checkout_date);
     });
     if (rentalItemsWithoutDates.length) {
-      alert('برای هر کالای اجاره‌ای از انبار، تاریخ تحویل و مهلت عودت معتبر را وارد کنید.');
+      toast('error', 'برای هر کالای اجاره‌ای تاریخ تحویل و مهلت عودت معتبر را وارد کنید.');
       return;
     }
 
     setIsSaving(true);
     try {
-      const itemsPayload = items.map(i => {
+      if (editingQuotationId && savedInvoices.some((invoice) => (
+        invoice.type === 'official' && String(invoice.quotation_id) === editingQuotationId
+      ))) {
+        throw new Error('این پیش‌فاکتور قبلاً رسمی شده و امکان ویرایش آن وجود ندارد.');
+      }
+
+      const { items: linkedItems, createdCount } = await ensureQuotationInventoryLinks(items, {
+        readTable,
+        insertRows,
+      });
+      setSelectedItems?.(linkedItems.map((item) => ({ ...item, id: item.inventory_id })));
+      if (createdCount) {
+        window.dispatchEvent(new Event('inventory-data-updated'));
+        await onInventoryChanged?.();
+      }
+
+      const itemsPayload = linkedItems.map(i => {
         const qty = getQuantity(i.requestedQuantity);
         const inventoryReference = i.inventory_id || i.id;
         const unitPrice = parseNumericInput(i.price_level1);
@@ -481,10 +504,11 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         const unitCost = parseNumericInput(i.base_cost);
         const lineTotal = unitPrice * qty;
         const lineCost = unitCost * qty;
-        const typeNormalized = (i.item_type === 'rent' || i.item_type === 'اجاره' || i.item_type === 'اجاره‌ای') ? 'rent' : 'sale';
+        const typeNormalized = i.item_type;
 
         return {
           title: i.title,
+          image: i.image || null,
           ...(hasInventoryReference(inventoryReference)
             ? { inventory_id: inventoryReference }
             : {}),
@@ -516,32 +540,26 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       };
       let savedQuotations;
       if (editingQuotationId) {
-        const linkedInvoice = savedInvoices.find((invoice) => (
-          invoice.type === 'official' && String(invoice.quotation_id) === editingQuotationId
-        ));
-        if (linkedInvoice) {
-          throw new Error('این پیش‌فاکتور قبلاً رسمی شده و امکان ویرایش آن وجود ندارد.');
-        }
         savedQuotations = await updateQuotation(
           editingQuotationId,
           quotationPayload,
           { updateRows },
         );
-        alert('تغییرات پیش‌فاکتور با موفقیت ذخیره شد.');
+        toast('success', 'تغییرات پیش‌فاکتور با موفقیت ذخیره شد.');
         setEditingQuotationId(null);
       } else {
         const { data, error } = await insertRows('quotations', [quotationPayload]);
         if (error) throw error;
         savedQuotations = data;
-        alert('پیش‌فاکتور با موفقیت ذخیره شد.');
+        toast('success', 'پیش‌فاکتور با موفقیت ذخیره شد.');
       }
       await fetchInvoices();
 
       const printWindow = window.open("", "_blank");
       if (printWindow) {
-        const quotationRows = items.map((item) => {
+        const quotationRows = linkedItems.map((item) => {
           const quantity = getQuantity(item.requestedQuantity);
-          const isRent = ['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type);
+          const isRent = item.item_type === 'rent';
           const unitPrice1 = parseNumericInput(item.price_level1);
           const unitPrice2 = parseNumericInput(item.price_level2);
           const unitPrice3 = parseNumericInput(item.price_level3);
@@ -591,7 +609,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         printWindow.document.close();
       }
     } catch (err) { 
-      alert("خطا در ذخیره‌سازی پیش‌فاکتور: " + err.message); 
+      toast('error', `خطا در ذخیره‌سازی پیش‌فاکتور: ${err.message}`);
     } finally { 
       setIsSaving(false); 
     }
@@ -600,7 +618,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
   const handleConvertToInvoice = async (e, inv) => {
     e.stopPropagation();
     if (inv.type === 'official') {
-      alert('این فاکتور قبلاً رسمی است.');
+      toast('info', 'این فاکتور قبلاً رسمی است.');
       return; 
     }
 
@@ -608,20 +626,23 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       invoice.type === 'official' && String(invoice.quotation_id) === String(inv.id),
     );
     if (existingInvoice) {
-      alert(`این پیش‌فاکتور قبلاً به فاکتور رسمی شمارهٔ ${formatPersianDigits(existingInvoice.id)} تبدیل شده است.`);
+      toast('info', `این پیش‌فاکتور قبلاً به فاکتور رسمی شمارهٔ ${formatPersianDigits(existingInvoice.id)} تبدیل شده است.`);
       return;
     }
 
-    const confirmConversion = window.confirm(`آیا مطمئن هستید که می‌خواهید پیش‌فاکتور «${inv.customer_name}» را به فاکتور رسمی تبدیل کنید؟`);
-    if (!confirmConversion) return;
+    if (!await confirm(`آیا مطمئن هستید که می‌خواهید پیش‌فاکتور «${inv.customer_name}» را به فاکتور رسمی تبدیل کنید؟`, {
+      title: 'صدور فاکتور رسمی',
+      confirmLabel: 'تبدیل به فاکتور',
+      danger: false,
+    })) return;
 
     setConvertingQuotationId(String(inv.id));
     try {
       const result = await convertQuotationToInvoice(inv, { readTable, insertRows });
       if (result.alreadyConverted) {
-        alert(`این پیش‌فاکتور قبلاً به فاکتور رسمی شمارهٔ ${formatPersianDigits(result.invoice.id)} تبدیل شده است.`);
+        toast('info', `این پیش‌فاکتور قبلاً به فاکتور رسمی شمارهٔ ${formatPersianDigits(result.invoice.id)} تبدیل شده است.`);
       } else {
-        alert('فاکتور رسمی با موفقیت صادر شد و در گزارش مالی قرار گرفت.');
+        toast('success', 'فاکتور رسمی با موفقیت صادر شد و در گزارش مالی قرار گرفت.');
       }
       await fetchInvoices();
     } catch (error) {
@@ -632,7 +653,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         : (error.message || '').includes('این خروج موجودی با رزروهای فعال تداخل دارد')
           ? 'برای ثبت کسریِ تأییدشدهٔ موجودی و صدور فاکتور، migration supabase/migrations/20261101192000_invoice_inventory_reconciliation.sql را در SQL Editor سوپابیس اجرا کنید.'
         : error.message;
-      alert(`خطا در صدور فاکتور رسمی: ${detail}`);
+      toast('error', `خطا در صدور فاکتور رسمی: ${detail}`);
     } finally {
       setConvertingQuotationId(null);
     }
@@ -659,12 +680,16 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
     }
   };
 
-  const handleLoadInvoice = (inv, { editing = false, notify = true, discardChanges = true } = {}) => {
+  const handleLoadInvoice = async (inv, { editing = false, notify = true, discardChanges = true } = {}) => {
     if (
       editingQuotationId
       && (String(editingQuotationId) !== String(inv.id) || !editing)
       && discardChanges
-      && !window.confirm('تغییرات ذخیره‌نشده کنار گذاشته شود؟')
+      && !await confirm('تغییرات ذخیره‌نشده کنار گذاشته شود؟', {
+        title: 'بارگذاری پیش‌فاکتور',
+        confirmLabel: 'بارگذاری',
+        danger: false,
+      })
     ) return;
     const itemsData = inv.items_json || inv.items_data || [];
     const restoredItems = itemsData.map((item, index) => ({
@@ -677,6 +702,9 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       price_level3: item.p3 ?? item.price_level3 ?? 0,
       base_cost: item.cost ?? item.base_cost ?? 0,
       item_type: item.item_type || 'sale',
+      image: item.image || inventoryItems.find((inventoryItem) => (
+        String(inventoryItem.id) === String(item.inventory_id)
+      ))?.image || '',
       rental_checkout_date: item.rental_checkout_date || '',
       rental_return_date: item.rental_return_date || '',
     }));
@@ -694,7 +722,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       phone: inv.customer_phone || '',
     });
     setEditingQuotationId(editing && inv.type !== 'official' ? String(inv.id) : null);
-    if (notify) alert(`پیش‌فاکتور مشتری «${inv.customer_name}» بارگذاری شد.`);
+    if (notify) toast('success', `پیش‌فاکتور مشتری «${inv.customer_name}» بارگذاری شد.`);
   };
 
   const handleEditQuotation = (event, quotation) => {
@@ -703,7 +731,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       invoice.type === 'official' && String(invoice.quotation_id) === String(quotation.id)
     ));
     if (linkedInvoice) {
-      alert('این پیش‌فاکتور قبلاً رسمی شده و امکان ویرایش آن وجود ندارد.');
+      toast('warning', 'این پیش‌فاکتور قبلاً رسمی شده و امکان ویرایش آن وجود ندارد.');
       return;
     }
     handleLoadInvoice(quotation, { editing: true });
@@ -729,22 +757,22 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
 
   const handleDeleteSelectedInvoices = async () => {
     if (selectedInvoiceIds.length === 0) { 
-      alert("لطفاً حداقل یک فاکتور را انتخاب کنید."); 
+      toast('warning', 'لطفاً حداقل یک فاکتور را انتخاب کنید.');
       return; 
     }
     
-    if (!window.confirm(`آیا از حذف ${formatDisplay(selectedInvoiceIds.length)} فاکتور انتخاب‌شده اطمینان دارید؟`)) return;
+    if (!await confirm(`آیا از حذف ${formatDisplay(selectedInvoiceIds.length)} فاکتور انتخاب‌شده اطمینان دارید؟`)) return;
 
     try {
       await deleteSelectedDocuments(selectedInvoiceIds, savedInvoices, { deleteRows });
-      alert("فاکتورهای انتخاب‌شده با موفقیت حذف شدند.");
+      toast('success', 'فاکتورهای انتخاب‌شده با موفقیت حذف شدند.');
       fetchInvoices();
     } catch (err) {
       if (err.partial) {
-        alert(`بخشی از حذف انجام شد اما عملیات کامل نشد: ${err.message} فهرست را تازه‌سازی و موارد باقی‌مانده را بررسی کنید.`);
+        toast('warning', `بخشی از حذف انجام شد اما عملیات کامل نشد: ${err.message} فهرست را تازه‌سازی و موارد باقی‌مانده را بررسی کنید.`);
         fetchInvoices();
       } else {
-        alert("خطا در حذف دسته‌ای: " + err.message);
+        toast('error', `خطا در حذف دسته‌ای: ${err.message}`);
       }
     }
   };
@@ -894,8 +922,13 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
             <tbody>
               {items.length === 0 ? (
                 <tr className="quotation-items-empty-row">
-                  <td colSpan={showBuyingPrice ? 10 : 9} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
-                    هیچ کالایی به پیش‌فاکتور اضافه نشده است. (از دکمهٔ «صدور پیش‌فاکتور جدید» استفاده کنید)
+                  <td colSpan={showBuyingPrice ? 10 : 9}>
+                    <EmptyState
+                      icon="invoice"
+                      title="هنوز کالایی اضافه نشده"
+                      description="از فهرست انبار کالا یا خدمت موردنیاز را انتخاب کنید."
+                      primaryAction={{ label: 'افزودن کالا', onClick: () => setInventoryPickerOpen(true) }}
+                    />
                   </td>
                 </tr>
               ) : (
@@ -1145,6 +1178,11 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                     placeholder="نام کالا"
                   />
                 </label>
+                <ImageUpload
+                  value={newInventoryForm.image}
+                  onChange={(image) => setNewInventoryForm((current) => ({ ...current, image }))}
+                  onError={(message) => toast('error', message)}
+                />
                 <label>
                   نوع
                   <select
@@ -1255,9 +1293,14 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
             {pickerStockError && <p className="quotation-inventory-stock-error" role="alert">{pickerStockError}</p>}
             <div className="quotation-inventory-picker-list">
               {filteredInventoryItems.length === 0 ? (
-                <p className="quotation-inventory-picker-empty">
-                  {inventoryItems.length === 0 ? 'هنوز کالایی در انبار ثبت نشده است.' : 'کالایی با این نام پیدا نشد.'}
-                </p>
+                <EmptyState
+                  icon={inventoryItems.length === 0 ? 'box' : 'search'}
+                  title={inventoryItems.length === 0 ? 'هنوز کالایی در انبار ثبت نشده' : 'موردی پیدا نشد'}
+                  description={inventoryItems.length === 0 ? 'می‌توانید کالا را همین‌جا ثبت کنید.' : 'عبارت جستجو را تغییر دهید یا فیلتر را پاک کنید.'}
+                  primaryAction={inventoryItems.length === 0
+                    ? { label: 'ثبت اولین کالا', onClick: () => setInventoryCreateOpen(true) }
+                    : { label: 'پاک کردن فیلترها', onClick: () => setInventorySearchTerm('') }}
+                />
               ) : (
                 <table className="quotation-inventory-picker-table">
                   <thead>
@@ -1306,12 +1349,25 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                           <td>{isSelected ? '✓' : formatDisplay(index + 1)}</td>
                           <td onClick={(event) => event.stopPropagation()}>
                             {isEditing ? (
-                              <input
-                                aria-label="عنوان کالا"
-                                value={inventoryEditForm.title}
-                                onChange={(event) => setInventoryEditForm((current) => ({ ...current, title: event.target.value }))}
-                              />
-                            ) : item.title}
+                              <div className="quotation-inventory-edit-item">
+                                <input
+                                  aria-label="عنوان کالا"
+                                  value={inventoryEditForm.title}
+                                  onChange={(event) => setInventoryEditForm((current) => ({ ...current, title: event.target.value }))}
+                                />
+                                <ImageUpload
+                                  value={inventoryEditForm.image}
+                                  onChange={(image) => setInventoryEditForm((current) => ({ ...current, image }))}
+                                  onError={(message) => toast('error', message)}
+                                  label="تصویر"
+                                />
+                              </div>
+                            ) : (
+                              <div className="quotation-inventory-item-name">
+                                <InventoryThumbnail item={item} />
+                                <span>{item.title}</span>
+                              </div>
+                            )}
                           </td>
                           <td>
                             {isEditing ? (
@@ -1455,9 +1511,11 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         </div>
         <div className="recent-invoices-list">
           {savedInvoices.length === 0 ? (
-            <div style={{ padding: '15px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
-              فاکتور یا پیش‌فاکتور ذخیره‌شده‌ای وجود ندارد.
-            </div>
+            <EmptyState
+              icon="invoice"
+              title="هنوز پیش‌فاکتوری ثبت نشده"
+              description="پس از انتخاب مشتری و کالاها، پیش‌فاکتور را ذخیره کنید."
+            />
           ) : (
             savedInvoices.map(inv => (
               <div

@@ -4,6 +4,7 @@ import {
   calculateQuotationTotals,
   convertQuotationToInvoice,
   deleteSelectedDocuments,
+  ensureQuotationInventoryLinks,
   getInvoiceDeletionErrorMessage,
   updateOfficialInvoice,
   updateQuotation,
@@ -35,7 +36,8 @@ test('quotation totals calculate all price levels from Persian grouped input', (
 });
 
 test('conversion creates a linked invoice when no invoice exists', async () => {
-  let inserted;
+  const inserted = [];
+  const tablesRead = [];
   const result = await convertQuotationToInvoice(
     {
       id: 12,
@@ -53,23 +55,31 @@ test('conversion creates a linked invoice when no invoice exists', async () => {
       }],
     },
     {
-      readTable: async () => ({ data: [], error: null }),
+      readTable: async (table) => {
+        tablesRead.push(table);
+        return { data: [], error: null };
+      },
       insertRows: async (table, rows) => {
-        inserted = { table, row: rows[0] };
-        return { data: [rows[0]], error: null };
+        const row = table === 'inventory' ? { ...rows[0], id: 81 } : rows[0];
+        inserted.push({ table, row });
+        return { data: [row], error: null };
       },
     },
   );
 
   assert.equal(result.alreadyConverted, false);
-  assert.equal(inserted.table, 'invoices');
-  assert.equal(inserted.row.quotation_id, '12');
-  assert.equal(inserted.row.customer_phone, '09120000000');
-  assert.equal(inserted.row.total_price, 500);
-  assert.equal(inserted.row.discount_amount, 120);
-  assert.equal(inserted.row.paid_amount, 0);
-  assert.equal(inserted.row.payment_status, 'unpaid');
-  assert.deepEqual(inserted.row.items_data, [{
+  assert.deepEqual(tablesRead, ['invoices', 'inventory']);
+  assert.equal(inserted[0].table, 'inventory');
+  assert.equal(inserted[0].row.title, 'کالای اجاره‌ای');
+  assert.equal(inserted[0].row.item_type, 'rent');
+  assert.equal(inserted[1].table, 'invoices');
+  assert.equal(inserted[1].row.quotation_id, '12');
+  assert.equal(inserted[1].row.customer_phone, '09120000000');
+  assert.equal(inserted[1].row.total_price, 500);
+  assert.equal(inserted[1].row.discount_amount, 120);
+  assert.equal(inserted[1].row.paid_amount, 0);
+  assert.equal(inserted[1].row.payment_status, 'unpaid');
+  assert.deepEqual(inserted[1].row.items_data, [{
     title: 'کالای اجاره‌ای',
     inventory_id: 81,
     item_type: 'rent',
@@ -79,12 +89,129 @@ test('conversion creates a linked invoice when no invoice exists', async () => {
   }]);
 });
 
+test('quotation item links to an existing inventory item by normalized title and type', async () => {
+  const result = await ensureQuotationInventoryLinks([{
+    id: 'restored-0',
+    title: '  کـالای   اجاره‌ای ',
+    item_type: 'اجاره',
+    p1: '۱٬۰۰۰',
+  }], {
+    readTable: async () => ({
+      data: [{ id: 27, title: 'کالای اجاره‌ای', item_type: 'rent', sort_order: 2 }],
+      error: null,
+    }),
+    insertRows: async () => assert.fail('should reuse the existing inventory item'),
+  });
+
+  assert.equal(result.createdCount, 0);
+  assert.equal(result.items[0].inventory_id, 27);
+  assert.equal(result.items[0].item_type, 'rent');
+});
+
+test('quotation item with a stale inventory ID is relinked by title and type', async () => {
+  const result = await ensureQuotationInventoryLinks([{
+    inventory_id: 999,
+    title: 'صندلی',
+    item_type: 'sale',
+  }], {
+    readTable: async () => ({
+      data: [{ id: 28, title: 'صندلی', item_type: 'sale', sort_order: 1 }],
+      error: null,
+    }),
+    insertRows: async () => assert.fail('should reuse the matching inventory item'),
+  });
+
+  assert.equal(result.items[0].inventory_id, 28);
+  assert.equal(result.createdCount, 0);
+});
+
+test('missing quotation item is added to inventory with all three prices', async () => {
+  const calls = [];
+  const result = await ensureQuotationInventoryLinks([{
+    title: 'میز',
+    item_type: 'فروشی',
+    p1: '۱٬۰۰۰',
+    p2: '۲٬۰۰۰',
+    p3: '۳٬۰۰۰',
+    cost: '۵۰۰',
+  }], {
+    readTable: async () => ({ data: [], error: null }),
+    insertRows: async (table, rows) => {
+      calls.push({ table, row: rows[0] });
+      return { data: [{ ...rows[0], id: 29 }], error: null };
+    },
+  });
+
+  assert.equal(result.createdCount, 1);
+  assert.equal(result.items[0].inventory_id, 29);
+  assert.deepEqual(calls, [{
+    table: 'inventory',
+    row: {
+      title: 'میز',
+      item_type: 'sale',
+      sort_order: 1,
+      base_cost: 500,
+      price_level1: 1000,
+      price_level2: 2000,
+      price_level3: 3000,
+      image: null,
+    },
+  }]);
+});
+
+test('item type mismatch creates or links an inventory item of the requested type', async () => {
+  let insertedRow;
+  const result = await ensureQuotationInventoryLinks([{
+    inventory_id: 30,
+    title: 'میز',
+    item_type: 'rent',
+  }], {
+    readTable: async () => ({
+      data: [{ id: 30, title: 'میز', item_type: 'sale', sort_order: 1 }],
+      error: null,
+    }),
+    insertRows: async (table, rows) => {
+      assert.equal(table, 'inventory');
+      insertedRow = rows[0];
+      return { data: [{ ...rows[0], id: 31 }], error: null };
+    },
+  });
+
+  assert.equal(insertedRow.item_type, 'rent');
+  assert.equal(result.items[0].inventory_id, 31);
+});
+
+test('ambiguous inventory title and type are reported instead of creating duplicates', async () => {
+  let insertCalled = false;
+  await assert.rejects(
+    ensureQuotationInventoryLinks([{ title: 'صندلی', item_type: 'sale' }], {
+      readTable: async () => ({
+        data: [
+          { id: 32, title: 'صندلی', item_type: 'sale' },
+          { id: 33, title: 'صندلی', item_type: 'sale' },
+        ],
+        error: null,
+      }),
+      insertRows: async () => {
+        insertCalled = true;
+        return { data: [], error: null };
+      },
+    }),
+    /چند کالای هم‌نام/,
+  );
+  assert.equal(insertCalled, false);
+});
+
 test('conversion does not insert a duplicate invoice', async () => {
   let insertCalled = false;
+  const tablesRead = [];
   const result = await convertQuotationToInvoice(
     { id: 12, customer_name: 'مشتری' },
     {
-      readTable: async () => ({ data: [{ id: 40, quotation_id: '12' }], error: null }),
+      readTable: async (table) => {
+        tablesRead.push(table);
+        return { data: [{ id: 40, quotation_id: '12' }], error: null };
+      },
       insertRows: async () => {
         insertCalled = true;
         return { data: [], error: null };
@@ -95,6 +222,7 @@ test('conversion does not insert a duplicate invoice', async () => {
   assert.equal(result.alreadyConverted, true);
   assert.equal(result.invoice.id, 40);
   assert.equal(insertCalled, false);
+  assert.deepEqual(tablesRead, ['invoices']);
 });
 
 test('bulk deletion groups quotation and official invoice IDs', async () => {

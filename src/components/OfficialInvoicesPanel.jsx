@@ -9,6 +9,8 @@ import { formatPersianDate } from '../dateUtils';
 import { renderBusinessContactHtml } from '../profileLinks';
 import { sumInvoiceExpenses } from '../invoiceExpenseUtils';
 import { buildInvoicePrintHtml } from '../invoicePrintTemplate';
+import EmptyState from './EmptyState';
+import { useToast } from './useToast';
 
 // مقادیر مجاز وضعیت پرداخت
 const PAYMENT_STATUSES = [
@@ -31,6 +33,7 @@ const isValidIsoDate = (value) => {
 };
 
 export default function OfficialInvoicesPanel({ businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
+  const { toast, confirm } = useToast();
   const [invoices, setInvoices] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkAction, setBulkAction] = useState('');
@@ -281,7 +284,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   };
 
   const handleDeleteInvoiceExpense = async (expense) => {
-    if (!window.confirm('این هزینهٔ پرداخت‌نشده از فاکتور حذف شود؟')) return;
+    if (!await confirm('این هزینهٔ پرداخت‌نشده از فاکتور حذف شود؟')) return;
     setInvoiceExpenseBusy(true);
     setInvoiceExpenseFeedback('');
     const { error } = await deleteRows('invoice_expenses', [
@@ -411,28 +414,32 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
 
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`آیا از حذف ${formatDisplay(selectedIds.length)} فاکتور انتخاب‌شده مطمئن هستید؟`)) return;
+    if (!await confirm(`آیا از حذف ${formatDisplay(selectedIds.length)} فاکتور انتخاب‌شده مطمئن هستید؟`)) return;
 
     const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'in', value: selectedIds }]);
     if (error) {
-      alert("خطا در حذف گروهی فاکتورها: " + getInvoiceDeletionErrorMessage(error));
+      toast('error', `خطا در حذف گروهی فاکتورها: ${getInvoiceDeletionErrorMessage(error)}`);
     } else {
       fetchOfficialInvoices();
+      toast('success', 'فاکتورهای انتخاب‌شده حذف شدند.');
     }
   };
 
   // انجام عملیات انتخاب‌شده روی یک فاکتور مشخص (دابل‌کلیک روی ردیف یا دکمهٔ «انجام»)
   const runInvoiceAction = async (action, invoice) => {
     if (!action) {
-      alert('ابتدا از فهرست «عملیات» یک مورد را انتخاب کنید، سپس روی ردیف فاکتور دابل‌کلیک کنید.');
+      toast('info', 'ابتدا از فهرست «عملیات» یک مورد را انتخاب کنید، سپس روی ردیف فاکتور دابل‌کلیک کنید.');
       return;
     }
 
     if (action === 'delete') {
-      if (!window.confirm(`آیا از حذف فاکتور #${formatPersianDigits(invoice.id)} اطمینان دارید؟`)) return;
+      if (!await confirm(`آیا از حذف فاکتور #${formatPersianDigits(invoice.id)} اطمینان دارید؟`)) return;
       const { error } = await deleteRows('invoices', [{ column: 'id', operator: 'eq', value: invoice.id }]);
-      if (error) alert('خطا در حذف فاکتور: ' + getInvoiceDeletionErrorMessage(error));
-      else fetchOfficialInvoices();
+      if (error) toast('error', 'خطا در حذف فاکتور: ' + getInvoiceDeletionErrorMessage(error));
+      else {
+        fetchOfficialInvoices();
+        toast('success', 'فاکتور حذف شد.');
+      }
       return;
     }
 
@@ -447,11 +454,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
 
   const handleApplyBulkAction = async () => {
     if (!bulkAction) {
-      alert('ابتدا یک عملیات را انتخاب کنید.');
+      toast('warning', 'ابتدا یک عملیات را انتخاب کنید.');
       return;
     }
     if (!selectedIds.length) {
-      alert('ابتدا حداقل یک فاکتور را انتخاب کنید.');
+      toast('warning', 'ابتدا حداقل یک فاکتور را انتخاب کنید.');
       return;
     }
     if (bulkAction === 'delete') {
@@ -459,13 +466,13 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       return;
     }
     if (selectedIds.length !== 1) {
-      alert('این عملیات فقط برای یک فاکتور قابل انجام است؛ فقط یک مورد را انتخاب کنید.');
+      toast('warning', 'این عملیات فقط برای یک فاکتور قابل انجام است؛ فقط یک مورد را انتخاب کنید.');
       return;
     }
 
     const invoice = invoices.find((item) => item.id === selectedIds[0]);
     if (!invoice) {
-      alert('فاکتور انتخاب‌شده پیدا نشد. فهرست را تازه‌سازی کنید.');
+      toast('error', 'فاکتور انتخاب‌شده پیدا نشد. فهرست را تازه‌سازی کنید.');
       return;
     }
     await runInvoiceAction(bulkAction, invoice);
@@ -496,7 +503,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const handleSendWhatsApp = () => {
     const digits = String(whatsAppPhone || '').replace(/\D/g, '');
     if (!digits) {
-      alert('لطفا شماره موبایل مشتری را وارد کنید.');
+      toast('warning', 'لطفا شماره موبایل مشتری را وارد کنید.');
       return;
     }
 
@@ -526,7 +533,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     const { error } = await updateRows('invoices', { checklist: updatedChecklist }, [{ column: 'id', operator: 'eq', value: inv.id }]);
 
     if (error) {
-      alert("خطا در بروزرسانی چک‌لیست: " + error.message);
+      toast('error', `خطا در بروزرسانی چک‌لیست: ${error.message}`);
     } else {
       fetchOfficialInvoices();
     }
@@ -544,7 +551,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     const { error } = await updateRows('invoices', { checklist: updatedChecklist }, [{ column: 'id', operator: 'eq', value: inv.id }]);
 
     if (error) {
-      alert("خطا در افزودن کار به چک‌لیست: " + error.message);
+      toast('error', `خطا در افزودن کار به چک‌لیست: ${error.message}`);
       return;
     }
 
@@ -670,11 +677,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
         || item.rental_return_date < item.rental_checkout_date)
     ));
     if (rentalItemsWithoutDates.length) {
-      alert('برای هر کالای اجاره‌ای متصل به انبار، تاریخ تحویل و مهلت عودت معتبر را وارد کنید.');
+      toast('error', 'برای هر کالای اجاره‌ای متصل به انبار، تاریخ تحویل و مهلت عودت معتبر را وارد کنید.');
       return;
     }
     if (normalizedItems.some((item) => item.inventory_id) && !navigator.onLine) {
-      alert('برای ذخیرهٔ فاکتورهای متصل به موجودی، اتصال آنلاین لازم است.');
+      toast('warning', 'برای ذخیرهٔ فاکتورهای متصل به موجودی، اتصال آنلاین لازم است.');
       return;
     }
     const grossTotal = normalizedItems.reduce((sum, item) => {
@@ -684,12 +691,12 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
     }, 0);
     const discount = Number(discountAmount) || 0;
     if (!Number.isSafeInteger(discount) || discount < 0 || discount > grossTotal) {
-      alert('مبلغ تخفیف باید عدد صحیح و بین صفر تا مبلغ کل فاکتور باشد.');
+      toast('error', 'مبلغ تخفیف باید عدد صحیح و بین صفر تا مبلغ کل فاکتور باشد.');
       return;
     }
     const newTotalPrice = grossTotal - discount;
     if (newTotalPrice < Number(paidAmount || 0)) {
-      alert('مبلغ کل فاکتور نمی‌تواند از مبلغی که تاکنون در صندوق یا بانک دریافت شده کمتر باشد.');
+      toast('error', 'مبلغ کل فاکتور نمی‌تواند از مبلغی که تاکنون در صندوق یا بانک دریافت شده کمتر باشد.');
       return;
     }
 
@@ -709,7 +716,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
       setIsCustomerListOpen(false);
       fetchOfficialInvoices();
     } catch (error) {
-      alert("خطا در ذخیره اطلاعات: " + error.message);
+      toast('error', `خطا در ذخیره اطلاعات: ${error.message}`);
     }
   };
 
@@ -766,7 +773,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
   const handlePrint = (inv) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert('مرورگر اجازهٔ باز کردن پنجرهٔ چاپ را نداد؛ لطفا اجازهٔ پاپ‌آپ را فعال کنید.');
+      toast('warning', 'مرورگر اجازهٔ باز کردن پنجرهٔ چاپ را نداد؛ لطفا اجازهٔ پاپ‌آپ را فعال کنید.');
       return;
     }
     printWindow.document.write(buildInvoiceHtml(inv, true));
@@ -845,7 +852,11 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
           <tbody>
             {invoices.length === 0 ? (
               <tr>
-                <td colSpan="9" style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>هیچ فاکتور رسمی ثبت نشده است.</td>
+                <td colSpan="9"><EmptyState
+                  icon="invoice"
+                  title="هنوز فاکتور رسمی ثبت نشده"
+                  description="فاکتور رسمی پس از تبدیل یک پیش‌فاکتور صادر می‌شود."
+                /></td>
               </tr>
             ) : (
               invoices.map((inv) => {

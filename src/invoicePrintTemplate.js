@@ -249,7 +249,11 @@ export function buildInvoicePrintHtml({
                 warning.style.display = 'block';
                 if (!warningShown) {
                   warningShown = true;
-                  window.alert('تعداد اقلام زیاد است و ممکن است همهٔ محتوا در یک صفحهٔ A4 جا نشود.');
+                  window.opener?.postMessage({
+                    type: 'azho-toast',
+                    kind: 'warning',
+                    message: 'تعداد اقلام زیاد است و ممکن است همهٔ محتوا در یک صفحهٔ A4 جا نشود.',
+                  }, location.origin);
                 }
               }
             };

@@ -3,6 +3,7 @@ import { SUPABASE_URL } from '../supabaseClient';
 import { BACKUP_TABLES, createBackupDocument, validateBackupDocument } from '../backupUtils';
 import { readAllBackupRows, restoreBackupDocument } from '../backupService';
 import { insertRows, readTable, updateRows } from '../offlineSync';
+import { useToast } from './useToast';
 
 const TABLE_LABELS = {
   customers: 'مشتریان',
@@ -28,6 +29,7 @@ const actionButtonStyle = {
 };
 
 export default function BackupPanel({ userId, organizationId }) {
+  const { toast, confirm } = useToast();
   const fileInput = useRef(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -56,8 +58,10 @@ export default function BackupPanel({ userId, organizationId }) {
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage('فایل پشتیبان شامل اطلاعات محلیِ همگام‌نشده نیز ساخته شد. آن را در محل امن نگهداری کنید.');
+      toast('success', 'فایل پشتیبان با موفقیت ساخته شد.');
     } catch (error) {
       setErrorMessage(`ساخت پشتیبان ناموفق بود: ${error.message}`);
+      toast('error', `ساخت پشتیبان ناموفق بود: ${error.message}`);
     } finally {
       setBusy(false);
     }
@@ -73,8 +77,9 @@ export default function BackupPanel({ userId, organizationId }) {
       const backup = validateBackupDocument(backupDocument);
       if (backup.userId !== userId) throw new Error('این فایل پشتیبان متعلق به حساب کاربری دیگری است.');
       if (backup.projectUrl !== SUPABASE_URL) throw new Error('این فایل برای پروژهٔ دیگری ساخته شده است.');
-      const confirmed = window.confirm(
+      const confirmed = await confirm(
         'بازیابی، رکوردهای دارای شناسهٔ یکسان را به‌روزرسانی و رکوردهای جدید را اضافه می‌کند؛ هیچ رکوردی حذف نمی‌شود. ادامه می‌دهید؟',
+        { title: 'بازیابی نسخهٔ پشتیبان', confirmLabel: 'ادامهٔ بازیابی', danger: false },
       );
       if (!confirmed) return;
 
@@ -91,6 +96,7 @@ export default function BackupPanel({ userId, organizationId }) {
         .filter((table) => restoredCounts[table].updated || restoredCounts[table].inserted)
         .map((table) => `${TABLE_LABELS[table]}: ${restoredCounts[table].updated} به‌روزرسانی، ${restoredCounts[table].inserted} افزودن`);
       setMessage(summary.length ? `بازیابی انجام شد؛ ${summary.join('؛ ')}.` : 'همهٔ رکوردهای فایل از قبل وجود داشتند؛ تغییری لازم نبود.');
+      toast('success', 'بازیابی پشتیبان با موفقیت انجام شد.');
       window.dispatchEvent(new Event('offline-data-updated'));
     } catch (error) {
       const completed = BACKUP_TABLES
@@ -98,6 +104,7 @@ export default function BackupPanel({ userId, organizationId }) {
         .map((table) => `${TABLE_LABELS[table]} (${error.restoredCounts[table].updated} به‌روزرسانی، ${error.restoredCounts[table].inserted} افزودن)`);
       const progress = completed.length ? ` انجام‌شده تا این مرحله: ${completed.join('؛ ')}.` : '';
       setErrorMessage(`بازیابی کامل نشد: ${error.message}${progress} فایل را نگه دارید و پس از رفع خطا دوباره بررسی کنید.`);
+      toast('error', `بازیابی کامل نشد: ${error.message}`);
     } finally {
       setBusy(false);
       if (fileInput.current) fileInput.current.value = '';

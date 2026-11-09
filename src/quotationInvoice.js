@@ -18,6 +18,123 @@ export function calculateQuotationTotals(items, discountAmount, paidAmount = 0) 
   };
 }
 
+const normalizeInventoryTitle = (title) => String(title || '')
+  .normalize('NFKC')
+  .replace(/[يى]/g, 'ی')
+  .replace(/ك/g, 'ک')
+  .replace(/[\u200c\u0640]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLocaleLowerCase();
+
+const normalizeInventoryType = (type) => {
+  const normalized = String(type || 'sale')
+    .normalize('NFKC')
+    .replace(/[يى]/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/[\u200c\u0640\s]/g, '')
+    .toLocaleLowerCase();
+
+  if (['rent', 'rental', 'اجاره', 'اجاره‌ای', 'اجارهای'].includes(normalized)) return 'rent';
+  if (['sale', 'sell', 'فروش', 'فروشی'].includes(normalized)) return 'sale';
+  throw new Error(`نوع کالای «${type}» معتبر نیست؛ نوع باید فروش یا اجاره باشد.`);
+};
+
+const getInventoryType = (type) => {
+  try {
+    return normalizeInventoryType(type);
+  } catch {
+    return null;
+  }
+};
+
+const hasInventoryId = (id) => (
+  id !== undefined
+  && id !== null
+  && String(id).trim() !== ''
+  && !String(id).startsWith('restored-')
+);
+
+export async function ensureQuotationInventoryLinks(items, { readTable, insertRows }) {
+  const lines = Array.isArray(items) ? items : [];
+  const { data: inventory, error: readError } = await readTable('inventory', {
+    orderBy: 'sort_order',
+    ascending: true,
+  });
+  if (readError) throw readError;
+
+  const inventoryItems = inventory || [];
+  let nextSortOrder = Math.max(0, ...inventoryItems.map((item) => Number(item.sort_order) || 0));
+  let createdCount = 0;
+  const resolvedLines = lines.map((line) => {
+    const type = normalizeInventoryType(line.item_type);
+    const reference = line.inventory_id ?? line.id;
+    const existingById = hasInventoryId(reference)
+      ? inventoryItems.find((item) => String(item.id) === String(reference))
+      : null;
+
+    if (existingById && getInventoryType(existingById.item_type) === type) {
+      return { line, type, inventoryItem: existingById };
+    }
+
+    const normalizedTitle = normalizeInventoryTitle(line.title);
+    if (!normalizedTitle) throw new Error('برای افزودن کالا به انبار، نام کالا یا خدمت لازم است.');
+
+    const matches = inventoryItems.filter((item) => (
+      normalizeInventoryTitle(item.title) === normalizedTitle
+      && getInventoryType(item.item_type) === type
+    ));
+    if (matches.length > 1) {
+      throw new Error(`برای «${line.title}» چند کالای هم‌نام و هم‌نوع در انبار وجود دارد؛ ابتدا موارد تکراری را بررسی کنید.`);
+    }
+
+    return { line, type, normalizedTitle, inventoryItem: matches[0] || null };
+  });
+
+  const resolvedIds = resolvedLines
+    .filter(({ inventoryItem }) => inventoryItem)
+    .map(({ inventoryItem }) => String(inventoryItem.id));
+  const missingKeys = resolvedLines
+    .filter(({ inventoryItem }) => !inventoryItem)
+    .map(({ normalizedTitle, type }) => `${normalizedTitle}:${type}`);
+  const referencedIds = [...resolvedIds, ...missingKeys];
+  if (new Set(referencedIds).size !== referencedIds.length) {
+    throw new Error('یک کالا بیش از یک بار در فاکتور آمده است؛ تعداد همان ردیف را اصلاح کنید.');
+  }
+
+  const linkedItems = [];
+  for (const resolved of resolvedLines) {
+    let { inventoryItem } = resolved;
+    if (!inventoryItem) {
+      const { line, type } = resolved;
+      nextSortOrder += 1;
+      const { data, error } = await insertRows('inventory', [{
+        title: String(line.title).trim(),
+        item_type: type,
+        sort_order: nextSortOrder,
+        base_cost: parseNumericInput(line.cost ?? line.base_cost),
+        price_level1: parseNumericInput(line.p1 ?? line.price_level1 ?? line.unit_price ?? line.price),
+        price_level2: parseNumericInput(line.p2 ?? line.price_level2),
+        price_level3: parseNumericInput(line.p3 ?? line.price_level3),
+        image: line.image || null,
+      }]);
+      if (error) throw error;
+      inventoryItem = data?.[0];
+      if (!inventoryItem?.id) throw new Error(`«${line.title}» ذخیره شد اما شناسهٔ آن از انبار دریافت نشد.`);
+      inventoryItems.push(inventoryItem);
+      createdCount += 1;
+    }
+
+    linkedItems.push({
+      ...resolved.line,
+      inventory_id: inventoryItem.id,
+      item_type: resolved.type,
+    });
+  }
+
+  return { items: linkedItems, createdCount };
+}
+
 export async function convertQuotationToInvoice(quotation, { readTable, insertRows }) {
   if (!quotation || quotation.id === undefined || quotation.id === null) {
     throw new Error('شناسهٔ پیش‌فاکتور معتبر نیست.');
@@ -31,6 +148,8 @@ export async function convertQuotationToInvoice(quotation, { readTable, insertRo
   );
   if (existingInvoice) return { alreadyConverted: true, invoice: existingInvoice };
 
+  const quotationItems = quotation.items_json || quotation.items_data || [];
+  const { items } = await ensureQuotationInventoryLinks(quotationItems, { readTable, insertRows });
   const { data, error } = await insertRows('invoices', [{
     quotation_id: String(quotation.id),
     customer_name: quotation.customer_name,
@@ -39,7 +158,7 @@ export async function convertQuotationToInvoice(quotation, { readTable, insertRo
     discount_amount: Number(quotation.discount_amount || 0),
     paid_amount: 0,
     payment_status: 'unpaid',
-    items_data: quotation.items_json || quotation.items_data || [],
+    items_data: items,
     is_official: true,
   }]);
   if (error) throw error;

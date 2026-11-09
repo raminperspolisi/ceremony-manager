@@ -1,12 +1,15 @@
-const CACHE_NAME = 'ceremony-manager-shell-v2';
+const CACHE_NAME = 'ceremony-manager-shell-v3';
 const APP_SHELL = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
-  '/azho-app-icon-32.png',
-  '/azho-app-icon-180.png',
-  '/azho-app-icon-192.png',
-  '/azho-app-icon-512.png',
+  '/favicon.svg',
+  '/favicon.ico',
+  '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png',
   '/azho-logo.png',
 ];
 
@@ -24,8 +27,11 @@ self.addEventListener('install', (event) => {
         }));
         await cache.addAll([...new Set([...APP_SHELL, ...assetPaths])]);
       })
-      .then(() => self.skipWaiting()),
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -54,16 +60,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request, { ignoreVary: true }).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
+  event.respondWith((async () => {
+    const cached = await caches.match(request, { ignoreVary: true });
+    if (url.pathname.startsWith('/assets/')) {
+      try {
+        const response = await fetch(request);
         if (response.ok && response.type === 'basic') {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
         return response;
-      });
-    }),
-  );
+      } catch {
+        if (cached) return cached;
+        throw new Error('آفلاین هستید و این فایل هنوز ذخیره نشده است.');
+      }
+    }
+    if (cached) return cached;
+    const response = await fetch(request);
+    if (response.ok && response.type === 'basic') {
+      const copy = response.clone();
+      void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+    }
+    return response;
+  })());
 });

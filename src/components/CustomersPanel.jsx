@@ -2,10 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
 import FormattedNumberInput from './FormattedNumberInput';
+import EmptyState from './EmptyState';
+import { useToast } from './useToast';
 
 const CEREMONY_TYPES = ['عروسی', 'عقد', 'نامزدی', 'تولد', 'حنابندان', 'همایش', 'سایر'];
 
 export default function CustomersPanel({ businessName = 'تشریفات آژو' }) {
+  const { toast, confirm } = useToast();
   // فرم مشتری
   const [editingId, setEditingId] = useState(null);
   const [customerFormOpen, setCustomerFormOpen] = useState(false);
@@ -140,6 +143,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       
       handleCancelEdit();
       await fetchCustomers();
+      toast('success', editingId ? 'تغییرات مشتری ذخیره شد.' : 'مشتری با موفقیت ثبت شد.');
     } catch (err) {
       setError('خطا در ذخیرهٔ مشتری: ' + err.message);
     } finally {
@@ -149,7 +153,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   async function handleDeleteCustomer(id, e) {
     e.stopPropagation();
-    if (!window.confirm('این مشتری و مراسم‌هایش حذف شوند؟')) return;
+    if (!await confirm('این مشتری و مراسم‌هایش حذف شوند؟')) return;
     try {
       const { error: ceremonyError } = await deleteRows('ceremonies', [{ column: 'customer_id', operator: 'eq', value: id }]);
       if (ceremonyError) throw ceremonyError;
@@ -158,13 +162,14 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       setCustomers((currentCustomers) => currentCustomers.filter((customer) => String(customer.id) !== String(id)));
       setSelectedCustomerIds((currentIds) => new Set([...currentIds].filter((selectedId) => String(selectedId) !== String(id))));
       if (String(selectedCustomer?.id) === String(id)) { setSelectedCustomer(null); setCeremonies([]); }
-    } catch (err) { alert('خطا در حذف: ' + err.message); }
+      toast('success', 'مشتری و مراسم‌های مرتبط حذف شدند.');
+    } catch (err) { toast('error', 'خطا در حذف: ' + err.message); }
   }
 
   async function handleDeleteSelectedCustomers() {
     const selectedIds = Array.from(selectedCustomerIds);
     if (!selectedIds.length) return;
-    if (!window.confirm(`آیا از حذف ${formatDisplay(selectedIds.length)} مشتری و مراسم‌هایشان مطمئن هستید؟`)) return;
+    if (!await confirm(`آیا از حذف ${formatDisplay(selectedIds.length)} مشتری و مراسم‌هایشان مطمئن هستید؟`)) return;
 
     try {
       const { error: ceremonyError } = await deleteRows('ceremonies', [{ column: 'customer_id', operator: 'in', value: selectedIds }]);
@@ -178,8 +183,9 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
         setSelectedCustomer(null);
         setCeremonies([]);
       }
+      toast('success', 'مشتریان انتخاب‌شده و مراسم‌های مرتبط حذف شدند.');
     } catch (err) {
-      alert('خطا در حذف گروهی مشتریان: ' + err.message);
+      toast('error', 'خطا در حذف گروهی مشتریان: ' + err.message);
     }
   }
 
@@ -233,8 +239,8 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
   // ثبت و همگام‌سازی مراسم در جدول ceremonies و events تقویم
   async function handleSaveCeremony() {
-    if (!selectedCustomer) { alert('ابتدا یک مشتری را انتخاب کنید'); return; }
-    if (!cerDate) { alert('تاریخ مراسم را وارد کنید'); return; }
+    if (!selectedCustomer) { toast('warning', 'ابتدا یک مشتری را انتخاب کنید'); return; }
+    if (!cerDate) { toast('warning', 'تاریخ مراسم را وارد کنید'); return; }
     try {
       setError(null);
       const cerData = {
@@ -273,8 +279,8 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
 
       setEditingCeremonyId(null); setCerDate(''); setCerGuests(''); setCerBudget(''); setCerNotes('');
       fetchCeremonies(selectedCustomer.id);
-      alert('مراسم با موفقیت ثبت و به تقویم اضافه شد.');
-    } catch (err) { setError('خطای مراسم: ' + err.message); }
+      toast('success', 'مراسم با موفقیت ثبت و به تقویم اضافه شد.');
+    } catch (err) { toast('error', 'خطای مراسم: ' + err.message); }
   }
 
   function handleStartEditCeremony(c) {
@@ -287,12 +293,13 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   }
 
   async function handleDeleteCeremony(id) {
-    if (!window.confirm('این مراسم حذف شود؟')) return;
+    if (!await confirm('این مراسم حذف شود؟')) return;
     try {
       const { error: e2 } = await deleteRows('ceremonies', [{ column: 'id', operator: 'eq', value: id }]);
       if (e2) throw e2;
       fetchCeremonies(selectedCustomer.id);
-    } catch (err) { alert('خطا در حذف مراسم: ' + err.message); }
+      toast('success', 'مراسم حذف شد.');
+    } catch (err) { toast('error', 'خطا در حذف مراسم: ' + err.message); }
   }
 
   const filteredCustomers = customers.filter(c =>
@@ -524,7 +531,13 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
                     <div key={c.id} onClick={() => handleCustomerSelect(c)} style={{ padding: '5px 8px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', fontSize: '11px' }}>
                       <strong>{c["Full name"]}</strong> — {formatPersianDigits(c.phone)}
                     </div>
-                  )) : <div style={{ padding: '5px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>یافت نشد</div>}
+                  )) : <EmptyState
+                    compact
+                    icon="search"
+                    title="موردی پیدا نشد"
+                    description="نام دیگری را جستجو کنید."
+                    primaryAction={{ label: 'پاک کردن جستجو', onClick: () => { setSearchTerm(''); setIsSearching(false); } }}
+                  />}
                 </div>
               )}
             </div>
@@ -598,7 +611,14 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
                   <span>دابل‌کلیک روی نام مشتری برای ویرایش</span>
                 </div>
               </div>
-              {customers.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8', padding: '8px', fontSize: '12px' }}>هنوز مشتری‌ای ثبت نشده است.</p>}
+              {customers.length === 0 && (
+                <EmptyState
+                  icon="list"
+                  title="هنوز مشتری‌ای ثبت نشده"
+                  description="با ثبت نخستین مشتری، می‌توانید سوابق و مراسم‌های او را مدیریت کنید."
+                  primaryAction={{ label: 'ثبت اولین مشتری', onClick: handleStartNewCustomer }}
+                />
+              )}
               <ul className="customer-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                 {customers.map(c => (
                   <li
@@ -685,7 +705,11 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
             </thead>
             <tbody>
               {ceremonies.length === 0 && (
-                <tr><td colSpan="6" style={{ ...styles.td, color: '#94a3b8' }}>هنوز مراسمی برای این مشتری ثبت نشده است.</td></tr>
+                <tr><td colSpan="6"><EmptyState
+                  icon="calendar"
+                  title="هنوز مراسمی ثبت نکرده‌اید"
+                  description="از فرم بالا برای ثبت مراسم جدید برای این مشتری استفاده کنید."
+                /></td></tr>
               )}
               {ceremonies.map(c => (
                 <tr key={c.id}>
