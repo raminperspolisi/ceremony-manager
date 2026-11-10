@@ -10,7 +10,14 @@ export function createReminderTimestamp(jalaliDate, time, eventDate) {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
     throw new Error("ساعت یادآوری را به‌شکل ساعت:دقیقه وارد کنید.");
   }
-  if (gregorianDate > String(eventDate || "").slice(0, 10)) {
+  const rawEventDate = String(eventDate || "").trim();
+  const normalizedEventDate = /^(13|14)\d{2}[/-]/.test(rawEventDate)
+    ? normalizeJalaliDate(rawEventDate)
+    : "";
+  const eventDateISO = normalizedEventDate
+    ? jalaliToGregorianISO(...normalizedEventDate.split("/").map(Number))
+    : rawEventDate.slice(0, 10);
+  if (!eventDateISO || gregorianDate > eventDateISO) {
     throw new Error("تاریخ یادآوری باید در روز مراسم یا قبل از آن باشد.");
   }
 

@@ -4,6 +4,7 @@ import { supabase } from "../supabaseClient";
 import { formatPersianDigits } from "../styles";
 import { gregorianISOToJalali, jalaliToGregorianISO, normalizeJalaliDate } from "../calendarDateUtils";
 import { createReminderTimestamp, formatReminderTimestamp } from "../telegramReminderUtils";
+import PersianDateInput from "./PersianDateInput";
 import moment from "jalali-moment";
 
 const JMONTHS = [
@@ -52,6 +53,12 @@ export default function CalendarPanel({ organizationId }) {
   const [telegramReminderLoading, setTelegramReminderLoading] = useState(false);
   const [telegramReminderSaving, setTelegramReminderSaving] = useState(false);
   const [telegramReminderError, setTelegramReminderError] = useState("");
+  const telegramReminderDateISO = useMemo(() => {
+    const normalizedDate = normalizeJalaliDate(telegramReminderDate);
+    if (!normalizedDate) return "";
+    const [year, month, day] = normalizedDate.split("/").map(Number);
+    return jalaliToGregorianISO(year, month, day) || "";
+  }, [telegramReminderDate]);
 
   const emptyForm = {
     customer_id: "",
@@ -739,12 +746,13 @@ export default function CalendarPanel({ organizationId }) {
                   <form className="calendar-telegram-reminder-form" onSubmit={handleAddTelegramReminder}>
                     <label>
                       تاریخ یادآوری (شمسی)
-                      <input
+                      <PersianDateInput
                         className="calendar-input"
-                        value={telegramReminderDate}
-                        onChange={(event) => setTelegramReminderDate(event.target.value)}
+                        value={telegramReminderDateISO}
+                        onChange={(value) => setTelegramReminderDate(
+                          value ? formatPersianDigits(gregorianISOToJalali(value)) : "",
+                        )}
                         placeholder="۱۴۰۵/۰۸/۱۸"
-                        inputMode="numeric"
                         required
                       />
                     </label>
