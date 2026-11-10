@@ -14,6 +14,7 @@ TELEGRAM_ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").strip()
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "").strip()
 ORDER_APPROVAL_SECRET = os.getenv("TELEGRAM_ORDER_APPROVAL_SECRET", "").strip()
+TELEGRAM_REMINDER_SECRET = os.getenv("TELEGRAM_REMINDER_SECRET", "").strip()
 
 TELEGRAM_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 SUPABASE_HEADERS = {
@@ -228,6 +229,282 @@ def save_bot_order_address(telegram_user_id, address):
     if not isinstance(result, dict) or "found" not in result:
         raise ValueError("Invalid order address response.")
     return result
+
+
+def complete_telegram_reminder_link(token, telegram_user_id, chat_id, username):
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/complete_telegram_reminder_link",
+        json={
+            "p_token": token,
+            "p_telegram_user_id": str(telegram_user_id),
+            "p_chat_id": str(chat_id),
+            "p_telegram_username": username or "",
+            "p_reminder_secret": TELEGRAM_REMINDER_SECRET,
+        },
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if not isinstance(result, dict) or result.get("linked") is not True:
+        raise ValueError("Invalid Telegram reminder link response.")
+    return result
+
+
+def claim_telegram_event_reminder():
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/claim_telegram_event_reminder",
+        json={"p_reminder_secret": TELEGRAM_REMINDER_SECRET},
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if result is not None and (
+        not isinstance(result, dict)
+        or not result.get("link_id")
+        or not result.get("event_id")
+        or not result.get("chat_id")
+        or not result.get("event_date")
+        or result.get("days_before") not in {1, 7}
+        or not isinstance(result.get("pending_tasks"), list)
+    ):
+        raise ValueError("Invalid Telegram event reminder claim response.")
+    return result
+
+
+def finish_telegram_event_reminder(reminder, sent):
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/finish_telegram_event_reminder",
+        json={
+            "p_link_id": reminder["link_id"],
+            "p_event_id": reminder["event_id"],
+            "p_event_date": reminder["event_date"],
+            "p_days_before": reminder["days_before"],
+            "p_sent": sent,
+            "p_reminder_secret": TELEGRAM_REMINDER_SECRET,
+        },
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if result is not True:
+        raise ValueError("Telegram event reminder completion made no change.")
+
+
+def telegram_event_reminder_message(reminder):
+    days_before = int(reminder["days_before"])
+    timing = "فردا" if days_before == 1 else f"{persian_digits(days_before)} روز دیگر"
+    title = str(reminder.get("event_type") or "مراسم").strip()[:120]
+    customer = str(reminder.get("customer_name") or "مشتری ثبت‌نشده").strip()[:160]
+    event_date = str(reminder.get("event_date") or "").strip()[:20]
+    tasks = [str(task).strip() for task in reminder["pending_tasks"] if str(task).strip()]
+    lines = [
+        "🔔 یادآوری مراسم",
+        "──────────────",
+        f"⏳ زمان باقی‌مانده: {timing}",
+        f"🎉 نوع مراسم: {title}",
+        f"👤 مشتری: {customer}",
+        f"📅 تاریخ: {persian_digits(event_date)}",
+        "",
+        "📋 کارهای انجام‌نشدهٔ چک‌لیست:",
+    ]
+    if tasks:
+        lines.extend(f"• {task[:180]}" for task in tasks[:15])
+        pending_count = int(reminder.get("pending_task_count", len(tasks)))
+        if pending_count > len(tasks):
+            lines.append(f"و {persian_digits(pending_count - len(tasks))} کار دیگر")
+    else:
+        lines.append("موردی باقی نمانده است.")
+    return "\n".join(lines)[:3900]
+
+
+def process_pending_telegram_event_reminders(limit=20):
+    if not TELEGRAM_REMINDER_SECRET:
+        return
+    for _ in range(limit):
+        try:
+            reminder = claim_telegram_event_reminder()
+        except (requests.RequestException, ValueError) as error:
+            print(
+                f"Telegram event reminder lookup failed "
+                f"({supabase_error_description(error)})."
+            )
+            return
+        if reminder is None:
+            return
+
+        try:
+            send_message(
+                reminder["chat_id"],
+                telegram_event_reminder_message(reminder),
+            )
+        except (requests.RequestException, RuntimeError) as error:
+            print(
+                f"Telegram event reminder delivery failed "
+                f"({type(error).__name__}); it will be retried."
+            )
+            sent = False
+        else:
+            sent = True
+
+        try:
+            finish_telegram_event_reminder(reminder, sent)
+        except (requests.RequestException, ValueError) as error:
+            print(
+                f"Telegram event reminder completion failed "
+                f"({supabase_error_description(error)}); it will be retried."
+            )
+            return
+
+
+def claim_custom_telegram_event_reminder():
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/claim_custom_telegram_event_reminder",
+        json={"p_reminder_secret": TELEGRAM_REMINDER_SECRET},
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if result is not None and (
+        not isinstance(result, dict)
+        or not result.get("id")
+        or not result.get("chat_id")
+        or not result.get("event_date")
+        or not isinstance(result.get("pending_tasks"), list)
+    ):
+        raise ValueError("Invalid custom Telegram reminder claim response.")
+    return result
+
+
+def finish_custom_telegram_event_reminder(reminder_id, sent):
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/finish_custom_telegram_event_reminder",
+        json={
+            "p_reminder_id": reminder_id,
+            "p_sent": sent,
+            "p_reminder_secret": TELEGRAM_REMINDER_SECRET,
+        },
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    if response.json() is not True:
+        raise ValueError("Custom Telegram reminder completion made no change.")
+
+
+def custom_telegram_event_reminder_message(reminder):
+    title = str(reminder.get("event_type") or "مراسم").strip()[:120]
+    customer = str(reminder.get("customer_name") or "مشتری ثبت‌نشده").strip()[:160]
+    event_date = str(reminder.get("event_date") or "").strip()[:20]
+    tasks = [str(task).strip() for task in reminder["pending_tasks"] if str(task).strip()]
+    lines = [
+        "🔔 یادآوری زمان‌بندی‌شدهٔ مراسم",
+        "──────────────",
+        f"🎉 نوع مراسم: {title}",
+        f"👤 مشتری: {customer}",
+        f"📅 تاریخ مراسم: {persian_digits(event_date)}",
+        "",
+        "📋 کارهای انجام‌نشدهٔ چک‌لیست:",
+    ]
+    if tasks:
+        lines.extend(f"• {task[:180]}" for task in tasks[:15])
+        pending_count = int(reminder.get("pending_task_count", len(tasks)))
+        if pending_count > len(tasks):
+            lines.append(f"و {persian_digits(pending_count - len(tasks))} کار دیگر")
+    else:
+        lines.append("موردی باقی نمانده است.")
+    return "\n".join(lines)[:3900]
+
+
+def process_pending_custom_telegram_event_reminders(limit=20):
+    if not TELEGRAM_REMINDER_SECRET:
+        return
+    for _ in range(limit):
+        try:
+            reminder = claim_custom_telegram_event_reminder()
+        except (requests.RequestException, ValueError) as error:
+            print(
+                f"Custom Telegram reminder lookup failed "
+                f"({supabase_error_description(error)})."
+            )
+            return
+        if reminder is None:
+            return
+
+        try:
+            send_message(
+                reminder["chat_id"],
+                custom_telegram_event_reminder_message(reminder),
+            )
+        except (requests.RequestException, RuntimeError) as error:
+            print(
+                f"Custom Telegram reminder delivery failed "
+                f"({type(error).__name__}); it will be retried."
+            )
+            sent = False
+        else:
+            sent = True
+
+        try:
+            finish_custom_telegram_event_reminder(reminder["id"], sent)
+        except (requests.RequestException, ValueError) as error:
+            print(
+                f"Custom Telegram reminder completion failed "
+                f"({supabase_error_description(error)}); it will be retried."
+            )
+            return
+
+
+def handle_telegram_reminder_link(message):
+    user = message.get("from") or {}
+    chat = message.get("chat") or {}
+    text = message.get("text")
+    if not isinstance(text, str) or not text.lstrip().startswith("/link"):
+        return False
+    parts = text.strip().split(maxsplit=1)
+    command = parts[0] if parts else ""
+    if command.partition("@")[0] != "/link":
+        return False
+    chat_id = str(chat.get("id") or "")
+    telegram_user_id = str(user.get("id") or "")
+    if chat.get("type") != "private" or chat_id != telegram_user_id:
+        send_message(chat.get("id"), "اتصال اعلان‌ها فقط از گفت‌وگوی خصوصی ربات ممکن است.")
+        return True
+    if not TELEGRAM_REMINDER_SECRET:
+        send_message(chat_id, "اتصال اعلان مراسم فعلاً پیکربندی نشده است.")
+        return True
+    token = "".join(parts[1].split()) if len(parts) > 1 else ""
+    token = token.replace("\u200b", "").replace("\u200e", "").replace("\u200f", "")
+    if len(token) != 64 or any(character not in "0123456789abcdef" for character in token):
+        send_message(chat_id, "کد اتصال معتبر نیست؛ از پروفایل برنامه کد تازه بگیرید.")
+        return True
+    try:
+        complete_telegram_reminder_link(
+            token,
+            telegram_user_id,
+            chat_id,
+            user.get("username"),
+        )
+    except requests.HTTPError as error:
+        description = supabase_error_description(error)
+        print(f"Telegram reminder link failed ({description}).")
+        send_message(
+            chat_id,
+            "اتصال انجام نشد؛ کد ممکن است منقضی یا قبلاً استفاده شده باشد. از برنامه کد تازه بگیرید.",
+        )
+    except (requests.RequestException, ValueError) as error:
+        print(f"Telegram reminder link failed ({type(error).__name__}).")
+        send_message(chat_id, "اتصال تلگرام ناموفق بود؛ کمی بعد دوباره تلاش کنید.")
+    else:
+        send_message(
+            chat_id,
+            "✅ تلگرام به اعلان‌های مراسم این فضای کاری متصل شد. "
+            "از این پس ۷ روز و ۱ روز قبل از مراسم یادآوری می‌گیرید.",
+        )
+    return True
 
 
 def price_level_lines(product):
@@ -1296,11 +1573,17 @@ def validate_settings():
 def main():
     validate_settings()
     offset = 0
+    next_reminder_check = 0
     print("Telegram catalog bot is ready.")
     if not ORDER_APPROVAL_SECRET:
         print(
             "TELEGRAM_ORDER_APPROVAL_SECRET is not configured; "
             "admin order actions are unavailable."
+        )
+    if not TELEGRAM_REMINDER_SECRET:
+        print(
+            "TELEGRAM_REMINDER_SECRET is not configured; "
+            "event reminders are unavailable."
         )
     process_pending_payment_notifications()
 
@@ -1325,6 +1608,8 @@ def main():
                 message = update.get("message")
                 if not message:
                     continue
+                if handle_telegram_reminder_link(message):
+                    continue
                 if handle_address_message(message):
                     continue
                 if handle_receipt_message(message):
@@ -1346,6 +1631,10 @@ def main():
                     send_message(chat_id, "سبد خرید شما پاک شد.", main_menu())
 
             process_pending_payment_notifications()
+            if time.monotonic() >= next_reminder_check:
+                process_pending_telegram_event_reminders()
+                process_pending_custom_telegram_event_reminders()
+                next_reminder_check = time.monotonic() + 60
 
         except requests.HTTPError as error:
             status = (

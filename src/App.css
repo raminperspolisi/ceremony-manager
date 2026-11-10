@@ -1798,6 +1798,83 @@ textarea:focus-visible {
   line-height: 1.8;
 }
 
+.calendar-telegram-reminders {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dbe3ea;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.calendar-telegram-reminders h4,
+.calendar-telegram-reminders p {
+  margin: 0;
+}
+
+.calendar-telegram-reminders h4 {
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.calendar-telegram-reminders > p {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.8;
+}
+
+.calendar-telegram-reminder-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 0.6fr) auto;
+  align-items: end;
+  gap: 9px;
+}
+
+.calendar-telegram-reminder-form label {
+  display: grid;
+  gap: 5px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.calendar-telegram-reminder-form .calendar-save-button {
+  min-height: 36px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.calendar-telegram-reminder-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calendar-telegram-reminder-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+}
+
+.calendar-telegram-reminder-list button {
+  padding: 5px 9px;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  background: #fff;
+  color: #b91c1c;
+  cursor: pointer;
+  font: inherit;
+}
+
 .calendar-event-task-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr) auto;
@@ -4712,6 +4789,10 @@ textarea:focus-visible {
     }
 
     .cashbook-summary {
+      grid-template-columns: 1fr;
+    }
+
+    .calendar-telegram-reminder-form {
       grid-template-columns: 1fr;
     }
 

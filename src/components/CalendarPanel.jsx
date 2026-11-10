@@ -1,7 +1,9 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { deleteRows, insertRows, readTable, updateRows } from "../offlineSync";
+import { supabase } from "../supabaseClient";
 import { formatPersianDigits } from "../styles";
 import { gregorianISOToJalali, jalaliToGregorianISO, normalizeJalaliDate } from "../calendarDateUtils";
+import { createReminderTimestamp, formatReminderTimestamp } from "../telegramReminderUtils";
 import moment from "jalali-moment";
 
 const JMONTHS = [
@@ -17,7 +19,7 @@ const getInvoiceItemPrice = (item) => {
   return Number(item.p1 ?? item.unit_price ?? item.price ?? 0);
 };
 
-export default function CalendarPanel() {
+export default function CalendarPanel({ organizationId }) {
   const todayJ = moment().locale("fa");
   const todayLabel = formatPersianDigits(todayJ.format("dddd jD jMMMM jYYYY"));
   const [jYear, setJYear] = useState(todayJ.jYear());
@@ -43,6 +45,13 @@ export default function CalendarPanel() {
   const [taskLoading, setTaskLoading] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
   const [taskError, setTaskError] = useState("");
+  const [telegramReminders, setTelegramReminders] = useState([]);
+  const [telegramReminderConnected, setTelegramReminderConnected] = useState(false);
+  const [telegramReminderDate, setTelegramReminderDate] = useState("");
+  const [telegramReminderTime, setTelegramReminderTime] = useState("09:00");
+  const [telegramReminderLoading, setTelegramReminderLoading] = useState(false);
+  const [telegramReminderSaving, setTelegramReminderSaving] = useState(false);
+  const [telegramReminderError, setTelegramReminderError] = useState("");
 
   const emptyForm = {
     customer_id: "",
@@ -266,23 +275,112 @@ export default function CalendarPanel() {
     setTaskTitle("");
     setTaskAssignee("");
     setTaskError("");
+    setTelegramReminders([]);
+    setTelegramReminderConnected(false);
+    setTelegramReminderError("");
+    setTelegramReminderDate(
+      formatPersianDigits(
+        /^\d{4}-\d{2}-\d{2}$/.test(String(event.event_date || ""))
+          ? gregorianISOToJalali(event.event_date)
+          : normalizeJalaliDate(event.event_date),
+      ),
+    );
+    setTelegramReminderTime("09:00");
     setTaskLoading(true);
+    setTelegramReminderLoading(true);
     try {
-      const { data, error: taskFetchError } = await readTable("event_tasks", {
-        filters: [{ column: "event_id", operator: "eq", value: event.id }],
-        orderBy: "created_at",
-        ascending: true,
-      });
-      if (taskFetchError) throw taskFetchError;
-      setEventTasks(data || []);
-    } catch (taskFetchError) {
-      setTaskError(
-        `بارگذاری پرونده ناموفق بود: ${taskFetchError.message}`
-        + " برای فعال‌سازی این بخش، migration "
-        + "supabase/migrations/20261102090000_event_tasks.sql را در Supabase اجرا کنید.",
-      );
+      const [taskResult, reminderResult] = await Promise.allSettled([
+        readTable("event_tasks", {
+          filters: [{ column: "event_id", operator: "eq", value: event.id }],
+          orderBy: "created_at",
+          ascending: true,
+        }),
+        supabase.rpc("list_telegram_event_reminders", {
+          p_organization_id: organizationId,
+          p_event_id: event.id,
+        }),
+      ]);
+      if (taskResult.status === "fulfilled" && !taskResult.value.error) {
+        setEventTasks(taskResult.value.data || []);
+      } else {
+        const taskFetchError = taskResult.status === "rejected"
+          ? taskResult.reason
+          : taskResult.value.error;
+        setTaskError(
+          `بارگذاری فهرست کارهای مراسم ناموفق بود: ${taskFetchError.message}`
+          + " برای فعال‌سازی این بخش، migration "
+          + "supabase/migrations/20261102090000_event_tasks.sql را در Supabase اجرا کنید.",
+        );
+      }
+
+      if (reminderResult.status === "fulfilled" && !reminderResult.value.error) {
+        setTelegramReminderConnected(Boolean(reminderResult.value.data?.connected));
+        setTelegramReminders(reminderResult.value.data?.reminders || []);
+      } else {
+        const reminderFetchError = reminderResult.status === "rejected"
+          ? reminderResult.reason
+          : reminderResult.value.error;
+        setTelegramReminderError(
+          `بارگذاری یادآوری‌های تلگرام ناموفق بود: ${reminderFetchError.message}`
+          + " مطمئن شوید migration "
+          + "supabase/migrations/20261110120000_custom_telegram_event_reminders.sql "
+          + "در Supabase اجرا شده باشد.",
+        );
+      }
+    } catch (error) {
+      setTaskError(`بازکردن پرونده مراسم ناموفق بود: ${error.message}`);
     } finally {
       setTaskLoading(false);
+      setTelegramReminderLoading(false);
+    }
+  };
+
+  const handleAddTelegramReminder = async (event) => {
+    event.preventDefault();
+    if (!selectedEventForTasks || !organizationId) return;
+    setTelegramReminderSaving(true);
+    setTelegramReminderError("");
+    try {
+      const remindAt = createReminderTimestamp(
+        telegramReminderDate,
+        telegramReminderTime,
+        selectedEventForTasks.event_date,
+      );
+      const { data, error: reminderInsertError } = await supabase.rpc(
+        "create_telegram_event_reminder",
+        {
+          p_organization_id: organizationId,
+          p_event_id: selectedEventForTasks.id,
+          p_remind_at: remindAt,
+        },
+      );
+      if (reminderInsertError) throw reminderInsertError;
+      setTelegramReminders((current) => [
+        ...current.filter((reminder) => reminder.id !== data.id),
+        data,
+      ].sort((left, right) => left.remind_at.localeCompare(right.remind_at)));
+    } catch (error) {
+      setTelegramReminderError(`ثبت یادآوری ناموفق بود: ${error.message}`);
+    } finally {
+      setTelegramReminderSaving(false);
+    }
+  };
+
+  const handleDeleteTelegramReminder = async (reminder) => {
+    setTelegramReminderError("");
+    try {
+      const { data, error: reminderDeleteError } = await supabase.rpc(
+        "delete_telegram_event_reminder",
+        {
+          p_organization_id: organizationId,
+          p_reminder_id: reminder.id,
+        },
+      );
+      if (reminderDeleteError) throw reminderDeleteError;
+      if (!data) throw new Error("یادآوری حذف نشد؛ شاید قبلاً ارسال شده باشد.");
+      setTelegramReminders((current) => current.filter((item) => item.id !== reminder.id));
+    } catch (error) {
+      setTelegramReminderError(`حذف یادآوری ناموفق بود: ${error.message}`);
     }
   };
 
@@ -629,6 +727,71 @@ export default function CalendarPanel() {
             <p className="calendar-event-tasks-description">
               کارهای لازم برای این مراسم را ثبت کنید، مسئول هر کار را مشخص کنید و انجام‌شدن آن را پیگیری کنید.
             </p>
+            <section className="calendar-telegram-reminders" aria-labelledby="calendar-telegram-reminders-title">
+              <h4 id="calendar-telegram-reminders-title">یادآوری تلگرامی این مراسم</h4>
+              <p>برای هر مراسم هر تعداد زمان یادآوری لازم دارید ثبت کنید؛ ساعت‌ها بر اساس وقت تهران هستند.</p>
+              {telegramReminderLoading ? (
+                <p role="status">در حال بارگذاری یادآوری‌ها...</p>
+              ) : telegramReminderError && !telegramReminderConnected ? (
+                <p>وضعیت اتصال تلگرام قابل بررسی نیست؛ جزئیات خطا در پیام زیر آمده است.</p>
+              ) : telegramReminderConnected ? (
+                <>
+                  <form className="calendar-telegram-reminder-form" onSubmit={handleAddTelegramReminder}>
+                    <label>
+                      تاریخ یادآوری (شمسی)
+                      <input
+                        className="calendar-input"
+                        value={telegramReminderDate}
+                        onChange={(event) => setTelegramReminderDate(event.target.value)}
+                        placeholder="۱۴۰۵/۰۸/۱۸"
+                        inputMode="numeric"
+                        required
+                      />
+                    </label>
+                    <label>
+                      ساعت
+                      <input
+                        className="calendar-input"
+                        type="time"
+                        value={telegramReminderTime}
+                        onChange={(event) => setTelegramReminderTime(event.target.value)}
+                        required
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      className="calendar-save-button"
+                      disabled={telegramReminderSaving}
+                    >
+                      {telegramReminderSaving ? "در حال ثبت..." : "افزودن یادآوری"}
+                    </button>
+                  </form>
+                  {telegramReminders.length > 0 ? (
+                    <ul className="calendar-telegram-reminder-list">
+                      {telegramReminders.map((reminder) => (
+                        <li key={reminder.id}>
+                          <span>{formatPersianDigits(formatReminderTimestamp(reminder.remind_at))}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTelegramReminder(reminder)}
+                            aria-label={`حذف یادآوری ${formatReminderTimestamp(reminder.remind_at)}`}
+                          >
+                            حذف
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="calendar-event-tasks-empty">برای این مراسم یادآوری زمان‌بندی‌شده‌ای ثبت نشده است.</p>
+                  )}
+                </>
+              ) : (
+                <p>
+                  تلگرام این حساب هنوز به فضای کاری وصل نشده است. ابتدا از پروفایل، بخش «اعلان تلگرام مراسم‌ها» را وصل کنید.
+                </p>
+              )}
+              {telegramReminderError && <div className="calendar-error" role="alert">{telegramReminderError}</div>}
+            </section>
             {taskError && <div className="calendar-error" role="alert">{taskError}</div>}
             <form className="calendar-event-task-form" onSubmit={handleAddTask}>
               <label>

@@ -205,6 +205,11 @@ export default function App() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [profileMessage, setProfileMessage] = useState('');
+  const [telegramReminderStatus, setTelegramReminderStatus] = useState(null);
+  const [telegramReminderCode, setTelegramReminderCode] = useState('');
+  const [telegramReminderLoading, setTelegramReminderLoading] = useState(false);
+  const [telegramReminderError, setTelegramReminderError] = useState('');
+  const [telegramReminderMessage, setTelegramReminderMessage] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -1035,6 +1040,23 @@ export default function App() {
     }
   };
 
+  const refreshTelegramReminderStatus = async () => {
+    if (!activeOrganizationId) return;
+    setTelegramReminderLoading(true);
+    setTelegramReminderError('');
+    try {
+      const { data, error } = await supabase.rpc('get_telegram_reminder_link', {
+        p_organization_id: activeOrganizationId,
+      });
+      if (error) throw error;
+      setTelegramReminderStatus(data);
+    } catch (error) {
+      setTelegramReminderError(`دریافت وضعیت تلگرام ناموفق بود: ${error.message}`);
+    } finally {
+      setTelegramReminderLoading(false);
+    }
+  };
+
   const handleOpenProfile = () => {
     setProfileName(session.user.user_metadata?.display_name || '');
     setProfileWebsite(session.user.user_metadata?.business_website || '');
@@ -1050,7 +1072,49 @@ export default function App() {
     setProfilePassword('');
     setProfileError('');
     setProfileMessage('');
+    setTelegramReminderStatus(null);
+    setTelegramReminderCode('');
+    setTelegramReminderError('');
+    setTelegramReminderMessage('');
     setProfileOpen(true);
+    if (activeOrganizationId && hasSectionAccess('calendar')) refreshTelegramReminderStatus();
+  };
+
+  const createTelegramReminderCode = async () => {
+    setTelegramReminderLoading(true);
+    setTelegramReminderError('');
+    setTelegramReminderMessage('');
+    try {
+      const { data, error } = await supabase.rpc('create_telegram_reminder_link', {
+        p_organization_id: activeOrganizationId,
+      });
+      if (error) throw error;
+      setTelegramReminderCode(data);
+      setTelegramReminderMessage('کد تا ۱۵ دقیقه معتبر است؛ آن را در گفت‌وگوی خصوصی ربات با دستور /link ارسال کنید.');
+    } catch (error) {
+      setTelegramReminderError(`ساخت کد اتصال ناموفق بود: ${error.message}`);
+    } finally {
+      setTelegramReminderLoading(false);
+    }
+  };
+
+  const disconnectTelegramReminders = async () => {
+    setTelegramReminderLoading(true);
+    setTelegramReminderError('');
+    setTelegramReminderMessage('');
+    try {
+      const { error } = await supabase.rpc('unlink_telegram_reminder', {
+        p_organization_id: activeOrganizationId,
+      });
+      if (error) throw error;
+      setTelegramReminderStatus({ connected: false });
+      setTelegramReminderCode('');
+      setTelegramReminderMessage('اتصال تلگرام قطع شد و اعلان‌های این فضا ارسال نمی‌شوند.');
+    } catch (error) {
+      setTelegramReminderError(`قطع اتصال تلگرام ناموفق بود: ${error.message}`);
+    } finally {
+      setTelegramReminderLoading(false);
+    }
   };
 
   const handleProfileLogoChange = (event) => {
@@ -1371,7 +1435,7 @@ export default function App() {
           {section === 'cashbook' && <CashbookPanel />}
           {section === 'reports' && <FinancialReportPanel businessName={businessName} logoUrl={logoUrl} />}
           {section === 'analytics' && <AnalyticsPanel />}
-          {section === 'calendar' && <CalendarPanel active />}
+          {section === 'calendar' && <CalendarPanel active organizationId={activeOrganizationId} />}
           {section === 'reminders' && (
             <RemindersPanel businessName={businessName} logoUrl={logoUrl} active />
           )}
@@ -1379,7 +1443,7 @@ export default function App() {
           {section === 'contact' && <ContactPanel />}
           {!isPopup && section !== 'calendar' && visitedSections.has('calendar') && hasSectionAccess('calendar') && (
             <div style={{ display: 'none' }}>
-              <CalendarPanel active={false} />
+              <CalendarPanel active={false} organizationId={activeOrganizationId} />
             </div>
           )}
           {!isPopup && section !== 'reminders' && visitedSections.has('reminders') && hasSectionAccess('reminders') && (
@@ -1731,6 +1795,68 @@ export default function App() {
                   {removeProfileLogo && <p className="profile-password-hint">لوگوی پیش‌فرض پس از ذخیره برمی‌گردد.</p>}
                 </div>
               </div>
+              {activeOrganizationId && hasSectionAccess('calendar') && (
+                <section
+                  aria-labelledby="telegram-reminder-title"
+                  style={{ margin: '18px 0', padding: 14, border: '1px solid #dbe3ec', borderRadius: 12 }}
+                >
+                  <h3 id="telegram-reminder-title" style={{ margin: '0 0 8px' }}>اعلان تلگرام مراسم‌ها</h3>
+                  <p className="profile-password-hint">
+                    با اتصال تلگرام، ۷ روز و ۱ روز قبل از هر مراسم پیام می‌گیرید؛ پیام شامل کارهای انجام‌نشدهٔ چک‌لیست هم هست.
+                  </p>
+                  {telegramReminderLoading && <p role="status">در حال بررسی اتصال تلگرام…</p>}
+                  {!telegramReminderLoading && telegramReminderStatus?.connected && (
+                    <p role="status">
+                      تلگرام متصل است
+                      {telegramReminderStatus.telegram_username
+                        ? `: @${telegramReminderStatus.telegram_username}`
+                        : '.'}
+                    </p>
+                  )}
+                  {!telegramReminderLoading && !telegramReminderStatus?.connected && (
+                    <p>تلگرامی برای دریافت اعلان‌های این فضای کاری متصل نیست.</p>
+                  )}
+                  {telegramReminderCode && (
+                    <div>
+                      <label htmlFor="telegram-reminder-code">کد اتصال موقت</label>
+                      <input id="telegram-reminder-code" value={telegramReminderCode} readOnly dir="ltr" />
+                      <p className="profile-password-hint">
+                        در گفت‌وگوی خصوصی ربات، این دستور را بفرستید: <code dir="ltr">/link {telegramReminderCode}</code>
+                      </p>
+                    </div>
+                  )}
+                  {telegramReminderError && <div className="profile-notice error" role="alert">{telegramReminderError}</div>}
+                  {telegramReminderMessage && <div className="profile-notice success" role="status">{telegramReminderMessage}</div>}
+                  <div className="profile-modal-actions">
+                    <button
+                      type="button"
+                      className="profile-cancel-button"
+                      onClick={createTelegramReminderCode}
+                      disabled={telegramReminderLoading}
+                    >
+                      {telegramReminderStatus?.connected ? 'اتصال دوباره / ساخت کد' : 'ساخت کد اتصال'}
+                    </button>
+                    <button
+                      type="button"
+                      className="profile-cancel-button"
+                      onClick={refreshTelegramReminderStatus}
+                      disabled={telegramReminderLoading}
+                    >
+                      بررسی اتصال
+                    </button>
+                    {telegramReminderStatus?.connected && (
+                      <button
+                        type="button"
+                        className="profile-cancel-button"
+                        onClick={disconnectTelegramReminders}
+                        disabled={telegramReminderLoading}
+                      >
+                        قطع اتصال تلگرام
+                      </button>
+                    )}
+                  </div>
+                </section>
+              )}
               <label htmlFor="profile-email">ایمیل</label>
               <input
                 id="profile-email"
