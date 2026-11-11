@@ -4,6 +4,7 @@ import { readTable } from '../offlineSync';
 import { formatDisplay, formatMoney, formatPersianDigits } from '../styles';
 import { formatDashboardDate, getPendingEventTasks, toDashboardIsoDate } from '../dashboardUtils';
 import BusinessContactCard from './BusinessContactCard';
+import DashboardTaskNotebook from './DashboardTaskNotebook';
 
 const PAGE_SIZE = 1000;
 const money = (value) => formatMoney(value);
@@ -33,23 +34,28 @@ export default function DashboardPanel({
   businessName,
   businessContact,
   onEditProfile,
+  canViewBusinessContacts = false,
   canViewCalendar = false,
 }) {
   const [invoices, setInvoices] = useState([]);
   const [ceremonies, setCeremonies] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [businessContactCount, setBusinessContactCount] = useState(0);
   const [events, setEvents] = useState([]);
   const [eventTasks, setEventTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
   const refresh = useCallback(async () => {
-    const [invoiceResult, ceremonyResult, customerResult, eventResult, eventTaskResult] = await Promise.all([
+    const [invoiceResult, ceremonyResult, customerResult, eventResult, eventTaskResult, businessContactResult] = await Promise.all([
       readAllRows('invoices', 'created_at'),
       readAllRows('ceremonies', 'ceremony_date'),
       readAllRows('customers', 'created_at'),
       canViewCalendar ? readAllRows('events', 'event_date') : Promise.resolve({ data: [], error: null }),
       canViewCalendar ? readAllRows('event_tasks', 'created_at') : Promise.resolve({ data: [], error: null }),
+      canViewBusinessContacts
+        ? readAllRows('business_contacts', 'created_at')
+        : Promise.resolve({ data: [], error: null }),
     ]);
     const failures = [
       invoiceResult.error && `فاکتورها: ${invoiceResult.error.message}`,
@@ -57,6 +63,7 @@ export default function DashboardPanel({
       customerResult.error && `مشتری‌ها: ${customerResult.error.message}`,
       eventResult.error && `مراسم‌ها: ${eventResult.error.message}`,
       eventTaskResult.error && `کارهای مراسم: ${eventTaskResult.error.message}`,
+      businessContactResult.error && `مخاطبان کاری: ${businessContactResult.error.message}`,
     ].filter(Boolean);
     setLoadError(failures.join('؛ '));
     if (!invoiceResult.error) setInvoices(invoiceResult.data || []);
@@ -64,8 +71,9 @@ export default function DashboardPanel({
     if (!customerResult.error) setCustomers(customerResult.data || []);
     if (!eventResult.error) setEvents(eventResult.data || []);
     if (!eventTaskResult.error) setEventTasks(eventTaskResult.data || []);
+    if (!businessContactResult.error) setBusinessContactCount(businessContactResult.data?.length || 0);
     setLoading(false);
-  }, [canViewCalendar]);
+  }, [canViewBusinessContacts, canViewCalendar]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => { void refresh(); }, 0);
@@ -172,11 +180,13 @@ export default function DashboardPanel({
           <strong>{loading ? '—' : formatDisplay(upcomingCeremonies.length)}</strong>
           <small>مشاهده در تقویم مراسم‌ها</small>
         </button>
-        <button type="button" className="home-metric-card home-metric-customers" onClick={() => navigate('customers')}>
-          <span>مشتریان ثبت‌شده</span>
-          <strong>{loading ? '—' : formatDisplay(customers.length)}</strong>
-          <small>رفتن به فهرست مشتریان</small>
-        </button>
+        {canViewBusinessContacts && (
+          <button type="button" className="home-metric-card home-metric-customers" onClick={() => navigate('business-contacts')}>
+            <span>مخاطبان کاری</span>
+            <strong>{loading ? '—' : formatDisplay(businessContactCount)}</strong>
+            <small>رفتن به دفترچهٔ مخاطبان کاری</small>
+          </button>
+        )}
         {canViewCalendar && (
           <button type="button" className="home-metric-card home-metric-tasks" onClick={() => navigate('calendar')}>
             <span>کارهای باقی‌ماندهٔ مراسم</span>
@@ -238,6 +248,8 @@ export default function DashboardPanel({
             </div>
           )}
         </section>
+
+        <DashboardTaskNotebook />
       </div>
 
       {canViewCalendar && (
@@ -286,6 +298,7 @@ export default function DashboardPanel({
             </button>
           )}
           <button type="button" onClick={() => navigate('customers')}>ثبت یا جستجوی مشتری</button>
+          {canViewBusinessContacts && <button type="button" onClick={() => navigate('business-contacts')}>ثبت مخاطب کاری</button>}
           <button type="button" onClick={() => navigate('official')}>فاکتورهای رسمی</button>
           <button type="button" onClick={() => navigate('cashbook')}>صندوق و بانک</button>
           <button type="button" onClick={() => navigate('quotations')}>ساخت پیش‌فاکتور</button>

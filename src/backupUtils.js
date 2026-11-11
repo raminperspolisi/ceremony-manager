@@ -1,5 +1,5 @@
 export const BACKUP_FORMAT = 'ceremony-manager-backup';
-export const BACKUP_VERSION = 6;
+export const BACKUP_VERSION = 8;
 export const BACKUP_TABLES = [
   'customers',
   'ceremonies',
@@ -17,6 +17,8 @@ export const BACKUP_TABLES = [
   'inventory_reservations',
   'inventory_stock_movements',
   'invoice_expenses',
+  'business_contacts',
+  'workspace_tasks',
 ];
 const PRE_CASHBOOK_TABLES = ['customers', 'ceremonies', 'events', 'inventory', 'quotations', 'invoices'];
 const PRE_INVENTORY_TABLES = [
@@ -30,9 +32,11 @@ const PRE_INVENTORY_TABLES = [
   'cash_transactions',
 ];
 const PRE_INVOICE_EXPENSES_TABLES = BACKUP_TABLES.filter(
-  (table) => !['invoice_expenses', 'event_tasks'].includes(table),
+  (table) => !['invoice_expenses', 'event_tasks', 'business_contacts', 'workspace_tasks'].includes(table),
 );
-const PRE_EVENT_TASKS_TABLES = BACKUP_TABLES.filter((table) => table !== 'event_tasks');
+const PRE_EVENT_TASKS_TABLES = BACKUP_TABLES.filter((table) => !['event_tasks', 'business_contacts', 'workspace_tasks'].includes(table));
+const PRE_BUSINESS_CONTACTS_TABLES = BACKUP_TABLES.filter((table) => !['business_contacts', 'workspace_tasks'].includes(table));
+const PRE_WORKSPACE_TASKS_TABLES = BACKUP_TABLES.filter((table) => table !== 'workspace_tasks');
 
 export function createBackupDocument(tables, { exportedAt, userId, projectUrl, organizationId }) {
   const backupTables = Object.fromEntries(BACKUP_TABLES.map((table) => {
@@ -58,7 +62,7 @@ export function validateBackupDocument(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('ساختار فایل پشتیبان معتبر نیست.');
   }
-  if (value.format !== BACKUP_FORMAT || ![1, 2, 3, 4, 5, BACKUP_VERSION].includes(value.version)) {
+  if (value.format !== BACKUP_FORMAT || ![1, 2, 3, 4, 5, 6, 7, BACKUP_VERSION].includes(value.version)) {
     throw new Error('نسخه یا قالب فایل پشتیبان پشتیبانی نمی‌شود.');
   }
   if (!value.userId || !value.projectUrl || !value.tables || typeof value.tables !== 'object') {
@@ -72,10 +76,14 @@ export function validateBackupDocument(value) {
     ? PRE_CASHBOOK_TABLES
     : value.version === BACKUP_VERSION
       ? BACKUP_TABLES
-      : value.version === 4
-        ? PRE_INVOICE_EXPENSES_TABLES
+      : value.version === 7
+        ? PRE_WORKSPACE_TASKS_TABLES
+        : value.version === 6
+        ? PRE_BUSINESS_CONTACTS_TABLES
         : value.version === 5
           ? PRE_EVENT_TASKS_TABLES
+          : value.version === 4
+          ? PRE_INVOICE_EXPENSES_TABLES
           : PRE_INVENTORY_TABLES;
   const compatibleTables = value.version === BACKUP_VERSION
     ? value.tables

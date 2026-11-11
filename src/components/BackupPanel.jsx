@@ -16,6 +16,8 @@ const TABLE_LABELS = {
   financial_accounts: 'حساب‌های صندوق و بانک',
   cash_transactions: 'گردش‌های مالی',
   invoice_expenses: 'هزینه‌های فاکتور',
+  business_contacts: 'مخاطبان کاری',
+  workspace_tasks: 'دفترچهٔ کارها',
 };
 
 const actionButtonStyle = {

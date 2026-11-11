@@ -14,6 +14,7 @@ import ContactPanel from './components/ContactPanel';
 import BackupPanel from './components/BackupPanel';
 import CashbookPanel from './components/CashbookPanel';
 import DashboardPanel from './components/DashboardPanel';
+import BusinessContactsPanel from './components/BusinessContactsPanel';
 import BotOrdersPanel from './components/BotOrdersPanel';
 import OrganizationManagementPanel from './components/OrganizationManagementPanel';
 import { useToast } from './components/useToast';
@@ -59,6 +60,7 @@ const SECTION_BY_FUNCTION_KEY = {
 const SECTION_PERMISSION_BY_NAV = {
   dashboard: 'dashboard',
   customers: 'customers',
+  'business-contacts': 'customers',
   inventory: 'inventory',
   'bot-orders': 'bot_orders',
   quotations: 'quotations',
@@ -73,7 +75,7 @@ const SECTION_PERMISSION_BY_NAV = {
   contact: 'contact',
 };
 const SECTION_FALLBACK_ORDER = [
-  'dashboard', 'customers', 'inventory', 'quotations', 'official',
+  'dashboard', 'customers', 'business-contacts', 'inventory', 'quotations', 'official',
   'bot-orders', 'cashbook', 'reports', 'analytics', 'calendar',
   'reminders', 'backup', 'tutorial', 'contact',
 ];
@@ -86,6 +88,7 @@ const GLOBAL_SEARCH_TABLES = [
 const SECTION_THEME_ICONS = {
   dashboard: '📊',
   customers: '👥',
+  'business-contacts': '📇',
   inventory: '📦',
   'bot-orders': '🤖',
   quotations: '🧾',
@@ -104,6 +107,7 @@ const SECTION_THEME_ICONS = {
 const SECTION_TITLES = {
   dashboard: 'داشبورد',
   customers: 'مشتریان',
+  'business-contacts': 'دفترچهٔ مخاطبان کاری',
   inventory: 'موجودی انبار',
   'bot-orders': 'سفارش‌های ربات',
   quotations: 'پیش‌فاکتور',
@@ -658,6 +662,7 @@ export default function App() {
       'invoice_expenses',
       'financial_accounts',
       'cash_transactions',
+      'workspace_tasks',
     ].forEach((table) => {
       channel.on('postgres_changes', {
         event: '*',
@@ -1396,10 +1401,12 @@ export default function App() {
               businessName={businessName}
               businessContact={businessContact}
               onEditProfile={handleOpenProfile}
+              canViewBusinessContacts={hasSectionAccess('business-contacts')}
               canViewCalendar={hasSectionAccess('calendar')}
             />
           )}
           {section === 'customers' && <CustomersPanel businessName={businessName} />}
+          {section === 'business-contacts' && <BusinessContactsPanel organizationId={activeOrganizationId} />}
           {section === 'inventory' && (
             <InventoryPanel
               items={inventory}
@@ -1977,6 +1984,16 @@ export default function App() {
               <span className="nav-icon">👤</span>
               <span className="nav-text">مشتریان</span>
               <span className="nav-shortcut">F1</span>
+            </button>
+
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'business-contacts' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('business-contacts')}
+              onClick={() => handleSectionChange('business-contacts')}
+            >
+              <span className="nav-icon">📇</span>
+              <span className="nav-text">دفترچهٔ مخاطبان کاری</span>
             </button>
 
             {/* 2. موجودی انبار */}

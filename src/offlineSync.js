@@ -23,6 +23,8 @@ const TENANT_TABLES = new Set([
   'inventory_purchase_receipts',
   'inventory_transfers',
   'inventory_reservations',
+  'business_contacts',
+  'workspace_tasks',
 ]);
 
 let databasePromise;
@@ -830,6 +832,8 @@ export async function warmOfflineCache() {
     'inventory_purchase_receipts',
     'inventory_transfers',
     'inventory_reservations',
+    'business_contacts',
+    'workspace_tasks',
   ];
   const failures = [];
   await Promise.all(tables.map(async (table) => {

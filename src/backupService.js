@@ -16,6 +16,8 @@ const TABLE_LABELS = {
   financial_accounts: 'حساب‌های صندوق و بانک',
   cash_transactions: 'گردش‌های مالی',
   invoice_expenses: 'هزینه‌های فاکتور',
+  business_contacts: 'مخاطبان کاری',
+  workspace_tasks: 'دفترچهٔ کارها',
 };
 const IMMUTABLE_TABLES = new Set([
   'cash_transactions',
@@ -47,6 +49,8 @@ const RESTORE_STEPS = [
   'financial_accounts',
   'cash_transactions',
   'invoice_expenses',
+  'business_contacts',
+  'workspace_tasks',
 ];
 
 export async function readAllBackupRows(table, readTable) {

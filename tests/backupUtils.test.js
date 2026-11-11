@@ -11,7 +11,7 @@ test('backup document has a version and all supported tables', () => {
     organizationId: 'organization-1',
   });
 
-  assert.equal(document.version, 6);
+  assert.equal(document.version, 8);
   assert.deepEqual(Object.keys(document.tables), BACKUP_TABLES);
   assert.deepEqual(validateBackupDocument(document), document);
 });
@@ -35,7 +35,7 @@ test('version 3 backups are upgraded with empty inventory-operation tables', () 
     tables: legacyTables,
   });
 
-  assert.equal(backup.version, 6);
+  assert.equal(backup.version, 8);
   assert.ok(BACKUP_TABLES
     .filter((table) => !Object.hasOwn(legacyTables, table))
     .every((table) => Array.isArray(backup.tables[table])));
@@ -43,7 +43,7 @@ test('version 3 backups are upgraded with empty inventory-operation tables', () 
 
 test('version 4 backups are upgraded with an empty invoice-expense table', () => {
   const legacyTables = Object.fromEntries(BACKUP_TABLES
-    .filter((table) => !['invoice_expenses', 'event_tasks'].includes(table))
+    .filter((table) => !['invoice_expenses', 'event_tasks', 'business_contacts'].includes(table))
     .map((table) => [table, []]));
   const backup = validateBackupDocument({
     format: 'ceremony-manager-backup',
@@ -54,13 +54,14 @@ test('version 4 backups are upgraded with an empty invoice-expense table', () =>
     tables: legacyTables,
   });
 
-  assert.equal(backup.version, 6);
+  assert.equal(backup.version, 8);
   assert.deepEqual(backup.tables.invoice_expenses, []);
+  assert.deepEqual(backup.tables.business_contacts, []);
 });
 
 test('version 5 backups are upgraded with an empty event-task table', () => {
   const legacyTables = Object.fromEntries(BACKUP_TABLES
-    .filter((table) => table !== 'event_tasks')
+    .filter((table) => !['event_tasks', 'business_contacts'].includes(table))
     .map((table) => [table, []]));
   const backup = validateBackupDocument({
     format: 'ceremony-manager-backup',
@@ -71,8 +72,44 @@ test('version 5 backups are upgraded with an empty event-task table', () => {
     tables: legacyTables,
   });
 
-  assert.equal(backup.version, 6);
+  assert.equal(backup.version, 8);
   assert.deepEqual(backup.tables.event_tasks, []);
+  assert.deepEqual(backup.tables.business_contacts, []);
+});
+
+test('version 6 backups are upgraded with an empty business-contact table', () => {
+  const legacyTables = Object.fromEntries(BACKUP_TABLES
+    .filter((table) => table !== 'business_contacts')
+    .map((table) => [table, []]));
+  const backup = validateBackupDocument({
+    format: 'ceremony-manager-backup',
+    version: 6,
+    userId: 'user-1',
+    projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
+    tables: legacyTables,
+  });
+
+  assert.equal(backup.version, 8);
+  assert.deepEqual(backup.tables.business_contacts, []);
+  assert.deepEqual(backup.tables.workspace_tasks, []);
+});
+
+test('version 7 backups are upgraded with an empty workspace-task table', () => {
+  const legacyTables = Object.fromEntries(BACKUP_TABLES
+    .filter((table) => table !== 'workspace_tasks')
+    .map((table) => [table, []]));
+  const backup = validateBackupDocument({
+    format: 'ceremony-manager-backup',
+    version: 7,
+    userId: 'user-1',
+    projectUrl: 'https://example.supabase.co',
+    organizationId: 'organization-1',
+    tables: legacyTables,
+  });
+
+  assert.equal(backup.version, 8);
+  assert.deepEqual(backup.tables.workspace_tasks, []);
 });
 
 test('generated purchase and transfer movements are rebuilt from their source records', () => {
