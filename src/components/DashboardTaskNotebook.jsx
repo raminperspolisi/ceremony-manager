@@ -15,6 +15,8 @@ export default function DashboardTaskNotebook() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   const loadTasks = useCallback(async () => {
     const { data, error } = await readTable(TASK_TABLE, {
@@ -45,6 +47,18 @@ export default function DashboardTaskNotebook() {
     };
   }, [loadTasks]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !saving) {
+        setIsOpen(false);
+        setIsFormOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, saving]);
+
   const handleAddTask = async (event) => {
     event.preventDefault();
     const taskTitle = title.trim();
@@ -65,6 +79,7 @@ export default function DashboardTaskNotebook() {
       setTasks((current) => [...(data || []), ...current]);
       setTitle('');
       setNotes('');
+      setIsFormOpen(false);
       toast('success', 'کار به دفترچه اضافه شد.');
     } catch (error) {
       setErrorMessage(`افزودن کار ناموفق بود: ${error.message}`);
@@ -108,74 +123,133 @@ export default function DashboardTaskNotebook() {
   };
 
   const pendingCount = tasks.filter((task) => !task.completed).length;
+  const closeModal = () => {
+    if (saving) return;
+    setIsOpen(false);
+    setIsFormOpen(false);
+  };
 
   return (
-    <section className="home-metric-card home-metric-notebook" aria-labelledby="dashboard-task-notebook-title">
-      <div className="home-notebook-heading">
-        <h4 id="dashboard-task-notebook-title">دفترچهٔ کارها</h4>
-        <span>یادداشت مشترک فضای کاری</span>
-      </div>
-      <strong className="home-notebook-count">{formatDisplay(pendingCount)}</strong>
-      <small className="home-notebook-subtitle">کار باقی‌مانده</small>
-
-      {errorMessage && <p className="home-notebook-error" role="alert">{errorMessage}</p>}
-
-      <form className="home-notebook-form" onSubmit={handleAddTask}>
-        <label>
-          <span className="sr-only">عنوان کار</span>
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="چه کاری باید انجام شود؟"
-            maxLength={180}
-            required
-            disabled={saving}
-          />
-        </label>
-        <label>
-          <span className="sr-only">یادداشت کار (اختیاری)</span>
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            placeholder="یادداشت یا جزئیات (اختیاری)"
-            maxLength={2000}
-            rows={2}
-            disabled={saving}
-          />
-        </label>
-        <button type="submit" disabled={saving || !title.trim()}>
-          {saving ? 'در حال افزودن…' : 'افزودن به دفترچه'}
+    <>
+      <section className="home-metric-card home-metric-notebook" aria-labelledby="dashboard-task-notebook-title">
+        <button
+          type="button"
+          className="home-notebook-summary"
+          onClick={() => setIsOpen(true)}
+          aria-label={`مشاهدهٔ دفترچهٔ کارها، ${formatDisplay(pendingCount)} کار باقی‌مانده`}
+        >
+          <span className="home-notebook-heading">
+            <strong id="dashboard-task-notebook-title">دفترچهٔ کارها</strong>
+            <span>یادداشت مشترک فضای کاری</span>
+          </span>
+          <strong className="home-notebook-count">{formatDisplay(pendingCount)}</strong>
+          <small className="home-notebook-subtitle">کار باقی‌مانده</small>
         </button>
-      </form>
+        <button
+          type="button"
+          className="home-notebook-add"
+          onClick={() => {
+            setIsOpen(true);
+            setIsFormOpen(true);
+          }}
+        >
+          افزودن کار
+        </button>
+      </section>
 
-      {loading ? (
-        <div className="home-dashboard-skeleton" role="status" aria-label="در حال بارگذاری کارها"><span /><span /></div>
-      ) : tasks.length === 0 ? (
-        <div className="home-notebook-empty">هنوز کاری ثبت نشده؛ می‌توانید اولین مورد را بالا اضافه کنید.</div>
-      ) : (
-        <ul className="home-notebook-list">
-          {tasks.map((task) => (
-            <li className={`home-notebook-item${task.completed ? ' is-completed' : ''}`} key={task.id}>
-              <label className="home-notebook-task">
-                <input
-                  type="checkbox"
-                  checked={Boolean(task.completed)}
-                  onChange={() => { void handleToggleTask(task); }}
-                  aria-label={task.completed ? `علامت‌زدن ${task.title} به‌عنوان انجام‌نشده` : `علامت‌زدن ${task.title} به‌عنوان انجام‌شده`}
-                />
-                <span className="home-notebook-task-content">
-                  <strong>{task.title}</strong>
-                  {task.notes && <small>{task.notes}</small>}
-                  {task.created_at && <time dateTime={task.created_at}>{formatDashboardDate(task.created_at)}</time>}
-                </span>
-              </label>
-              <button type="button" className="home-notebook-delete" onClick={() => { void handleDeleteTask(task); }} aria-label={`حذف ${task.title}`}>
-                حذف
-              </button>
-            </li>
-          ))}
-        </ul>
+      {isOpen && (
+        <div
+          className="home-notebook-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeModal();
+          }}
+        >
+          <section
+            className="home-notebook-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="home-notebook-modal-title"
+            dir="rtl"
+          >
+            <header className="home-notebook-modal-header">
+              <div>
+                <h3 id="home-notebook-modal-title">دفترچهٔ کارها</h3>
+                <p>{formatDisplay(pendingCount)} کار باقی‌مانده</p>
+              </div>
+              <button type="button" onClick={closeModal} disabled={saving} aria-label="بستن دفترچهٔ کارها">×</button>
+            </header>
+
+            {errorMessage && <p className="home-notebook-error" role="alert">{errorMessage}</p>}
+
+            <button
+              type="button"
+              className="home-notebook-add"
+              onClick={() => setIsFormOpen((current) => !current)}
+            >
+              {isFormOpen ? 'انصراف از افزودن' : 'افزودن کار'}
+            </button>
+
+            {isFormOpen && (
+              <form className="home-notebook-form" onSubmit={handleAddTask}>
+                <label>
+                  عنوان کار
+                  <input
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    placeholder="چه کاری باید انجام شود؟"
+                    maxLength={180}
+                    required
+                    disabled={saving}
+                  />
+                </label>
+                <label>
+                  یادداشت کار (اختیاری)
+                  <textarea
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="یادداشت یا جزئیات (اختیاری)"
+                    maxLength={2000}
+                    rows={2}
+                    disabled={saving}
+                  />
+                </label>
+                <button type="submit" disabled={saving || !title.trim()}>
+                  {saving ? 'در حال افزودن…' : 'ثبت کار'}
+                </button>
+              </form>
+            )}
+
+            {loading ? (
+              <div className="home-dashboard-skeleton" role="status" aria-label="در حال بارگذاری کارها"><span /><span /></div>
+            ) : tasks.length === 0 ? (
+              <div className="home-notebook-empty">هنوز کاری ثبت نشده است.</div>
+            ) : (
+              <ul className="home-notebook-list">
+                {tasks.map((task) => (
+                  <li className={`home-notebook-item${task.completed ? ' is-completed' : ''}`} key={task.id}>
+                    <label className="home-notebook-task">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(task.completed)}
+                        onChange={() => { void handleToggleTask(task); }}
+                        aria-label={task.completed ? `علامت‌زدن ${task.title} به‌عنوان انجام‌نشده` : `علامت‌زدن ${task.title} به‌عنوان انجام‌شده`}
+                      />
+                      <span className="home-notebook-task-content">
+                        <strong>{task.title}</strong>
+                        {task.notes && <small>{task.notes}</small>}
+                        {task.created_at && <time dateTime={task.created_at}>{formatDashboardDate(task.created_at)}</time>}
+                      </span>
+                    </label>
+                    <button type="button" className="home-notebook-delete" onClick={() => { void handleDeleteTask(task); }} aria-label={`حذف ${task.title}`}>
+                      حذف
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       )}
-    </section>
+    </>
   );
 }

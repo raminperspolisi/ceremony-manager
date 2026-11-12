@@ -366,7 +366,12 @@ export default function BusinessContactsPanel({ organizationId }) {
                   </div>
                 </div>
 
-                {contact.field_of_work && <p className="business-contact-field"><span>حوزهٔ فعالیت</span>{contact.field_of_work}</p>}
+                {contact.field_of_work && (
+                  <p className="business-contact-field">
+                    <span>حوزهٔ فعالیت</span>
+                    <strong>{contact.field_of_work}</strong>
+                  </p>
+                )}
                 {contact.phone && <a className="business-contact-detail" href={`tel:${contact.phone}`} dir="ltr">{contact.phone}</a>}
                 <div className="business-contact-socials">
                   {contact.telegram_id && (telegramUrl
