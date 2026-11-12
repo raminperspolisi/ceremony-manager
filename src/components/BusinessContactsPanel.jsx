@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { getSocialProfileUrl, normalizeSocialHandle } from '../businessContactUtils';
@@ -52,6 +53,7 @@ export default function BusinessContactsPanel({ organizationId }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const dialogReturnFocusRef = useRef(null);
 
   const loadContacts = useCallback(async () => {
     try {
@@ -97,16 +99,32 @@ export default function BusinessContactsPanel({ organizationId }) {
     return query ? contacts.filter((contact) => searchableText(contact).includes(query)) : contacts;
   }, [contacts, search]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setForm(INITIAL_FORM);
     setEditingId(null);
     setCardFile(null);
     setEditingCardUrl('');
     setRemoveCard(false);
     setFormOpen(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!formOpen) {
+      if (dialogReturnFocusRef.current instanceof HTMLElement) dialogReturnFocusRef.current.focus();
+      return undefined;
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !saving) {
+        event.preventDefault();
+        resetForm();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [formOpen, resetForm, saving]);
 
   const openNewContactForm = () => {
+    dialogReturnFocusRef.current = document.activeElement;
     setForm(INITIAL_FORM);
     setEditingId(null);
     setCardFile(null);
@@ -117,6 +135,7 @@ export default function BusinessContactsPanel({ organizationId }) {
   };
 
   const openEditContactForm = (contact) => {
+    dialogReturnFocusRef.current = document.activeElement;
     setForm({
       ...INITIAL_FORM,
       ...contact,
@@ -257,16 +276,28 @@ export default function BusinessContactsPanel({ organizationId }) {
         <button type="button" className="business-contacts-add" onClick={openNewContactForm}>افزودن مخاطب</button>
       </header>
 
-      {errorMessage && <p className="business-contacts-error" role="alert">{errorMessage}</p>}
+      {!formOpen && errorMessage && <p className="business-contacts-error" role="alert">{errorMessage}</p>}
 
-      {formOpen && (
-        <form className="business-contact-form" onSubmit={handleSave}>
+      {formOpen && createPortal(
+        <div
+          className="business-contact-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !saving) resetForm();
+          }}
+        >
+        <form
+          className="business-contact-form business-contact-modal"
+          onSubmit={handleSave}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="business-contact-form-title"
+        >
           <div className="business-contact-form-heading">
-            <h3>{editingId ? 'ویرایش مخاطب' : 'ثبت مخاطب جدید'}</h3>
-            <button type="button" onClick={resetForm} disabled={saving}>بستن</button>
+            <h3 id="business-contact-form-title">{editingId ? 'ویرایش مخاطب' : 'ثبت مخاطب جدید'}</h3>
+            <button type="button" onClick={resetForm} disabled={saving} aria-label="بستن فرم">×</button>
           </div>
           <fieldset className="business-contact-fields" disabled={saving}>
-            <label>نام<input value={form.first_name} onChange={(event) => setForm((current) => ({ ...current, first_name: event.target.value }))} maxLength={100} required /></label>
+            <label>نام<input autoFocus value={form.first_name} onChange={(event) => setForm((current) => ({ ...current, first_name: event.target.value }))} maxLength={100} required /></label>
             <label>نام خانوادگی<input value={form.last_name} onChange={(event) => setForm((current) => ({ ...current, last_name: event.target.value }))} maxLength={100} required /></label>
             <label>نام مجموعه<input value={form.company_name || ''} onChange={(event) => setForm((current) => ({ ...current, company_name: event.target.value }))} maxLength={160} /></label>
             <label>حوزهٔ فعالیت<input value={form.field_of_work || ''} onChange={(event) => setForm((current) => ({ ...current, field_of_work: event.target.value }))} maxLength={160} placeholder="مثلاً گل‌فروشی، تجهیزات صوتی" /></label>
@@ -288,11 +319,14 @@ export default function BusinessContactsPanel({ organizationId }) {
             </div>
             <label className="business-contact-notes">یادداشت<textarea value={form.notes || ''} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} maxLength={2000} rows={3} placeholder="مثلاً وسیله را از ایشان خریدم یا نحوهٔ آشنایی" /></label>
           </fieldset>
+          {errorMessage && <p className="business-contacts-error" role="alert">{errorMessage}</p>}
           <div className="business-contact-form-actions">
             <button type="submit" disabled={saving}>{saving ? 'در حال ذخیره…' : editingId ? 'ذخیرهٔ تغییرات' : 'ثبت مخاطب'}</button>
             <button type="button" onClick={resetForm} disabled={saving}>انصراف</button>
           </div>
         </form>
+        </div>,
+        document.body,
       )}
 
       <div className="business-contacts-toolbar">

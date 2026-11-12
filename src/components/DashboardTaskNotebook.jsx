@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatDashboardDate } from '../dashboardUtils';
+import { formatDisplay } from '../styles';
 import { useToast } from './useToast';
 import './DashboardTaskNotebook.css';
 
@@ -109,11 +110,13 @@ export default function DashboardTaskNotebook() {
   const pendingCount = tasks.filter((task) => !task.completed).length;
 
   return (
-    <section className="home-dashboard-card home-dashboard-notebook" aria-labelledby="dashboard-task-notebook-title">
-      <div className="home-dashboard-card-heading">
-        <div><span>یادداشت مشترک فضای کاری</span><h4 id="dashboard-task-notebook-title">دفترچهٔ کارها</h4></div>
-        <span className="home-notebook-count">{pendingCount} کار باقی‌مانده</span>
+    <section className="home-metric-card home-metric-notebook" aria-labelledby="dashboard-task-notebook-title">
+      <div className="home-notebook-heading">
+        <h4 id="dashboard-task-notebook-title">دفترچهٔ کارها</h4>
+        <span>یادداشت مشترک فضای کاری</span>
       </div>
+      <strong className="home-notebook-count">{formatDisplay(pendingCount)}</strong>
+      <small className="home-notebook-subtitle">کار باقی‌مانده</small>
 
       {errorMessage && <p className="home-notebook-error" role="alert">{errorMessage}</p>}
 

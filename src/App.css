@@ -5156,6 +5156,7 @@ textarea:focus-visible {
   .home-dashboard-metrics {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
     gap: 13px;
   }
 
@@ -13072,7 +13073,12 @@ body {
 
 @media (max-width: 600px) {
   .home-dashboard-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-metric-card > strong {
+    font-size: 17px;
+    white-space: nowrap;
   }
 
   .home-dashboard-shortcuts button {
@@ -13123,6 +13129,17 @@ body {
   color: #17473f;
   font-size: 12px;
   font-weight: 700;
+}
+
+.app-container .panel-container .home-metric-notebook {
+  border-color: #d8ebe3 !important;
+  background: linear-gradient(135deg, #effbf5, #fff 84%) !important;
+  box-shadow: 0 10px 25px rgb(26 45 66 / 7%) !important;
+  color: #263a32 !important;
+}
+
+.app-container .panel-container .home-metric-notebook::after {
+  background: rgb(53 167 122 / 13%);
 }
 
 @media (prefers-reduced-motion: reduce) {

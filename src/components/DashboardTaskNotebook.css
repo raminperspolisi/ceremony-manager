@@ -1,23 +1,55 @@
-.home-dashboard-notebook {
+.home-metric-notebook {
   min-width: 0;
-  align-self: stretch;
+  align-content: start;
+  justify-items: stretch;
+  gap: 10px;
+  padding: 18px;
+  border-color: #d8ebe3 !important;
+  background: linear-gradient(135deg, #effbf5, #fff 84%) !important;
+  text-align: right;
+}
+
+.home-notebook-heading {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding-left: 52px;
+}
+
+.home-notebook-heading h4 {
+  margin: 0;
+  color: #52677c;
+  font-size: 12px;
+}
+
+.home-notebook-heading > span {
+  color: #52677c;
+  font-size: 10px;
+}
+
+.home-metric-notebook::before {
+  --metric-icon: "✓";
+  --metric-icon-bg: #d9f3e7;
+  --metric-icon-color: #198261;
+  --metric-glow: rgb(53 167 122 / 13%);
+  content: var(--metric-icon);
 }
 
 .home-notebook-count {
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: #edf8f3;
-  color: #26765f;
+  color: #16805f !important;
+  font-size: clamp(20px, 2.2vw, 27px);
+  line-height: 1.15;
+}
+
+.home-notebook-subtitle {
+  color: #7c8a9a;
   font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 .home-notebook-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
-  align-items: start;
-  gap: 9px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
 }
 
 .home-notebook-form label {
@@ -28,7 +60,7 @@
 .home-notebook-form textarea {
   width: 100%;
   min-width: 0;
-  padding: 9px 11px;
+  padding: 7px 9px;
   border: 1px solid #dce5e9;
   border-radius: 9px;
   background: #fff;
@@ -48,8 +80,9 @@
 }
 
 .home-notebook-form button {
-  min-height: 36px;
-  padding: 7px 12px;
+  justify-self: start;
+  min-height: 34px;
+  padding: 6px 11px;
   border: 0;
   border-radius: 9px;
   background: #19745d;
@@ -75,7 +108,7 @@
 }
 
 .home-notebook-empty {
-  padding: 12px;
+  padding: 8px;
   border: 1px dashed #dce5e9;
   border-radius: 10px;
   color: #7a8998;
@@ -85,8 +118,8 @@
 
 .home-notebook-list {
   display: grid;
-  gap: 7px;
-  max-height: 340px;
+  gap: 6px;
+  max-height: 180px;
   overflow: auto;
   margin: 0;
   padding: 0;
@@ -99,7 +132,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 11px;
+  padding: 7px 8px;
   border: 1px solid #edf0f3;
   border-radius: 10px;
   background: #fff;
@@ -164,12 +197,3 @@
   font-size: 9px;
 }
 
-@media (max-width: 640px) {
-  .home-notebook-form {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .home-notebook-form button {
-    justify-self: start;
-  }
-}

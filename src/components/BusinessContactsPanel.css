@@ -66,6 +66,45 @@
   box-shadow: 0 8px 25px rgb(26 45 66 / 5%);
 }
 
+.business-contact-modal-backdrop {
+  position: fixed;
+  z-index: 1300;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: max(20px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgb(15 23 42 / 58%);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+.business-contact-modal {
+  width: min(720px, 100%);
+  max-height: calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: #233548;
+}
+
+.business-contact-modal .business-contact-form-heading h3 {
+  color: #253649;
+}
+
+.business-contact-modal .business-contact-fields,
+.business-contact-modal .business-contact-fields label,
+.business-contact-modal .business-contact-card-upload {
+  color: #46596c;
+}
+
+.business-contact-modal .business-contact-form-heading button {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 3px 8px;
+  font-size: 20px;
+}
+
 .business-contact-form-heading,
 .business-contact-form-actions,
 .business-contacts-toolbar,
@@ -345,5 +384,17 @@
 
   .business-contact-notes {
     grid-column: auto;
+  }
+
+  .business-contact-modal-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .business-contact-modal {
+    width: 100%;
+    max-height: 94dvh;
+    border-radius: 16px 16px 0 0;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
   }
 }

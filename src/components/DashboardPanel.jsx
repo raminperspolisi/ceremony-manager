@@ -194,6 +194,7 @@ export default function DashboardPanel({
             <small>پیگیری در تقویم مراسم‌ها</small>
           </button>
         )}
+        <DashboardTaskNotebook />
       </section>
 
       <div className="home-dashboard-columns">
@@ -249,7 +250,6 @@ export default function DashboardPanel({
           )}
         </section>
 
-        <DashboardTaskNotebook />
       </div>
 
       {canViewCalendar && (
