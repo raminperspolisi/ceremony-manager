@@ -246,33 +246,37 @@
   gap: 12px;
   min-width: 0;
   overflow: hidden;
-  padding: 18px;
-  border: 1px solid #dfeae3;
-  border-radius: 18px;
-  background: linear-gradient(145deg, #fff 12%, #f8fcf9 100%);
-  box-shadow: 0 10px 24px rgb(28 62 49 / 7%), inset 0 1px 0 #fff;
-  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  padding: 16px;
+  border: 1px solid #dce8df;
+  border-radius: 20px;
+  background:
+    radial-gradient(ellipse at 100% 0, rgb(224 242 230 / 58%), transparent 48%),
+    linear-gradient(155deg, #fff 8%, #fbfdfb 100%);
+  box-shadow: 0 8px 24px rgb(32 62 47 / 7%), inset 0 1px 0 #fff;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .business-contact-card::before {
   position: absolute;
-  inset-block: 18px;
+  inset-block: 16px;
   inset-inline-start: 0;
-  width: 4px;
+  width: 3px;
   border-radius: 0 4px 4px 0;
-  background: linear-gradient(180deg, #4a9a78, #b9dfc8);
+  background: linear-gradient(180deg, #398667, #a9d8b8);
   content: "";
   pointer-events: none;
 }
 
 .business-contact-card:hover {
-  transform: translateY(-2px);
-  border-color: #c9dfd1;
-  box-shadow: 0 15px 30px rgb(28 62 49 / 11%), inset 0 1px 0 #fff;
+  transform: translateY(-3px);
+  border-color: #b9d5c2;
+  box-shadow: 0 16px 32px rgb(28 62 49 / 12%), inset 0 1px 0 #fff;
 }
 
 .business-contact-card-main {
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto;
+  align-items: center;
   gap: 11px;
   min-width: 0;
   padding-bottom: 13px;
@@ -281,9 +285,10 @@
 
 .business-contact-avatar {
   display: grid;
-  width: 46px;
-  height: 46px;
-  flex: 0 0 46px;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  overflow: hidden;
   place-items: center;
   border: 1px solid #d5e9dd;
   border-radius: 15px;
@@ -292,6 +297,21 @@
   font-size: 18px;
   font-weight: 800;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
+}
+
+.business-contact-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.business-contact-personal-photo-preview {
+  width: 88px;
+  height: 88px;
+  border: 1px solid #d5e9dd;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #f7faf8;
 }
 
 .business-contact-name {
@@ -303,7 +323,7 @@
   overflow: hidden;
   margin: 0;
   color: #203b31;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -354,7 +374,14 @@
   background: #fff0f0;
 }
 
+.business-contact-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
+  gap: 8px;
+}
+
 .business-contact-field,
+.business-contact-detail,
 .business-contact-note {
   margin: 0;
   color: #344c40;
@@ -364,11 +391,14 @@
 
 .business-contact-field {
   display: grid;
+  min-width: 0;
+  align-content: center;
   gap: 2px;
-  padding: 9px 11px;
-  border: 1px solid #e9f0eb;
-  border-radius: 11px;
-  background: #f8fbf9;
+  min-height: 58px;
+  padding: 8px 10px;
+  border: 1px solid #e5eee7;
+  border-radius: 12px;
+  background: rgb(247 251 248 / 90%);
 }
 
 .business-contact-field span {
@@ -383,43 +413,59 @@
 }
 
 .business-contact-detail {
-  display: inline-flex;
-  min-height: 38px;
-  align-items: center;
-  width: fit-content;
-  padding: 7px 11px;
+  display: grid;
+  min-width: 0;
+  min-height: 58px;
+  align-content: center;
+  gap: 2px;
+  padding: 8px 10px;
   border: 1px solid #dcebe1;
-  border-radius: 10px;
-  background: #f2faf5;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #f3faf5, #fff);
   color: #24664d;
-  font-size: 12px;
-  font-weight: 700;
   text-decoration: none;
-  transition: border-color 140ms ease, background 140ms ease;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.business-contact-detail span {
+  color: #84948a;
+  font-size: 10px;
+}
+
+.business-contact-detail strong {
+  color: #24664d;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .business-contact-detail:hover {
   border-color: #b8d7c3;
   background: #e8f5ed;
+  transform: translateY(-1px);
 }
 
 .business-contact-socials {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .business-contact-socials a,
 .business-contact-socials span {
   max-width: 100%;
-  padding: 6px 9px;
-  border: 1px solid #e2eee6;
-  border-radius: 8px;
-  background: #f7fbf8;
+  min-width: 0;
+  min-height: 34px;
+  display: grid;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid #e1ece4;
+  border-radius: 10px;
+  background: #f8fbf9;
   color: #34745b;
   direction: ltr;
   font-size: 10px;
   overflow-wrap: anywhere;
+  text-align: center;
   text-decoration: none;
 }
 
@@ -431,19 +477,34 @@
 
 .business-contact-card-image {
   display: grid;
-  gap: 6px;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid #e3ece5;
+  border-radius: 14px;
+  background: #f8fbf9;
   color: #26765f;
   font-size: 10px;
   text-decoration: none;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.business-contact-card-image:hover {
+  border-color: #c6ddce;
+  background: #f1f8f3;
 }
 
 .business-contact-card-image img {
   width: 100%;
-  max-height: 170px;
+  max-height: 128px;
   border: 1px solid #e1ebe4;
-  border-radius: 12px;
+  border-radius: 9px;
   object-fit: contain;
-  background: #f7faf8;
+  background: #fff;
+}
+
+.business-contact-card-image span {
+  padding-inline: 3px;
+  font-weight: 700;
 }
 
 .business-contact-image-error {
@@ -462,9 +523,11 @@
 }
 
 .app-container .panel-container .business-contacts .business-contact-card {
-  border-color: #dfeae3 !important;
-  background: linear-gradient(145deg, #fff 12%, #f8fcf9 100%) !important;
-  box-shadow: 0 10px 24px rgb(28 62 49 / 7%), inset 0 1px 0 #fff !important;
+  border-color: #dce8df !important;
+  background:
+    radial-gradient(ellipse at 100% 0, rgb(224 242 230 / 58%), transparent 48%),
+    linear-gradient(155deg, #fff 8%, #fbfdfb 100%) !important;
+  box-shadow: 0 8px 24px rgb(32 62 47 / 7%), inset 0 1px 0 #fff !important;
   color: #344c40 !important;
 }
 
@@ -515,6 +578,15 @@
 .app-container .panel-container .business-contacts .business-contact-field,
 .app-container .panel-container .business-contacts .business-contact-note {
   color: #344c40 !important;
+}
+
+.app-container .panel-container .business-contacts .business-contact-detail,
+.app-container .panel-container .business-contacts .business-contact-detail strong {
+  color: #24664d !important;
+}
+
+.app-container .panel-container .business-contacts .business-contact-detail span {
+  color: #84948a !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

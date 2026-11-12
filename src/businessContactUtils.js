@@ -3,6 +3,10 @@ const PLATFORM_HOSTS = {
   telegram: ['t.me', 'telegram.me', 'www.t.me'],
 };
 
+export function trimBusinessContactText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export function normalizeSocialHandle(value, platform) {
   const input = String(value ?? '').trim();
   if (!input) return '';

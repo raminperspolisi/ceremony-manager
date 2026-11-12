@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
-import { getSocialProfileUrl, normalizeSocialHandle } from '../businessContactUtils';
+import { getSocialProfileUrl, normalizeSocialHandle, trimBusinessContactText } from '../businessContactUtils';
 import EmptyState from './EmptyState';
 import { useToast } from './useToast';
 import './BusinessContactsPanel.css';
@@ -18,6 +18,7 @@ const INITIAL_FORM = {
   instagram_id: '',
   telegram_id: '',
   business_card_path: '',
+  personal_photo_path: '',
   notes: '',
 };
 
@@ -46,8 +47,11 @@ export default function BusinessContactsPanel({ organizationId }) {
   const [form, setForm] = useState(INITIAL_FORM);
   const [editingId, setEditingId] = useState(null);
   const [cardFile, setCardFile] = useState(null);
+  const [personalPhotoFile, setPersonalPhotoFile] = useState(null);
   const [editingCardUrl, setEditingCardUrl] = useState('');
+  const [editingPersonalPhotoUrl, setEditingPersonalPhotoUrl] = useState('');
   const [removeCard, setRemoveCard] = useState(false);
+  const [removePersonalPhoto, setRemovePersonalPhoto] = useState(false);
   const [search, setSearch] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,21 +67,30 @@ export default function BusinessContactsPanel({ organizationId }) {
       });
       if (error) throw error;
 
-      const cardErrors = [];
+      const imageErrors = [];
       const contactsWithCardUrls = await Promise.all((data || []).map(async (contact) => {
-        if (!contact.business_card_path) return contact;
-        const { data: signedUrl, error: signedUrlError } = await supabase.storage
-          .from(STORAGE_BUCKET)
-          .createSignedUrl(contact.business_card_path, 3600);
-        if (signedUrlError || !signedUrl?.signedUrl) {
-          const message = signedUrlError?.message || 'ساخت لینک امن تصویر ناموفق بود.';
-          cardErrors.push(`${contact.first_name} ${contact.last_name}: ${message}`);
-          return { ...contact, business_card_error: message };
+        const contactWithImages = { ...contact };
+        const images = [
+          { path: 'business_card_path', url: 'business_card_url', error: 'business_card_error', label: 'کارت ویزیت' },
+          { path: 'personal_photo_path', url: 'personal_photo_url', error: 'personal_photo_error', label: 'عکس پرسنلی' },
+        ];
+        for (const image of images) {
+          if (!contact[image.path]) continue;
+          const { data: signedUrl, error: signedUrlError } = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .createSignedUrl(contact[image.path], 3600);
+          if (signedUrlError || !signedUrl?.signedUrl) {
+            const message = signedUrlError?.message || 'ساخت لینک امن تصویر ناموفق بود.';
+            imageErrors.push(`${contact.first_name} ${contact.last_name} (${image.label}): ${message}`);
+            contactWithImages[image.error] = message;
+          } else {
+            contactWithImages[image.url] = signedUrl.signedUrl;
+          }
         }
-        return { ...contact, business_card_url: signedUrl.signedUrl };
+        return contactWithImages;
       }));
       setContacts(contactsWithCardUrls);
-      setErrorMessage(cardErrors.length ? `بارگذاری تصویر کارت برخی مخاطبان ناموفق بود: ${cardErrors.join('؛ ')}` : '');
+      setErrorMessage(imageErrors.length ? `بارگذاری برخی تصاویر مخاطبان ناموفق بود: ${imageErrors.join('؛ ')}` : '');
     } catch (error) {
       setErrorMessage(`بارگذاری دفترچهٔ مخاطبان ناموفق بود: ${error.message}`);
     } finally {
@@ -103,8 +116,11 @@ export default function BusinessContactsPanel({ organizationId }) {
     setForm(INITIAL_FORM);
     setEditingId(null);
     setCardFile(null);
+    setPersonalPhotoFile(null);
     setEditingCardUrl('');
+    setEditingPersonalPhotoUrl('');
     setRemoveCard(false);
+    setRemovePersonalPhoto(false);
     setFormOpen(false);
   }, []);
 
@@ -128,8 +144,11 @@ export default function BusinessContactsPanel({ organizationId }) {
     setForm(INITIAL_FORM);
     setEditingId(null);
     setCardFile(null);
+    setPersonalPhotoFile(null);
     setEditingCardUrl('');
+    setEditingPersonalPhotoUrl('');
     setRemoveCard(false);
+    setRemovePersonalPhoto(false);
     setFormOpen(true);
     setErrorMessage('');
   };
@@ -144,71 +163,90 @@ export default function BusinessContactsPanel({ organizationId }) {
     });
     setEditingId(contact.id);
     setCardFile(null);
+    setPersonalPhotoFile(null);
     setEditingCardUrl(contact.business_card_url || '');
+    setEditingPersonalPhotoUrl(contact.personal_photo_url || '');
     setRemoveCard(false);
+    setRemovePersonalPhoto(false);
     setFormOpen(true);
     setErrorMessage('');
   };
 
-  const handleCardFileChange = (event) => {
+  const handleImageFileChange = (event, setFile, setRemove, imageLabel) => {
     const [file] = event.target.files || [];
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setErrorMessage('تصویر کارت ویزیت باید با فرمت JPG، PNG یا WebP باشد.');
-      setCardFile(null);
+      setErrorMessage(`تصویر ${imageLabel} باید با فرمت JPG، PNG یا WebP باشد.`);
+      setFile(null);
       event.target.value = '';
       return;
     }
     if (file.size > MAX_CARD_SIZE) {
-      setErrorMessage('حجم تصویر کارت ویزیت نباید بیشتر از ۵ مگابایت باشد.');
-      setCardFile(null);
+      setErrorMessage(`حجم تصویر ${imageLabel} نباید بیشتر از ۵ مگابایت باشد.`);
+      setFile(null);
       event.target.value = '';
       return;
     }
     setErrorMessage('');
-    setCardFile(file);
-    setRemoveCard(false);
+    setFile(file);
+    setRemove(false);
+  };
+
+  const handleCardFileChange = (event) => {
+    handleImageFileChange(event, setCardFile, setRemoveCard, 'کارت ویزیت');
+  };
+
+  const handlePersonalPhotoChange = (event) => {
+    handleImageFileChange(event, setPersonalPhotoFile, setRemovePersonalPhoto, 'پرسنلی');
   };
 
   const handleSave = async (event) => {
     event.preventDefault();
-    if (!form.first_name.trim() || !form.last_name.trim()) {
+    const firstName = trimBusinessContactText(form.first_name);
+    const lastName = trimBusinessContactText(form.last_name);
+    if (!firstName || !lastName) {
       setErrorMessage('نام و نام خانوادگی را وارد کنید.');
       return;
     }
 
     setSaving(true);
     setErrorMessage('');
-    let uploadedPath = '';
+    const uploadedPaths = [];
     let contactSaved = false;
     try {
-      if ((cardFile || removeCard) && !navigator.onLine) {
-        throw new Error('برای افزودن یا حذف تصویر کارت ویزیت باید به اینترنت متصل باشید.');
+      if ((cardFile || removeCard || personalPhotoFile || removePersonalPhoto) && !navigator.onLine) {
+        throw new Error('برای افزودن یا حذف تصاویر مخاطب باید به اینترنت متصل باشید.');
       }
       const instagramId = normalizeSocialHandle(form.instagram_id, 'instagram');
       const telegramId = normalizeSocialHandle(form.telegram_id, 'telegram');
       let businessCardPath = removeCard ? null : form.business_card_path || null;
+      let personalPhotoPath = removePersonalPhoto ? null : form.personal_photo_path || null;
 
-      if (cardFile) {
-        const extension = cardFile.type === 'image/png' ? 'png' : cardFile.type === 'image/webp' ? 'webp' : 'jpg';
-        uploadedPath = `${organizationId}/${crypto.randomUUID()}.${extension}`;
+      const uploadImage = async (file) => {
+        const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+        const imagePath = `${organizationId}/${crypto.randomUUID()}.${extension}`;
         const { error: uploadError } = await supabase.storage
           .from(STORAGE_BUCKET)
-          .upload(uploadedPath, cardFile, { contentType: cardFile.type, upsert: false });
+          .upload(imagePath, file, { contentType: file.type, upsert: false });
         if (uploadError) throw uploadError;
-        businessCardPath = uploadedPath;
-      }
+        uploadedPaths.push(imagePath);
+        return imagePath;
+      };
+
+      if (cardFile) businessCardPath = await uploadImage(cardFile);
+      if (personalPhotoFile) personalPhotoPath = await uploadImage(personalPhotoFile);
 
       const contactData = {
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        company_name: form.company_name.trim() || null,
-        field_of_work: form.field_of_work.trim() || null,
-        phone: form.phone.trim() || null,
+        first_name: firstName,
+        last_name: lastName,
+        company_name: trimBusinessContactText(form.company_name) || null,
+        field_of_work: trimBusinessContactText(form.field_of_work) || null,
+        phone: trimBusinessContactText(form.phone) || null,
         instagram_id: instagramId || null,
         telegram_id: telegramId || null,
         business_card_path: businessCardPath,
-        notes: form.notes.trim() || null,
+        personal_photo_path: personalPhotoPath,
+        notes: trimBusinessContactText(form.notes) || null,
       };
 
       const result = editingId
@@ -217,10 +255,11 @@ export default function BusinessContactsPanel({ organizationId }) {
       if (result.error) throw result.error;
       contactSaved = true;
 
-      const previousCardPath = form.business_card_path;
+      const previousImagePaths = [form.business_card_path, form.personal_photo_path]
+        .filter((path) => path && ![businessCardPath, personalPhotoPath].includes(path));
       let cleanupMessage = '';
-      if (previousCardPath && previousCardPath !== businessCardPath) {
-        const { error: removeError } = await supabase.storage.from(STORAGE_BUCKET).remove([previousCardPath]);
+      if (previousImagePaths.length) {
+        const { error: removeError } = await supabase.storage.from(STORAGE_BUCKET).remove(previousImagePaths);
         if (removeError) cleanupMessage = `اطلاعات مخاطب ذخیره شد اما حذف تصویر قبلی ناموفق بود: ${removeError.message}`;
       }
       resetForm();
@@ -228,8 +267,8 @@ export default function BusinessContactsPanel({ organizationId }) {
       toast('success', editingId ? 'اطلاعات مخاطب ذخیره شد.' : 'مخاطب کاری ثبت شد.');
       if (cleanupMessage) setErrorMessage(cleanupMessage);
     } catch (error) {
-      if (uploadedPath && !contactSaved) {
-        const { error: cleanupError } = await supabase.storage.from(STORAGE_BUCKET).remove([uploadedPath]);
+      if (uploadedPaths.length && !contactSaved) {
+        const { error: cleanupError } = await supabase.storage.from(STORAGE_BUCKET).remove(uploadedPaths);
         setErrorMessage(cleanupError
           ? `ذخیرهٔ مخاطب ناموفق بود: ${error.message}؛ پاک‌سازی تصویر بارگذاری‌شده هم ناموفق بود: ${cleanupError.message}`
           : `ذخیرهٔ مخاطب ناموفق بود: ${error.message}`);
@@ -244,8 +283,9 @@ export default function BusinessContactsPanel({ organizationId }) {
   const handleDelete = async (contact) => {
     const fullName = `${contact.first_name} ${contact.last_name}`;
     if (!await confirm(`مخاطب «${fullName}» حذف شود؟`)) return;
-    if (contact.business_card_path && !navigator.onLine) {
-      setErrorMessage('برای حذف مخاطبی که تصویر کارت دارد، ابتدا به اینترنت متصل شوید.');
+    const imagePaths = [contact.business_card_path, contact.personal_photo_path].filter(Boolean);
+    if (imagePaths.length && !navigator.onLine) {
+      setErrorMessage('برای حذف مخاطبی که تصویر دارد، ابتدا به اینترنت متصل شوید.');
       return;
     }
     setErrorMessage('');
@@ -253,11 +293,11 @@ export default function BusinessContactsPanel({ organizationId }) {
       const { error } = await deleteRows('business_contacts', [{ column: 'id', operator: 'eq', value: contact.id }]);
       if (error) throw error;
       setContacts((current) => current.filter((item) => item.id !== contact.id));
-      if (contact.business_card_path) {
+      if (imagePaths.length) {
         const { error: removeError } = await supabase.storage
           .from(STORAGE_BUCKET)
-          .remove([contact.business_card_path]);
-        if (removeError) throw new Error(`مخاطب حذف شد اما حذف تصویر کارت ناموفق بود: ${removeError.message}`);
+          .remove(imagePaths);
+        if (removeError) throw new Error(`مخاطب حذف شد اما حذف تصاویر او ناموفق بود: ${removeError.message}`);
       }
       toast('success', 'مخاطب کاری حذف شد.');
     } catch (error) {
@@ -304,6 +344,19 @@ export default function BusinessContactsPanel({ organizationId }) {
             <label>شماره تماس<input type="tel" dir="ltr" value={form.phone || ''} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} maxLength={40} /></label>
             <label>آیدی اینستاگرام<input dir="ltr" value={form.instagram_id || ''} onChange={(event) => setForm((current) => ({ ...current, instagram_id: event.target.value }))} placeholder="@username" maxLength={100} /></label>
             <label>آیدی تلگرام<input dir="ltr" value={form.telegram_id || ''} onChange={(event) => setForm((current) => ({ ...current, telegram_id: event.target.value }))} placeholder="@username" maxLength={100} /></label>
+            <div className="business-contact-card-upload">
+              <label htmlFor="business-contact-personal-photo-file">عکس پرسنلی</label>
+              <input id="business-contact-personal-photo-file" type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePersonalPhotoChange} />
+              <small>JPG، PNG یا WebP؛ حداکثر ۵ مگابایت</small>
+              {personalPhotoFile && <small>{personalPhotoFile.name}</small>}
+              {!personalPhotoFile && form.personal_photo_path && !removePersonalPhoto && (
+                <>
+                  {editingPersonalPhotoUrl && <img className="business-contact-personal-photo-preview" src={editingPersonalPhotoUrl} alt="پیش‌نمایش عکس پرسنلی" />}
+                  <button type="button" onClick={() => setRemovePersonalPhoto(true)}>حذف عکس پرسنلی</button>
+                </>
+              )}
+              {removePersonalPhoto && <small>عکس پرسنلی پس از ذخیره حذف می‌شود.</small>}
+            </div>
             <div className="business-contact-card-upload">
               <label htmlFor="business-contact-card-file">تصویر کارت ویزیت</label>
               <input id="business-contact-card-file" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCardFileChange} />
@@ -355,7 +408,11 @@ export default function BusinessContactsPanel({ organizationId }) {
             return (
               <article className="business-contact-card" key={contact.id}>
                 <div className="business-contact-card-main">
-                  <span className="business-contact-avatar" aria-hidden="true">{contact.first_name.slice(0, 1)}</span>
+                  <span className="business-contact-avatar" aria-hidden="true">
+                    {contact.personal_photo_url
+                      ? <img src={contact.personal_photo_url} alt="" loading="lazy" />
+                      : (contact.first_name || '?').slice(0, 1)}
+                  </span>
                   <div className="business-contact-name">
                     <h3>{fullName}</h3>
                     {contact.company_name && <p>{contact.company_name}</p>}
@@ -366,13 +423,22 @@ export default function BusinessContactsPanel({ organizationId }) {
                   </div>
                 </div>
 
-                {contact.field_of_work && (
-                  <p className="business-contact-field">
-                    <span>حوزهٔ فعالیت</span>
-                    <strong>{contact.field_of_work}</strong>
-                  </p>
+                {(contact.field_of_work || contact.phone) && (
+                  <div className="business-contact-summary">
+                    {contact.field_of_work && (
+                      <p className="business-contact-field">
+                        <span>حوزهٔ فعالیت</span>
+                        <strong>{contact.field_of_work}</strong>
+                      </p>
+                    )}
+                    {contact.phone && (
+                      <a className="business-contact-detail" href={`tel:${contact.phone}`}>
+                        <span>شماره تماس</span>
+                        <strong dir="ltr">{contact.phone}</strong>
+                      </a>
+                    )}
+                  </div>
                 )}
-                {contact.phone && <a className="business-contact-detail" href={`tel:${contact.phone}`} dir="ltr">{contact.phone}</a>}
                 <div className="business-contact-socials">
                   {contact.telegram_id && (telegramUrl
                     ? <a href={telegramUrl} target="_blank" rel="noreferrer">تلگرام · @{contact.telegram_id}</a>
@@ -388,6 +454,7 @@ export default function BusinessContactsPanel({ organizationId }) {
                   </a>
                 )}
                 {contact.business_card_error && <p className="business-contact-image-error">دریافت تصویر کارت ناموفق بود: {contact.business_card_error}</p>}
+                {contact.personal_photo_error && <p className="business-contact-image-error">دریافت عکس پرسنلی ناموفق بود: {contact.personal_photo_error}</p>}
                 {contact.notes && <p className="business-contact-note">{contact.notes}</p>}
               </article>
             );

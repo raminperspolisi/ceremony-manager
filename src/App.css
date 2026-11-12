@@ -12369,7 +12369,7 @@ body:has([role="dialog"][aria-modal="true"]) {
   }
 }
 
-/* Keep the application surfaces consistent with the white-and-green sign-in page. */
+/* Use a warm gold canvas while keeping content cards light and readable. */
 :root {
   color-scheme: light;
   --app-primary: var(--color-brand);
@@ -12385,20 +12385,23 @@ body:has([role="dialog"][aria-modal="true"]) {
 html,
 body,
 #root {
-  background: #f2f5f2 !important;
+  background:
+    radial-gradient(ellipse at 12% 4%, rgb(226 183 91 / 20%), transparent 36rem),
+    radial-gradient(ellipse at 88% 72%, rgb(198 155 66 / 14%), transparent 38rem),
+    linear-gradient(145deg, #fbf6e9 0%, #efe1bf 100%) !important;
   color: #1b2b2a !important;
 }
 
 .app-container {
-  border-color: #dce8e2 !important;
-  background: #fff !important;
+  border-color: #e6d6b3 !important;
+  background: linear-gradient(145deg, #fffaf0 0%, #f7eedb 100%) !important;
   box-shadow: 0 18px 48px rgb(26 51 44 / 9%) !important;
 }
 
 .app-window-titlebar,
 .app-header {
-  border-color: #e2e9e3 !important;
-  background: #fff !important;
+  border-color: #eadfc8 !important;
+  background: #fffcf5 !important;
   color: #1b2b2a !important;
   box-shadow: 0 2px 10px rgb(26 51 44 / 5%) !important;
   -webkit-backdrop-filter: none !important;
@@ -12444,7 +12447,7 @@ body,
 .app-layout[class*="page-theme-"],
 .main-content[class*="page-theme-"],
 .app-layout[class*="page-theme-"] .sidebar {
-  background: #f2f5f2 !important;
+  background: #f7eedb !important;
   background-image: none !important;
 }
 
@@ -12454,12 +12457,19 @@ body,
 
 .main-content[class*="page-theme-"] > .page-heading,
 .main-content[class*="page-theme-"] > .panel-container {
-  border: 1px solid #dce8e2 !important;
-  background: #fff !important;
+  border: 1px solid #e8dcc2 !important;
   color: #1b2b2a !important;
   box-shadow: 0 8px 24px rgb(26 51 44 / 6%) !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+}
+
+.main-content[class*="page-theme-"] > .page-heading {
+  background: #fffaf0 !important;
+}
+
+.main-content[class*="page-theme-"] > .panel-container {
+  background: linear-gradient(145deg, #fffaf0 0%, #f8efd9 100%) !important;
 }
 
 .main-content[class*="page-theme-"] > .page-heading {
@@ -12483,8 +12493,8 @@ body,
 .app-container .sidebar.mobile-menu-open,
 .app-layout[class*="page-theme-"] .sidebar,
 .app-layout[class*="page-theme-"] .sidebar.mobile-menu-open {
-  border-color: #dce8e2 !important;
-  background: #fff !important;
+  border-color: #e6d8b8 !important;
+  background: #fff9eb !important;
   box-shadow: 0 12px 36px rgb(26 51 44 / 10%) !important;
   color: #1b2b2a !important;
   -webkit-backdrop-filter: none !important;
@@ -13097,7 +13107,32 @@ body {
   }
 }
 
+.home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) {
+  padding-left: 76px;
+}
+
 @media (max-width: 700px) {
+  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) {
+    min-height: 110px;
+    padding: 14px 14px 14px 64px;
+    gap: 5px;
+  }
+
+  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) > span,
+  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) > strong,
+  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) > small {
+    grid-column: 1;
+    grid-row: auto;
+    min-width: 0;
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) > strong {
+    font-size: clamp(16px, 4.2vw, 18px);
+  }
+
   .home-metric-notebook {
     grid-template-columns: minmax(0, 1fr);
     min-height: 0;
