@@ -37,7 +37,7 @@ const APP_SECTION_HISTORY_KEY = '__ceremonyManagerSection';
 const APP_SECTION_POPUP_HISTORY_KEY = '__ceremonyManagerPopupSection';
 const getInitialActiveSection = () => {
   const section = window.history.state?.[APP_SECTION_HISTORY_KEY];
-  return typeof section === 'string' ? section : 'dashboard';
+  return typeof section === 'string' ? section : 'reports';
 };
 const getOrganizationLogoUrl = (organization) => {
   if (!organization?.id || !organization.logo_updated_at) return DEFAULT_LOGO_URL;
@@ -56,6 +56,7 @@ const SECTION_BY_FUNCTION_KEY = {
   F7: 'calendar',
   F8: 'reminders',
   F9: 'dashboard',
+  F12: 'cashbook',
 };
 const SECTION_PERMISSION_BY_NAV = {
   dashboard: 'dashboard',
@@ -73,11 +74,12 @@ const SECTION_PERMISSION_BY_NAV = {
   reminders: 'calendar',
   tutorial: 'tutorial',
   contact: 'contact',
+  support: 'contact',
 };
 const SECTION_FALLBACK_ORDER = [
-  'dashboard', 'customers', 'business-contacts', 'inventory', 'quotations', 'official',
-  'bot-orders', 'cashbook', 'reports', 'analytics', 'calendar',
-  'reminders', 'backup', 'tutorial', 'contact',
+  'dashboard', 'customers', 'inventory', 'quotations', 'official', 'cashbook',
+  'calendar', 'reminders', 'bot-orders', 'business-contacts', 'reports', 'analytics',
+  'tutorial', 'contact', 'support', 'backup',
 ];
 const GLOBAL_SEARCH_TABLES = [
   { table: 'customers', section: 'customers', label: 'مشتری' },
@@ -103,25 +105,27 @@ const SECTION_THEME_ICONS = {
   'organization-management': '👤',
   'organization-creation': '🏢',
   contact: '💬',
+  support: '🎧',
 };
 const SECTION_TITLES = {
   dashboard: 'داشبورد',
   customers: 'مشتریان',
-  'business-contacts': 'دفترچهٔ مخاطبان کاری',
+  'business-contacts': 'دفترچه کاری',
   inventory: 'موجودی انبار',
-  'bot-orders': 'سفارش‌های ربات',
+  'bot-orders': 'سفارشات بات',
   quotations: 'پیش‌فاکتور',
   official: 'فاکتور رسمی',
   reports: 'گزارش مالی',
-  analytics: 'آنالیز پیشرفته و سود و زیان',
-  calendar: 'تقویم مراسم‌ها',
-  reminders: 'یادآوری مراسم و پیگیری تسویه',
-  tutorial: 'آموزش نرم‌افزار',
+  analytics: 'آنالیز پیشرفته',
+  calendar: 'تقویم مراسم',
+  reminders: 'یادآوری',
+  tutorial: 'آموزش',
   backup: 'پشتیبان‌گیری و بازیابی',
   cashbook: 'صندوق و بانک',
-  'organization-management': 'مدیریت کاربران و دسترسی',
+  'organization-management': 'مدیریت کاربران',
   'organization-creation': 'ساخت فضای کاری جدید',
   contact: 'ارتباط با ما',
+  support: 'پشتیبانی',
 };
 
 const normalizeSearchText = (value) => String(value ?? '')
@@ -988,9 +992,9 @@ export default function App() {
   const handleOrganizationCreated = async (organization) => {
     closeSectionPopup();
     await refreshOrganizationMemberships(organization?.id);
-    setActiveSection('dashboard');
-    activeSectionRef.current = 'dashboard';
-    setVisitedSections(new Set(['dashboard']));
+    setActiveSection('reports');
+    activeSectionRef.current = 'reports';
+    setVisitedSections(new Set(['reports']));
   };
   const handleSignIn = async (e) => {
     e.preventDefault();
@@ -1447,7 +1451,7 @@ export default function App() {
             <RemindersPanel businessName={businessName} logoUrl={logoUrl} active />
           )}
           {section === 'tutorial' && <TutorialPanel />}
-          {section === 'contact' && <ContactPanel />}
+          {(section === 'contact' || section === 'support') && <ContactPanel />}
           {!isPopup && section !== 'calendar' && visitedSections.has('calendar') && hasSectionAccess('calendar') && (
             <div style={{ display: 'none' }}>
               <CalendarPanel active={false} organizationId={activeOrganizationId} />
@@ -1963,29 +1967,103 @@ export default function App() {
           <nav className="section-nav" aria-label="بخش‌های برنامه">
             <button
               type="button"
-              className={`nav-button ${navigationSection === "dashboard" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === 'dashboard' ? 'active' : ''}`}
               hidden={!hasSectionAccess('dashboard')}
               aria-keyshortcuts="F9"
-              onClick={() => handleSectionChange("dashboard")}
+              onClick={() => handleSectionChange('dashboard')}
             >
               <span className="nav-icon">⌂</span>
               <span className="nav-text">داشبورد</span>
               <span className="nav-shortcut">F9</span>
             </button>
-
-            {/* 1. مشتریان */}
             <button
               type="button"
-              className={`nav-button ${navigationSection === "customers" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === 'customers' ? 'active' : ''}`}
               hidden={!hasSectionAccess('customers')}
               aria-keyshortcuts="F1"
-              onClick={() => handleSectionChange("customers")}
+              onClick={() => handleSectionChange('customers')}
             >
               <span className="nav-icon">👤</span>
               <span className="nav-text">مشتریان</span>
               <span className="nav-shortcut">F1</span>
             </button>
-
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'inventory' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('inventory')}
+              aria-keyshortcuts="F2"
+              onClick={() => handleSectionChange('inventory')}
+            >
+              <span className="nav-icon">▦</span>
+              <span className="nav-text">موجودی انبار</span>
+              <span className="nav-count">{formatDisplay(inventory.length)}</span>
+              <span className="nav-shortcut">F2</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'quotations' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('quotations')}
+              aria-keyshortcuts="F3"
+              onClick={() => handleSectionChange('quotations')}
+            >
+              <span className="nav-icon">▤</span>
+              <span className="nav-text">پیش‌فاکتور</span>
+              <span className="nav-count">{formatDisplay(selectedItems.length)}</span>
+              <span className="nav-shortcut">F3</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'official' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('official')}
+              aria-keyshortcuts="F4"
+              onClick={() => handleSectionChange('official')}
+            >
+              <span className="nav-icon">📜</span>
+              <span className="nav-text">فاکتور رسمی</span>
+              <span className="nav-shortcut">F4</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'cashbook' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('cashbook')}
+              aria-keyshortcuts="F12"
+              onClick={() => handleSectionChange('cashbook')}
+            >
+              <span className="nav-icon">💰</span>
+              <span className="nav-text">صندوق و بانک</span>
+              <span className="nav-shortcut">F12</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'calendar' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('calendar')}
+              aria-keyshortcuts="F7"
+              onClick={() => handleSectionChange('calendar')}
+            >
+              <span className="nav-icon">📅</span>
+              <span className="nav-text">تقویم مراسم</span>
+              <span className="nav-shortcut">F7</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'reminders' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('reminders')}
+              aria-keyshortcuts="F8"
+              onClick={() => handleSectionChange('reminders')}
+            >
+              <span className="nav-icon">🔔</span>
+              <span className="nav-text">یادآوری</span>
+              <span className="nav-shortcut">F8</span>
+            </button>
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'bot-orders' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('bot-orders')}
+              onClick={() => handleSectionChange('bot-orders')}
+            >
+              <span className="nav-icon">🛍</span>
+              <span className="nav-text">سفارشات بات</span>
+            </button>
             <button
               type="button"
               className={`nav-button ${navigationSection === 'business-contacts' ? 'active' : ''}`}
@@ -1993,147 +2071,44 @@ export default function App() {
               onClick={() => handleSectionChange('business-contacts')}
             >
               <span className="nav-icon">📇</span>
-              <span className="nav-text">دفترچهٔ مخاطبان کاری</span>
+              <span className="nav-text">دفترچه کاری</span>
             </button>
-
-            {/* 2. موجودی انبار */}
             <button
               type="button"
-              className={`nav-button ${navigationSection === "inventory" ? "active" : ""}`}
-              hidden={!hasSectionAccess('inventory')}
-              aria-keyshortcuts="F2"
-              onClick={() => handleSectionChange("inventory")}
-            >
-              <span className="nav-icon">▦</span>
-              <span className="nav-text">موجودی انبار</span>
-              <span className="nav-count">{formatDisplay(inventory.length)}</span>
-              <span className="nav-shortcut">F2</span>
-            </button>
-
-            <button
-              type="button"
-              className={`nav-button ${navigationSection === "bot-orders" ? "active" : ""}`}
-              hidden={!hasSectionAccess('bot-orders')}
-              onClick={() => handleSectionChange("bot-orders")}
-            >
-              <span className="nav-icon">🛍</span>
-              <span className="nav-text">سفارش‌های ربات</span>
-            </button>
-
-            {/* 3. پیش‌فاکتور */}
-            <button
-              type="button"
-              className={`nav-button ${navigationSection === "quotations" ? "active" : ""}`}
-              hidden={!hasSectionAccess('quotations')}
-              aria-keyshortcuts="F3"
-              onClick={() => handleSectionChange("quotations")}
-            >
-              <span className="nav-icon">▤</span>
-              <span className="nav-text">پیش‌فاکتور</span>
-              <span className="nav-count">{formatDisplay(selectedItems.length)}</span>
-              <span className="nav-shortcut">F3</span>
-            </button>
-
-            {/* 4. فاکتور رسمی */}
-            <button
-              type="button"
-              className={`nav-button ${navigationSection === "official" ? "active" : ""}`}
-              hidden={!hasSectionAccess('official')}
-              aria-keyshortcuts="F4"
-              onClick={() => handleSectionChange("official")}
-            >
-              <span className="nav-icon">📜</span>
-              <span className="nav-text">فاکتور رسمی</span>
-              <span className="nav-shortcut">F4</span>
-            </button>
-
-            <button
-              type="button"
-              className={`nav-button ${navigationSection === "backup" ? "active" : ""}`}
-              hidden={!hasSectionAccess('backup')}
-              onClick={() => handleSectionChange("backup")}
-            >
-              <span className="nav-icon">⬇</span>
-              <span className="nav-text">پشتیبان‌گیری</span>
-            </button>
-
-            <button
-              type="button"
-              className={`nav-button ${navigationSection === "cashbook" ? "active" : ""}`}
-              hidden={!hasSectionAccess('cashbook')}
-              onClick={() => handleSectionChange("cashbook")}
-            >
-              <span className="nav-icon">💰</span>
-              <span className="nav-text">صندوق و بانک</span>
-            </button>
-
-            {/* 5. گزارش مالی */}
-            <button
-              type="button"
-              className={`nav-button ${navigationSection === "reports" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === 'reports' ? 'active' : ''}`}
               hidden={!hasSectionAccess('reports')}
               aria-keyshortcuts="F5"
-              onClick={() => handleSectionChange("reports")}
+              onClick={() => handleSectionChange('reports')}
             >
               <span className="nav-icon">📊</span>
               <span className="nav-text">گزارش مالی</span>
               <span className="nav-shortcut">F5</span>
             </button>
-
-            {/* 6. آنالیز پیشرفته */}
             <button
               type="button"
-              className={`nav-button ${navigationSection === "analytics" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === 'analytics' ? 'active' : ''}`}
               hidden={!hasSectionAccess('analytics')}
               aria-keyshortcuts="F6"
-              onClick={() => handleSectionChange("analytics")}
+              onClick={() => handleSectionChange('analytics')}
             >
               <span className="nav-icon">📈</span>
               <span className="nav-text">آنالیز پیشرفته</span>
               <span className="nav-shortcut">F6</span>
             </button>
-
-            {/* 7. تقویم مراسم‌ها */}
             <button
               type="button"
-              className={`nav-button ${navigationSection === "calendar" ? "active" : ""}`}
-              hidden={!hasSectionAccess('calendar')}
-              aria-keyshortcuts="F7"
-              onClick={() => handleSectionChange("calendar")}
-            >
-              <span className="nav-icon">📅</span>
-              <span className="nav-text">تقویم مراسم‌ها</span>
-              <span className="nav-shortcut">F7</span>
-            </button>
-
-            {/* 8. یادآوری مراسم و تسویه */}
-            <button
-              type="button"
-              className={`nav-button ${navigationSection === "reminders" ? "active" : ""}`}
-              hidden={!hasSectionAccess('reminders')}
-              aria-keyshortcuts="F8"
-              onClick={() => handleSectionChange("reminders")}
-            >
-              <span className="nav-icon">🔔</span>
-              <span className="nav-text">یادآوری مراسم و تسویه</span>
-              <span className="nav-shortcut">F8</span>
-            </button>
-
-            <button
-              type="button"
-              className={`nav-button ${navigationSection === "tutorial" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === 'tutorial' ? 'active' : ''}`}
               hidden={!hasSectionAccess('tutorial')}
-              onClick={() => handleSectionChange("tutorial")}
+              onClick={() => handleSectionChange('tutorial')}
             >
               <span className="nav-icon">📖</span>
-              <span className="nav-text">آموزش نرم‌افزار</span>
+              <span className="nav-text">آموزش</span>
             </button>
-
             <button
               type="button"
-              className={`nav-button ${navigationSection === "contact" ? "active" : ""}`}
+              className={`nav-button ${navigationSection === 'contact' ? 'active' : ''}`}
               hidden={!hasSectionAccess('contact')}
-              onClick={() => handleSectionChange("contact")}
+              onClick={() => handleSectionChange('contact')}
             >
               <span className="nav-icon">📞</span>
               <span className="nav-text">ارتباط با ما</span>
@@ -2145,9 +2120,18 @@ export default function App() {
                 onClick={() => handleSectionChange('organization-management')}
               >
                 <span className="nav-icon">⚙</span>
-                <span className="nav-text">مدیریت کاربران و دسترسی</span>
+                <span className="nav-text">مدیریت کاربران</span>
               </button>
             )}
+            <button
+              type="button"
+              className={`nav-button ${navigationSection === 'support' ? 'active' : ''}`}
+              hidden={!hasSectionAccess('support')}
+              onClick={() => handleSectionChange('support')}
+            >
+              <span className="nav-icon">🎧</span>
+              <span className="nav-text">پشتیبانی</span>
+            </button>
           </nav>
 
           <div className="sidebar-note">

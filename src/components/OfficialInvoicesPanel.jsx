@@ -847,7 +847,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
         </div>
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
+      <div className="official-invoices-table-wrap" style={{ overflowX: 'auto' }}>
         <table className="official-invoices-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right', fontSize: '12px' }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
@@ -884,6 +884,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                 return (
                   <tr
                     key={inv.id}
+                    className={selectedIds.includes(inv.id) ? 'is-selected' : undefined}
                     onDoubleClick={() => void runInvoiceAction(bulkAction, inv)}
                     title="دابل‌کلیک: انجام عملیات انتخاب‌شده در فهرست «عملیات»"
                     style={{

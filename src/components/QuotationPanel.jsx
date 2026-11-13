@@ -127,6 +127,11 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
   const [convertingQuotationId, setConvertingQuotationId] = useState(null);
   const [editingQuotationId, setEditingQuotationId] = useState(null);
 
+  const closeInventoryPicker = () => {
+    setInventoryCreateOpen(false);
+    setInventoryPickerOpen(false);
+  };
+
   useEffect(() => {
     fetchCustomers();
     fetchInvoices();
@@ -143,7 +148,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       if (inventoryPickerOpen) {
         event.preventDefault();
         if (inventoryCreateOpen) {
-          setInventoryCreateOpen(false);
+          if (!savingNewInventoryItem) setInventoryCreateOpen(false);
         } else if (editingInventoryItemId !== null) {
           setEditingInventoryItemId(null);
           setInventoryEditForm({});
@@ -166,7 +171,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
     };
     window.addEventListener('app-escape', handleAppEscape);
     return () => window.removeEventListener('app-escape', handleAppEscape);
-  }, [editingInventoryItemId, inventoryCreateOpen, inventoryPickerOpen, isSearching, showAddCustomerForm]);
+  }, [editingInventoryItemId, inventoryCreateOpen, inventoryPickerOpen, isSearching, savingNewInventoryItem, showAddCustomerForm]);
 
   useEffect(() => {
     if (!inventoryPickerOpen) return undefined;
@@ -833,6 +838,8 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                 }}
               />
               <button
+                type="button"
+                className={`quotation-customer-add-button ${showAddCustomerForm ? 'is-open' : ''}`}
                 style={win95Style.button}
                 onClick={() => setShowAddCustomerForm(!showAddCustomerForm)}>
                 {showAddCustomerForm ? 'بستن فرم' : '+ مشتری جدید'}
@@ -840,7 +847,9 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
             </div>
 
             <button
+              type="button"
               className="quotation-buying-price-toggle"
+              aria-pressed={showBuyingPrice}
               onClick={() => setShowBuyingPrice(!showBuyingPrice)}>
               {showBuyingPrice ? 'مخفی کردن قیمت خرید' : 'نمایش قیمت خرید'}
             </button>
@@ -1126,7 +1135,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         <div
           className="quotation-inventory-picker-backdrop"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setInventoryPickerOpen(false);
+            if (event.target === event.currentTarget) closeInventoryPicker();
           }}
         >
           <section
@@ -1146,114 +1155,146 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                 <button
                   type="button"
                   className="quotation-inventory-picker-add-button"
-                  onClick={() => {
-                    if (inventoryCreateOpen) setInventoryCreateOpen(false);
-                    else setInventoryCreateOpen(true);
-                  }}
+                  onClick={() => setInventoryCreateOpen(true)}
                 >
-                  {inventoryCreateOpen ? 'بستن ثبت کالا' : '+ ثبت کالای جدید'}
+                  + ثبت کالای جدید
                 </button>
                 <button
                   type="button"
                   aria-label="بستن فهرست اقلام"
-                  onClick={() => setInventoryPickerOpen(false)}
+                  onClick={closeInventoryPicker}
                 >
                   ×
                 </button>
               </div>
             </header>
             {inventoryCreateOpen && (
-              <form className="quotation-inventory-create-form" onSubmit={handleCreateInventoryItem}>
-                <div className="quotation-inventory-create-heading">
-                  <strong>ثبت کالا در انبار و افزودن به پیش‌فاکتور</strong>
-                  <span>کالای ثبت‌شده با تعداد ۱ به پیش‌فاکتور اضافه می‌شود؛ تعداد را بعداً می‌توانید تغییر دهید.</span>
-                </div>
-                <label>
-                  نام کالا / خدمت
-                  <input
-                    autoFocus
-                    required
-                    value={newInventoryForm.title}
-                    onChange={(event) => setNewInventoryForm((current) => ({ ...current, title: event.target.value }))}
-                    placeholder="نام کالا"
-                  />
-                </label>
-                <ImageUpload
-                  value={newInventoryForm.image}
-                  onChange={(image) => setNewInventoryForm((current) => ({ ...current, image }))}
-                  onError={(message) => toast('error', message)}
-                />
-                <label>
-                  نوع
-                  <select
-                    value={newInventoryForm.item_type}
-                    onChange={(event) => setNewInventoryForm((current) => ({ ...current, item_type: event.target.value }))}
-                  >
-                    <option value="sale">فروشی</option>
-                    <option value="rent">اجاره‌ای</option>
-                  </select>
-                </label>
-                <label>
-                  نرخ سطح ۱
-                  <FormattedNumberInput
-                    allowDecimal={false}
-                    value={newInventoryForm.price_level1}
-                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level1: value }))}
-                  />
-                </label>
-                <label>
-                  نرخ سطح ۲
-                  <FormattedNumberInput
-                    allowDecimal={false}
-                    value={newInventoryForm.price_level2}
-                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level2: value }))}
-                  />
-                </label>
-                <label>
-                  نرخ سطح ۳
-                  <FormattedNumberInput
-                    allowDecimal={false}
-                    value={newInventoryForm.price_level3}
-                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level3: value }))}
-                  />
-                </label>
-                <label>
-                  قیمت خرید
-                  <FormattedNumberInput
-                    allowDecimal={false}
-                    value={newInventoryForm.base_cost}
-                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, base_cost: value }))}
-                  />
-                </label>
-                <label>
-                  انبار موجودی اولیه
-                  <select
-                    value={newInventoryForm.warehouse_id}
-                    onChange={(event) => setNewInventoryForm((current) => ({ ...current, warehouse_id: event.target.value }))}
-                    disabled={pickerStockLoading || pickerWarehouses.length === 0}
-                  >
-                    <option value="">{pickerStockLoading ? 'در حال دریافت انبارها...' : 'انتخاب انبار'}</option>
-                    {pickerWarehouses.map((warehouse) => (
-                      <option key={warehouse.id} value={warehouse.id}>
-                        {warehouse.name}{warehouse.is_default ? ' (اصلی)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  موجودی اولیه
-                  <FormattedNumberInput
-                    value={newInventoryForm.initial_quantity}
-                    onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, initial_quantity: value }))}
-                    placeholder="مثلاً ۱۰"
-                  />
-                </label>
-                <div className="quotation-inventory-create-actions">
-                  <button type="submit" disabled={savingNewInventoryItem || pickerStockLoading}>
-                    {savingNewInventoryItem ? 'در حال ثبت...' : 'ثبت کالا و افزودن'}
-                  </button>
-                </div>
-              </form>
+              <div
+                className="quotation-inventory-create-backdrop"
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget && !savingNewInventoryItem) {
+                    setInventoryCreateOpen(false);
+                  }
+                }}
+              >
+                <section
+                  className="quotation-inventory-create-dialog"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="quotation-inventory-create-title"
+                  dir="rtl"
+                >
+                  <header className="quotation-inventory-create-dialog-heading">
+                    <div>
+                      <h2 id="quotation-inventory-create-title">ثبت کالای جدید</h2>
+                      <p>کالای ثبت‌شده با تعداد ۱ به پیش‌فاکتور اضافه می‌شود.</p>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="بستن فرم ثبت کالا"
+                      disabled={savingNewInventoryItem}
+                      onClick={() => setInventoryCreateOpen(false)}
+                    >
+                      ×
+                    </button>
+                  </header>
+                  <form className="quotation-inventory-create-form" onSubmit={handleCreateInventoryItem}>
+                    <label>
+                      نام کالا / خدمت
+                      <input
+                        autoFocus
+                        required
+                        value={newInventoryForm.title}
+                        onChange={(event) => setNewInventoryForm((current) => ({ ...current, title: event.target.value }))}
+                        placeholder="نام کالا"
+                      />
+                    </label>
+                    <ImageUpload
+                      value={newInventoryForm.image}
+                      onChange={(image) => setNewInventoryForm((current) => ({ ...current, image }))}
+                      onError={(message) => toast('error', message)}
+                    />
+                    <label>
+                      نوع
+                      <select
+                        value={newInventoryForm.item_type}
+                        onChange={(event) => setNewInventoryForm((current) => ({ ...current, item_type: event.target.value }))}
+                      >
+                        <option value="sale">فروشی</option>
+                        <option value="rent">اجاره‌ای</option>
+                      </select>
+                    </label>
+                    <label>
+                      نرخ سطح ۱
+                      <FormattedNumberInput
+                        allowDecimal={false}
+                        value={newInventoryForm.price_level1}
+                        onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level1: value }))}
+                      />
+                    </label>
+                    <label>
+                      نرخ سطح ۲
+                      <FormattedNumberInput
+                        allowDecimal={false}
+                        value={newInventoryForm.price_level2}
+                        onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level2: value }))}
+                      />
+                    </label>
+                    <label>
+                      نرخ سطح ۳
+                      <FormattedNumberInput
+                        allowDecimal={false}
+                        value={newInventoryForm.price_level3}
+                        onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, price_level3: value }))}
+                      />
+                    </label>
+                    <label>
+                      قیمت خرید
+                      <FormattedNumberInput
+                        allowDecimal={false}
+                        value={newInventoryForm.base_cost}
+                        onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, base_cost: value }))}
+                      />
+                    </label>
+                    <label>
+                      انبار موجودی اولیه
+                      <select
+                        value={newInventoryForm.warehouse_id}
+                        onChange={(event) => setNewInventoryForm((current) => ({ ...current, warehouse_id: event.target.value }))}
+                        disabled={pickerStockLoading || pickerWarehouses.length === 0}
+                      >
+                        <option value="">{pickerStockLoading ? 'در حال دریافت انبارها...' : 'انتخاب انبار'}</option>
+                        {pickerWarehouses.map((warehouse) => (
+                          <option key={warehouse.id} value={warehouse.id}>
+                            {warehouse.name}{warehouse.is_default ? ' (اصلی)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      موجودی اولیه
+                      <FormattedNumberInput
+                        value={newInventoryForm.initial_quantity}
+                        onValueChange={(value) => setNewInventoryForm((current) => ({ ...current, initial_quantity: value }))}
+                        placeholder="مثلاً ۱۰"
+                      />
+                    </label>
+                    <div className="quotation-inventory-create-actions">
+                      <button
+                        type="button"
+                        className="quotation-inventory-create-cancel"
+                        disabled={savingNewInventoryItem}
+                        onClick={() => setInventoryCreateOpen(false)}
+                      >
+                        انصراف
+                      </button>
+                      <button type="submit" disabled={savingNewInventoryItem || pickerStockLoading}>
+                        {savingNewInventoryItem ? 'در حال ثبت...' : 'ثبت کالا و افزودن'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              </div>
             )}
             <label className="quotation-inventory-picker-search">
               <span>جستجوی کالا</span>
@@ -1489,7 +1530,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
             </div>
             <footer className="quotation-inventory-picker-footer">
               <span>{formatDisplay(items.length)} قلم در پیش‌فاکتور</span>
-              <button type="button" onClick={() => setInventoryPickerOpen(false)}>پایان انتخاب</button>
+              <button type="button" onClick={closeInventoryPicker}>پایان انتخاب</button>
             </footer>
           </section>
         </div>
@@ -1563,7 +1604,8 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                           </span>
                         ) : (
                           <button
-                            style={{ backgroundColor: '#0ea5e9', color: '#fff', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: convertingQuotationId === String(inv.id) ? 'wait' : 'pointer', fontSize: '11px' }}
+                            type="button"
+                            className="recent-invoice-issue-button"
                             onClick={(e) => handleConvertToInvoice(e, inv)}
                             disabled={convertingQuotationId === String(inv.id)}
                           >
