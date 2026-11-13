@@ -1,32 +1,47 @@
 .sms-auth-screen {
-  --auth-green: #236357;
-  --auth-green-dark: #17473f;
-  --auth-ink: #1b2b2a;
-  --auth-muted: #71817e;
+  --sds-color-gray-100: #f5f5f5;
+  --sds-color-gray-200: #e6e6e6;
+  --sds-color-gray-300: #d9d9d9;
+  --sds-color-gray-500: #757575;
+  --sds-color-gray-700: #383838;
+  --sds-color-gray-900: #1e1e1e;
+  --sds-color-brand-800: #2c2c2c;
+  --sds-color-brand-900: #1e1e1e;
+  --sds-color-background-brand-default: var(--sds-color-brand-800);
+  --sds-color-background-brand-hover: var(--sds-color-brand-900);
+  --sds-color-green-100: #ebffee;
+  --sds-color-red-100: #fee9e7;
+  --sds-color-red-700: #900b09;
+  --sds-size-space-100: 4px;
+  --sds-size-space-200: 8px;
+  --sds-size-space-300: 12px;
+  --sds-size-space-400: 16px;
+  --sds-size-space-600: 24px;
+  --sds-size-space-800: 32px;
+  --sds-size-radius-200: 8px;
+  --sds-size-radius-400: 16px;
+  --auth-brand: #28645a;
   display: grid;
   min-height: 100vh;
   min-height: 100dvh;
   place-items: center;
-  padding: 48px 24px;
+  padding: clamp(16px, 4vw, 48px);
   direction: rtl;
-  background:
-    radial-gradient(ellipse at 12% 8%, rgb(91 151 126 / 14%), transparent 32rem),
-    radial-gradient(ellipse at 90% 92%, rgb(176 155 108 / 13%), transparent 30rem),
-    #f2f5f2;
-  color: var(--auth-ink);
+  background: var(--sds-color-gray-100);
+  color: var(--sds-color-gray-900);
 }
 
 .sms-auth-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0.94fr);
   width: min(100%, 1080px);
-  min-height: 660px;
+  min-height: 640px;
   overflow: hidden;
-  border: 1px solid rgb(30 69 60 / 8%);
-  border-radius: 26px;
+  border: 1px solid var(--sds-color-gray-200);
+  border-radius: var(--sds-size-radius-400);
   background: #fff;
-  box-shadow: 0 30px 90px rgb(26 51 44 / 13%), 0 4px 14px rgb(26 51 44 / 5%);
-  animation: sms-auth-enter 500ms ease both;
+  box-shadow: 0 8px 24px rgb(12 12 13 / 6%);
+  animation: sms-auth-enter 300ms ease both;
 }
 
 .sms-auth-content {
@@ -36,17 +51,17 @@
   width: 100%;
   max-width: 470px;
   margin-inline: auto;
-  padding: 64px 58px 38px;
+  padding: 56px 52px 36px;
 }
 
 .sms-auth-mobile-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 48px;
-  color: var(--auth-green-dark);
-  font-size: 19px;
-  font-weight: 800;
+  gap: var(--sds-size-space-200);
+  margin-bottom: 40px;
+  color: var(--sds-color-gray-900);
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .sms-auth-mobile-brand img {
@@ -56,100 +71,100 @@
 }
 
 .sms-auth-heading {
-  margin-bottom: 30px;
+  margin-bottom: 28px;
 }
 
 .sms-auth-eyebrow {
   display: block;
-  margin-bottom: 10px;
-  color: var(--auth-green);
+  margin-bottom: var(--sds-size-space-200);
+  color: var(--auth-brand);
   font-size: 13px;
   font-weight: 700;
 }
 
 .sms-auth-heading h1 {
-  margin: 0 0 9px;
-  color: var(--auth-ink);
+  margin: 0 0 var(--sds-size-space-100);
+  color: var(--sds-color-gray-900);
   font-size: clamp(24px, 2.4vw, 29px);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.5;
 }
 
 .sms-auth-heading p {
   margin: 0;
-  color: var(--auth-muted);
+  color: var(--sds-color-gray-500);
   font-size: 14px;
   line-height: 1.9;
 }
 
 .sms-auth-message {
-  margin: 0 0 18px;
-  padding: 12px 14px;
+  margin: 0 0 var(--sds-size-space-400);
+  padding: var(--sds-size-space-300) var(--sds-size-space-400);
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--sds-size-radius-200);
   font-size: 13px;
   line-height: 1.8;
 }
 
 .sms-auth-error {
-  border-color: #f3d0cd;
-  background: #fff4f2;
-  color: #a63f35;
+  border-color: #fcb3ad;
+  background: var(--sds-color-red-100);
+  color: var(--sds-color-red-700);
 }
 
 .sms-auth-success {
-  border-color: #cce5d8;
-  background: #f0faf4;
-  color: #26734a;
+  border-color: #aff4c6;
+  background: var(--sds-color-green-100);
+  color: #02542d;
 }
 
 .sms-auth-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sds-size-space-200);
 }
 
 .sms-auth-form label {
-  margin-top: 5px;
-  color: #344844;
+  margin-top: var(--sds-size-space-100);
+  color: var(--sds-color-gray-700);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .sms-auth-form label span {
-  color: #8a9894;
+  color: var(--sds-color-gray-500);
   font-size: 12px;
   font-weight: 400;
 }
 
 .sms-auth-form input {
   width: 100%;
-  height: 52px;
-  margin: 0 0 5px;
-  padding: 0 15px;
-  border: 1px solid #dce5e1;
-  border-radius: 12px;
+  height: 48px;
+  margin: 0 0 var(--sds-size-space-100);
+  padding: 0 var(--sds-size-space-300);
+  border: 1px solid var(--sds-color-gray-300);
+  border-radius: var(--sds-size-radius-200);
   outline: 0;
-  background: #fbfcfb;
-  color: var(--auth-ink);
-  font-size: 15px;
-  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  background: #fff;
+  color: var(--sds-color-gray-900);
+  font-size: 14px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .sms-auth-form input::placeholder {
-  color: #9daaa6;
+  color: var(--sds-color-gray-500);
   opacity: 1;
 }
 
 .sms-auth-form input:focus {
-  border-color: #4b8c7d;
-  background: #fff;
-  box-shadow: 0 0 0 4px rgb(57 126 109 / 11%);
+  border-color: var(--auth-brand);
+  box-shadow: 0 0 0 3px rgb(40 100 90 / 15%);
 }
 
 .sms-auth-form input:disabled {
   cursor: not-allowed;
-  opacity: 0.65;
+  background: var(--sds-color-gray-100);
+  opacity: 0.7;
 }
 
 #sms-auth-phone,
@@ -171,8 +186,8 @@
 }
 
 .sms-auth-hint {
-  margin: -2px 0 8px;
-  color: var(--auth-muted);
+  margin: 0 0 var(--sds-size-space-200);
+  color: var(--sds-color-gray-500);
   font-size: 12px;
   line-height: 1.8;
 }
@@ -182,38 +197,42 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--sds-size-space-200);
   width: 100%;
-  min-height: 50px;
-  padding: 11px 16px;
+  min-height: 48px;
+  padding: 10px var(--sds-size-space-400);
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--sds-size-radius-200);
   font-size: 14px;
-  font-weight: 700;
-  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  font-weight: 600;
+  transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .sms-auth-primary {
-  margin-top: 7px;
-  background: linear-gradient(135deg, #2d7667, #20594f);
-  box-shadow: 0 8px 18px rgb(35 99 87 / 18%);
+  margin-top: var(--sds-size-space-200);
+  background: var(--sds-color-background-brand-default);
   color: #fff;
 }
 
 .sms-auth-primary span {
   font-size: 18px;
   line-height: 1;
-  transition: transform 180ms ease;
+  transition: transform 150ms ease;
 }
 
 .sms-auth-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: linear-gradient(135deg, #256b5c, #174a41);
-  box-shadow: 0 11px 22px rgb(35 99 87 / 23%);
+  background: var(--sds-color-background-brand-hover);
 }
 
 .sms-auth-primary:hover:not(:disabled) span {
   transform: translateX(-3px);
+}
+
+.sms-auth-primary:focus-visible,
+.sms-auth-secondary:focus-visible,
+.sms-auth-mode-toggle:focus-visible {
+  outline: 3px solid rgb(40 100 90 / 35%);
+  outline-offset: 2px;
 }
 
 .sms-auth-primary:disabled,
@@ -224,7 +243,7 @@
 }
 
 .sms-auth-actions {
-  margin-top: 17px;
+  margin-top: var(--sds-size-space-400);
   text-align: center;
 }
 
@@ -232,13 +251,13 @@
   padding: 4px 8px;
   border: 0;
   background: transparent;
-  color: var(--auth-green);
+  color: var(--auth-brand);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .sms-auth-mode-toggle:hover:not(:disabled) {
-  color: var(--auth-green-dark);
+  color: #1e5048;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -246,9 +265,9 @@
 .sms-auth-divider {
   display: flex;
   align-items: center;
-  gap: 13px;
-  margin: 13px 0;
-  color: #9aa6a2;
+  gap: var(--sds-size-space-300);
+  margin: var(--sds-size-space-300) 0;
+  color: var(--sds-color-gray-500);
   font-size: 12px;
 }
 
@@ -256,24 +275,72 @@
 .sms-auth-divider::after {
   height: 1px;
   flex: 1;
-  background: #edf0ee;
+  background: var(--sds-color-gray-200);
   content: "";
 }
 
 .sms-auth-secondary {
-  border-color: #dce5e1;
+  border-color: var(--sds-color-gray-300);
   background: #fff;
-  color: #405650;
+  color: var(--sds-color-gray-700);
 }
 
 .sms-auth-secondary:hover:not(:disabled) {
-  border-color: #a9c5bb;
-  background: #f7faf8;
+  border-color: var(--sds-color-gray-500);
+  background: var(--sds-color-gray-100);
+}
+
+#root .sms-auth-screen .sms-auth-form input {
+  border-color: var(--sds-color-gray-300) !important;
+  border-radius: var(--sds-size-radius-200) !important;
+  background: #fff !important;
+  color: var(--sds-color-gray-900) !important;
+  box-shadow: none !important;
+}
+
+#root .sms-auth-screen .sms-auth-form input::placeholder {
+  color: var(--sds-color-gray-500) !important;
+}
+
+#root .sms-auth-screen .sms-auth-form input:focus {
+  border-color: var(--auth-brand) !important;
+  outline: 2px solid rgb(40 100 90 / 20%) !important;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px rgb(40 100 90 / 12%) !important;
+}
+
+#root .sms-auth-screen .sms-auth-primary,
+#root .sms-auth-screen .sms-auth-secondary {
+  min-height: 48px;
+  border-radius: var(--sds-size-radius-200) !important;
+  font-weight: 600;
+}
+
+#root .sms-auth-screen .sms-auth-primary {
+  border-color: var(--sds-color-background-brand-default) !important;
+  background: var(--sds-color-background-brand-default) !important;
+  color: #fff !important;
+}
+
+#root .sms-auth-screen .sms-auth-primary:not(:disabled):hover {
+  border-color: var(--sds-color-background-brand-hover) !important;
+  background: var(--sds-color-background-brand-hover) !important;
+}
+
+#root .sms-auth-screen .sms-auth-secondary {
+  border-color: var(--sds-color-gray-300) !important;
+  background: #fff !important;
+  color: var(--sds-color-gray-700) !important;
+}
+
+#root .sms-auth-screen .sms-auth-secondary:not(:disabled):hover {
+  border-color: var(--sds-color-gray-500) !important;
+  background: var(--sds-color-gray-100) !important;
 }
 
 .sms-auth-privacy {
-  margin: 27px 0 0;
-  color: #8a9894;
+  margin: var(--sds-size-space-600) 0 0;
+  color: var(--sds-color-gray-500);
   font-size: 11px;
   text-align: center;
 }
@@ -284,9 +351,9 @@
   flex-direction: column;
   justify-content: space-between;
   overflow: hidden;
-  padding: 48px 52px 32px;
+  padding: 40px;
   background:
-    radial-gradient(ellipse at 8% 12%, rgb(103 168 143 / 35%), transparent 25rem),
+    radial-gradient(ellipse at 8% 12%, rgb(103 168 143 / 28%), transparent 25rem),
     linear-gradient(150deg, #1d5b50 0%, #17483f 55%, #123a35 100%);
   color: #fff;
 }
@@ -294,7 +361,7 @@
 .sms-auth-showcase::before,
 .sms-auth-showcase::after {
   position: absolute;
-  border: 1px solid rgb(255 255 255 / 9%);
+  border: 1px solid rgb(255 255 255 / 10%);
   border-radius: 50%;
   content: "";
   pointer-events: none;
@@ -302,16 +369,16 @@
 
 .sms-auth-showcase::before {
   top: 20%;
-  left: -145px;
+  left: -160px;
   width: 430px;
   height: 430px;
 }
 
 .sms-auth-showcase::after {
   top: 24%;
-  left: -105px;
-  width: 350px;
-  height: 350px;
+  left: -115px;
+  width: 340px;
+  height: 340px;
 }
 
 .sms-auth-showcase-top,
@@ -325,18 +392,18 @@
 .sms-auth-showcase-top {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 20px;
-  font-weight: 800;
+  gap: var(--sds-size-space-300);
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .sms-auth-showcase-top img {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
   padding: 5px;
-  border: 1px solid rgb(255 255 255 / 20%);
-  border-radius: 15px;
-  background: rgb(255 255 255 / 96%);
+  border: 1px solid var(--sds-color-gray-200);
+  border-radius: var(--sds-size-radius-200);
+  background: #fff;
   object-fit: contain;
 }
 
@@ -350,13 +417,13 @@
 
 .sms-auth-showcase-copy {
   max-width: 400px;
-  margin-block: 70px 48px;
+  margin-block: 64px 40px;
 }
 
 .sms-auth-showcase-label {
   display: inline-flex;
-  margin-bottom: 20px;
-  padding: 7px 12px;
+  margin-bottom: var(--sds-size-space-400);
+  padding: 6px 10px;
   border: 1px solid rgb(255 255 255 / 18%);
   border-radius: 999px;
   background: rgb(255 255 255 / 7%);
@@ -365,9 +432,10 @@
 }
 
 .sms-auth-showcase-copy h2 {
-  margin: 0 0 16px;
-  font-size: clamp(27px, 3vw, 38px);
-  font-weight: 800;
+  margin: 0 0 var(--sds-size-space-300);
+  color: #fff;
+  font-size: clamp(27px, 3vw, 36px);
+  font-weight: 700;
   line-height: 1.65;
 }
 
@@ -382,21 +450,20 @@
 .sms-auth-showcase-card {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px;
+  gap: var(--sds-size-space-300);
+  padding: var(--sds-size-space-400);
   border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 16px;
+  border-radius: var(--sds-size-radius-200);
   background: rgb(255 255 255 / 8%);
-  backdrop-filter: blur(8px);
 }
 
 .sms-auth-showcase-icon {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 13px;
+  border-radius: var(--sds-size-radius-200);
   background: rgb(220 184 116 / 18%);
   color: #eed29c;
   font-size: 20px;
@@ -408,7 +475,7 @@
 }
 
 .sms-auth-showcase-card strong {
-  margin-bottom: 4px;
+  margin-bottom: var(--sds-size-space-100);
   font-size: 13px;
 }
 
@@ -418,7 +485,7 @@
 }
 
 .sms-auth-showcase-footer {
-  margin-top: 26px;
+  margin-top: var(--sds-size-space-600);
   color: rgb(255 255 255 / 55%);
   font-size: 11px;
 }
@@ -426,7 +493,7 @@
 @keyframes sms-auth-enter {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -436,14 +503,13 @@
 
 @media (max-width: 820px) {
   .sms-auth-screen {
-    padding: 28px 18px;
+    padding: 24px 16px;
   }
 
   .sms-auth-panel {
     display: block;
     width: min(100%, 500px);
     min-height: 0;
-    border-radius: 22px;
   }
 
   .sms-auth-content {
@@ -451,7 +517,7 @@
   }
 
   .sms-auth-mobile-brand {
-    margin-bottom: 34px;
+    margin-bottom: 32px;
   }
 
   .sms-auth-showcase {
@@ -461,11 +527,11 @@
 
 @media (max-width: 420px) {
   .sms-auth-screen {
-    padding: 15px 12px;
+    padding: 14px 12px;
   }
 
   .sms-auth-panel {
-    border-radius: 18px;
+    border-radius: var(--sds-size-radius-400);
   }
 
   .sms-auth-content {
@@ -473,7 +539,7 @@
   }
 
   .sms-auth-mobile-brand {
-    margin-bottom: 27px;
+    margin-bottom: 26px;
   }
 
   .sms-auth-heading {
@@ -481,7 +547,7 @@
   }
 
   .sms-auth-form input {
-    height: 49px;
+    height: 46px;
   }
 }
 
