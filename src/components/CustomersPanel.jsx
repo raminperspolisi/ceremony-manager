@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatDisplay, formatPersianDigits } from '../styles';
+import { formatPersianDate } from '../dateUtils';
+import { toGregorianISODate } from '../calendarDateUtils';
 import FormattedNumberInput from './FormattedNumberInput';
+import PersianDateInput from './PersianDateInput';
 import EmptyState from './EmptyState';
 import { useToast } from './useToast';
 
 const CEREMONY_TYPES = ['عروسی', 'عقد', 'نامزدی', 'تولد', 'حنابندان', 'همایش', 'سایر'];
+
+const formatCeremonyDate = (value) => {
+  if (!value) return '—';
+  const isoDate = toGregorianISODate(value);
+  return isoDate ? formatPersianDate(isoDate) : formatPersianDigits(String(value));
+};
 
 export default function CustomersPanel({ businessName = 'تشریفات آژو' }) {
   const { toast, confirm } = useToast();
@@ -240,13 +249,14 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   // ثبت و همگام‌سازی مراسم در جدول ceremonies و events تقویم
   async function handleSaveCeremony() {
     if (!selectedCustomer) { toast('warning', 'ابتدا یک مشتری را انتخاب کنید'); return; }
-    if (!cerDate) { toast('warning', 'تاریخ مراسم را وارد کنید'); return; }
+    const ceremonyDateISO = toGregorianISODate(cerDate);
+    if (!ceremonyDateISO) { toast('warning', 'تاریخ مراسم معتبر نیست؛ تاریخ را از تقویم انتخاب کنید.'); return; }
     try {
       setError(null);
       const cerData = {
         customer_id: selectedCustomer.id,
         ceremony_type: cerType,
-        ceremony_date: cerDate,
+        ceremony_date: ceremonyDateISO,
         guest_count: parseInt(cerGuests) || 0,
         budget: parseInt(cerBudget) || 0,
         notes: cerNotes || null
@@ -256,7 +266,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
       const eventData = {
         customer_name: selectedCustomer["Full name"],
         event_type: cerType,
-        event_date: cerDate,
+        event_date: ceremonyDateISO,
         total_cost: parseInt(cerBudget) || 0,
         advance_payment: 0,
         paid_amount: 0,
@@ -286,7 +296,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
   function handleStartEditCeremony(c) {
     setEditingCeremonyId(c.id);
     setCerType(c.ceremony_type || CEREMONY_TYPES[0]);
-    setCerDate(c.ceremony_date || '');
+    setCerDate(toGregorianISODate(c.ceremony_date) || '');
     setCerGuests(c.guest_count ? String(c.guest_count) : '');
     setCerBudget(c.budget ? String(c.budget) : '');
     setCerNotes(c.notes || '');
@@ -668,7 +678,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
             </div>
             <div className="accounting-field">
               <label htmlFor="ceremony-date">تاریخ مراسم</label>
-              <input id="ceremony-date" style={styles.inputSmall} placeholder="مثلاً ۱۴۰۴/۰۵/۱۰" value={cerDate} onChange={e => setCerDate(e.target.value)} />
+              <PersianDateInput id="ceremony-date" className="ceremony-date-input" value={cerDate} onChange={setCerDate} />
             </div>
             <div className="accounting-field">
               <label htmlFor="ceremony-guests">تعداد مهمان</label>
@@ -714,7 +724,7 @@ export default function CustomersPanel({ businessName = 'تشریفات آژو' 
               {ceremonies.map(c => (
                 <tr key={c.id}>
                   <td style={styles.td}><span style={styles.badge}>{c.ceremony_type}</span></td>
-                  <td style={styles.td}>{formatPersianDigits(c.ceremony_date)}</td>
+                  <td style={styles.td}>{formatCeremonyDate(c.ceremony_date)}</td>
                   <td style={styles.td}>{fmt(c.guest_count)}</td>
                   <td style={styles.td}>{fmt(c.budget)}</td>
                   <td style={styles.td}>{c.notes || '—'}</td>

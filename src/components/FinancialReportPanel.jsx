@@ -10,16 +10,14 @@ import {
   summarizeCeremonyProfit,
   summarizeInvoiceRevenue,
 } from '../financialReportUtils';
+import { formatPersianDate } from '../dateUtils';
+import { toGregorianISODate } from '../calendarDateUtils';
 import { useToast } from './useToast';
 
 const formatNumber = (value) => Number(value || 0).toLocaleString('fa-IR');
 const formatEventDate = (value) => {
-  const date = String(value || '');
-  if (/^(13|14)\d{2}[/-]/.test(date)) return toPersianDigits(date.replace(/-/g, '/'));
-  if (/^\d{4}-\d{2}-\d{2}/.test(date)) {
-    return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString('fa-IR');
-  }
-  return 'ثبت نشده';
+  const isoDate = toGregorianISODate(value);
+  return isoDate ? formatPersianDate(isoDate) : 'ثبت نشده';
 };
 const toPersianDigits = (value) => String(value).replace(/[0-9٠-٩]/g, (digit) => {
   const asciiDigit = digit >= '٠' && digit <= '٩'
@@ -183,7 +181,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
     const invoiceNumber = selectedInvoice.invoiceNumber || '---';
     const customerName = selectedInvoice.customer_name || 'مشتری محترم';
     const customerPhone = toPersianDigits(selectedInvoice.customer_phone || selectedInvoice.phone || 'ثبت نشده');
-    const ceremonyDate = selectedInvoice.ceremony_date ? new Date(selectedInvoice.ceremony_date).toLocaleDateString('fa-IR') : 'تعیین نشده';
+    const ceremonyDate = selectedInvoice.ceremony_date ? formatEventDate(selectedInvoice.ceremony_date) : 'تعیین نشده';
     const registerDate = selectedInvoice.created_at ? new Date(selectedInvoice.created_at).toLocaleDateString('fa-IR') : '---';
     const totalAmount = formatNumber(selectedInvoice.total_price || selectedInvoice.total_amount);
     const safeBusinessName = String(businessName).replace(/[&<>"']/g, (character) => ({
@@ -596,7 +594,7 @@ export default function FinancialReportPanel({ businessName = 'تشریفات آ
               <div><strong>نام مشتری:</strong> {selectedInvoice.customer_name || 'ثبت نشده'}</div>
               <div><strong>تاریخ ثبت فاکتور:</strong> {new Date(selectedInvoice.created_at).toLocaleDateString('fa-IR')}</div>
               <div><strong>شماره تماس:</strong> {toPersianDigits(selectedInvoice.customer_phone || selectedInvoice.phone || 'ثبت نشده')}</div>
-              <div><strong>تاریخ مراسم:</strong> {selectedInvoice.ceremony_date ? new Date(selectedInvoice.ceremony_date).toLocaleDateString('fa-IR') : 'تعیین نشده'}</div>
+              <div><strong>تاریخ مراسم:</strong> {selectedInvoice.ceremony_date ? formatEventDate(selectedInvoice.ceremony_date) : 'تعیین نشده'}</div>
             </div>
 
             <h4 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#334155' }}>اقلام و خدمات فاکتور:</h4>

@@ -41,6 +41,32 @@ export function jalaliToGregorianISO(jy, jm, jd) {
   return parsed.isValid() ? parsed.format("YYYY-MM-DD") : null;
 }
 
+export function toGregorianISODate(input) {
+  if (input === null || input === undefined || input === "") return null;
+
+  const value = toAsciiDigits(input).trim();
+  const jalaliYearMatch = value.match(/^(\d{4})[/-]/);
+  if (jalaliYearMatch && Number(jalaliYearMatch[1]) >= 1300 && Number(jalaliYearMatch[1]) <= 1500) {
+    const normalizedJalali = normalizeJalaliDate(value.slice(0, 10));
+    if (!normalizedJalali) return null;
+    const [year, month, day] = normalizedJalali.split("/").map(Number);
+    return jalaliToGregorianISO(year, month, day);
+  }
+
+  const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})(?:T.*)?$/);
+  if (isoMatch) {
+    const parsed = moment(isoMatch[1], "YYYY-MM-DD", true);
+    return parsed.isValid() && parsed.format("YYYY-MM-DD") === isoMatch[1]
+      ? isoMatch[1]
+      : null;
+  }
+
+  const normalizedJalali = normalizeJalaliDate(value);
+  if (!normalizedJalali) return null;
+  const [year, month, day] = normalizedJalali.split("/").map(Number);
+  return jalaliToGregorianISO(year, month, day);
+}
+
 export function gregorianISOToJalali(iso) {
   if (!iso) return "";
   const parsed = moment(iso);

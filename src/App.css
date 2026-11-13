@@ -8866,6 +8866,16 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.ceremony-date-input {
+  padding: 4px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+
 .rmdp-wrapper.persian-date-calendar {
   z-index: 20;
   font-family: var(--font-main);
