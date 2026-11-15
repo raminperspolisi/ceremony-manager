@@ -1,5 +1,7 @@
 from html import escape
+from datetime import datetime, timedelta, timezone
 import os
+import re
 import ssl
 import time
 from pathlib import Path
@@ -26,6 +28,15 @@ PRODUCTS_PER_PAGE = 8
 MAX_CART_QUANTITY = 99
 carts = {}
 awaiting_receipts = {}
+active_stores = {}
+
+
+def store_user_key(store_identifier, user_id):
+    return f"{store_identifier}:{user_id}"
+
+
+def user_store(user_id):
+    return active_stores.get(str(user_id), "initial")
 
 
 def telegram_request(method, payload):
@@ -34,6 +45,8 @@ def telegram_request(method, payload):
         json=payload,
         timeout=10,
     )
+    if response.status_code == 404:
+        return ["initial"]
     response.raise_for_status()
     result = response.json()
     if not result.get("ok"):
@@ -124,10 +137,10 @@ def forward_message(chat_id, from_chat_id, message_id, caption=None):
     return telegram_request("copyMessage", payload)
 
 
-def get_products():
+def get_products(store_identifier="initial"):
     response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/bot_catalog",
-        json={},
+        f"{SUPABASE_URL}/rest/v1/rpc/bot_catalog_for_store",
+        json={"p_store_identifier": store_identifier},
         headers=SUPABASE_HEADERS,
         timeout=12,
     )
@@ -139,10 +152,64 @@ def get_products():
         raise ValueError("Invalid product catalog response.")
     return products
 
-def create_order(customer, username, telegram_user_id, items):
+
+def get_bot_store(store_identifier):
+    if not isinstance(store_identifier, str) or not re.fullmatch(
+        r"[a-z0-9][a-z0-9-]{2,31}",
+        store_identifier,
+    ):
+        return None
+
     response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/submit_bot_order",
+        f"{SUPABASE_URL}/rest/v1/rpc/bot_store_info",
+        json={"p_store_identifier": store_identifier},
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if result is None:
+        return None
+    if (
+        not isinstance(result, dict)
+        or result.get("store_identifier") != store_identifier
+        or not isinstance(result.get("is_initial"), bool)
+    ):
+        raise ValueError("Invalid bot store lookup response.")
+    return result
+
+
+def get_bot_store_admin(store_identifier):
+    if not ORDER_APPROVAL_SECRET:
+        return None
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/bot_store_admin",
         json={
+            "p_store_identifier": store_identifier,
+            "p_approval_secret": ORDER_APPROVAL_SECRET,
+        },
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if result is None:
+        return None
+    if (
+        not isinstance(result, dict)
+        or result.get("store_identifier") != store_identifier
+        or not isinstance(result.get("admin_chat_id"), str)
+        or not result["admin_chat_id"].lstrip("-").isdigit()
+    ):
+        raise ValueError("Invalid bot store admin response.")
+    return result
+
+
+def create_order(customer, username, telegram_user_id, items, store_identifier="initial"):
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/submit_bot_order_for_store",
+        json={
+            "p_store_identifier": store_identifier,
             "p_telegram_user_id": str(telegram_user_id),
             "p_customer_name": customer,
             "p_telegram_username": username or "",
@@ -158,12 +225,13 @@ def create_order(customer, username, telegram_user_id, items):
     return result
 
 
-def process_bot_order_action(order_id, action):
+def process_bot_order_action(order_id, action, store_identifier="initial"):
     if not ORDER_APPROVAL_SECRET:
         raise RuntimeError("TELEGRAM_ORDER_APPROVAL_SECRET is not configured.")
     response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/process_bot_order_action",
+        f"{SUPABASE_URL}/rest/v1/rpc/process_bot_order_action_for_store",
         json={
+            "p_store_identifier": store_identifier,
             "p_order_id": int(order_id),
             "p_action": action,
             "p_approval_secret": ORDER_APPROVAL_SECRET,
@@ -178,10 +246,29 @@ def process_bot_order_action(order_id, action):
     return result
 
 
-def claim_bot_order_payment_notification():
+def get_bot_store_identifiers():
     response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/claim_bot_order_payment_notification",
-        json={"p_approval_secret": ORDER_APPROVAL_SECRET},
+        f"{SUPABASE_URL}/rest/v1/rpc/bot_store_identifiers",
+        json={},
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if not isinstance(result, list) or any(
+        not isinstance(identifier, str) for identifier in result
+    ):
+        raise ValueError("Invalid bot store identifiers response.")
+    return result
+
+
+def claim_bot_order_payment_notification(store_identifier="initial"):
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/claim_bot_order_payment_notification_for_store",
+        json={
+            "p_store_identifier": store_identifier,
+            "p_approval_secret": ORDER_APPROVAL_SECRET,
+        },
         headers=SUPABASE_HEADERS,
         timeout=12,
     )
@@ -191,15 +278,17 @@ def claim_bot_order_payment_notification():
         not isinstance(result, dict)
         or result.get("id") is None
         or result.get("telegram_user_id") is None
+        or result.get("store_identifier") != store_identifier
     ):
         raise ValueError("Invalid payment notification claim response.")
     return result
 
 
-def complete_bot_order_payment_notification(order_id):
+def complete_bot_order_payment_notification(order_id, store_identifier="initial"):
     response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/complete_bot_order_payment_notification",
+        f"{SUPABASE_URL}/rest/v1/rpc/complete_bot_order_payment_notification_for_store",
         json={
+            "p_store_identifier": store_identifier,
             "p_order_id": int(order_id),
             "p_approval_secret": ORDER_APPROVAL_SECRET,
         },
@@ -213,10 +302,11 @@ def complete_bot_order_payment_notification(order_id):
     return result
 
 
-def save_bot_order_address(telegram_user_id, address):
+def save_bot_order_address(telegram_user_id, address, store_identifier=None):
     response = requests.post(
-        f"{SUPABASE_URL}/rest/v1/rpc/submit_bot_order_address",
+        f"{SUPABASE_URL}/rest/v1/rpc/submit_bot_order_address_for_store",
         json={
+            "p_store_identifier": store_identifier,
             "p_telegram_user_id": str(telegram_user_id),
             "p_address": address,
             "p_approval_secret": ORDER_APPROVAL_SECRET,
@@ -458,6 +548,105 @@ def process_pending_custom_telegram_event_reminders(limit=20):
             return
 
 
+def claim_telegram_workspace_task_reminder():
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/claim_telegram_workspace_task_reminder",
+        json={"p_reminder_secret": TELEGRAM_REMINDER_SECRET},
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if result is not None:
+        if (
+            not isinstance(result, dict)
+            or not result.get("id")
+            or not result.get("chat_id")
+            or not result.get("title")
+            or not result.get("remind_at")
+        ):
+            raise ValueError("Invalid Telegram workspace task reminder claim response.")
+        datetime.fromisoformat(str(result["remind_at"]).replace("Z", "+00:00"))
+    return result
+
+
+def finish_telegram_workspace_task_reminder(reminder_id, sent):
+    response = requests.post(
+        f"{SUPABASE_URL}/rest/v1/rpc/finish_telegram_workspace_task_reminder",
+        json={
+            "p_reminder_id": reminder_id,
+            "p_sent": sent,
+            "p_reminder_secret": TELEGRAM_REMINDER_SECRET,
+        },
+        headers=SUPABASE_HEADERS,
+        timeout=12,
+    )
+    response.raise_for_status()
+    if response.json() is not True:
+        raise ValueError("Telegram workspace task reminder completion made no change.")
+
+
+def telegram_workspace_task_reminder_message(reminder):
+    timestamp = datetime.fromisoformat(
+        str(reminder["remind_at"]).replace("Z", "+00:00")
+    )
+    if timestamp.tzinfo is None:
+        raise ValueError("Workspace task reminder timestamp must include a timezone.")
+    tehran_time = timestamp.astimezone(timezone(timedelta(hours=3, minutes=30)))
+    title = str(reminder["title"]).strip()[:180]
+    notes = str(reminder.get("notes") or "").strip()[:2000]
+    lines = [
+        "🔔 یادآوری کار دفترچه",
+        "──────────────",
+        f"📌 عنوان: {title}",
+    ]
+    if notes:
+        lines.extend(["📝 یادداشت:", notes])
+    lines.append(
+        f"🕒 زمان اعلان: {persian_digits(tehran_time.strftime('%Y-%m-%d %H:%M'))}"
+    )
+    return "\n".join(lines)[:3900]
+
+
+def process_pending_telegram_workspace_task_reminders(limit=20):
+    if not TELEGRAM_REMINDER_SECRET:
+        return
+    for _ in range(limit):
+        try:
+            reminder = claim_telegram_workspace_task_reminder()
+        except (requests.RequestException, ValueError) as error:
+            print(
+                f"Telegram workspace task reminder lookup failed "
+                f"({supabase_error_description(error)})."
+            )
+            return
+        if reminder is None:
+            return
+
+        try:
+            send_message(
+                reminder["chat_id"],
+                telegram_workspace_task_reminder_message(reminder),
+            )
+        except (requests.RequestException, RuntimeError, ValueError) as error:
+            print(
+                f"Telegram workspace task reminder delivery failed "
+                f"({type(error).__name__}); it will be retried."
+            )
+            sent = False
+        else:
+            sent = True
+
+        try:
+            finish_telegram_workspace_task_reminder(reminder["id"], sent)
+        except (requests.RequestException, ValueError) as error:
+            print(
+                f"Telegram workspace task reminder completion failed "
+                f"({supabase_error_description(error)}); it will be retried."
+            )
+            return
+
+
 def handle_telegram_reminder_link(message):
     user = message.get("from") or {}
     chat = message.get("chat") or {}
@@ -561,27 +750,47 @@ def order_admin_message(order, customer, username, telegram_user_id):
     return message
 
 
-def admin_order_keyboard(order_id):
+def admin_order_keyboard(order_id, store_identifier="initial"):
+    if store_identifier == "initial":
+        return {
+            "inline_keyboard": [[
+                {"text": "✅ تایید سفارش", "callback_data": f"order:approve:{order_id}"},
+                {"text": "❌ رد سفارش", "callback_data": f"order:reject:{order_id}"},
+            ]]
+        }
     return {
         "inline_keyboard": [[
             {
                 "text": "✅ تایید سفارش",
-                "callback_data": f"order:approve:{order_id}",
+                "callback_data": f"order:approve:{store_identifier}:{order_id}",
             },
             {
                 "text": "❌ رد سفارش",
-                "callback_data": f"order:reject:{order_id}",
+                "callback_data": f"order:reject:{store_identifier}:{order_id}",
             },
         ]]
     }
 
 
-def notify_admin_order(order, customer, username, telegram_user_id):
+def notify_admin_order(order, customer, username, telegram_user_id, store_identifier="initial"):
+    try:
+        store_admin = get_bot_store_admin(store_identifier)
+    except (requests.RequestException, ValueError) as error:
+        print(f"Store admin lookup failed ({type(error).__name__}); details omitted.")
+        return False
+    admin_chat_id = (
+        store_admin.get("admin_chat_id")
+        if store_admin and store_admin.get("admin_chat_id")
+        else TELEGRAM_ADMIN_CHAT_ID if store_identifier == "initial" else None
+    )
+    if not admin_chat_id:
+        print(f"Store admin is not configured: store={store_identifier}.")
+        return False
     try:
         send_message(
-            TELEGRAM_ADMIN_CHAT_ID,
+            admin_chat_id,
             order_admin_message(order, customer, username, telegram_user_id),
-            admin_order_keyboard(order["id"]),
+            admin_order_keyboard(order["id"], store_identifier),
         )
     except requests.HTTPError as error:
         status = error.response.status_code if error.response is not None else "unknown"
@@ -689,56 +898,71 @@ def payment_instruction_message(order):
 
 
 def process_pending_payment_notifications(limit=10):
-    for _ in range(limit):
-        try:
-            order = claim_bot_order_payment_notification()
-        except (requests.RequestException, ValueError, RuntimeError) as error:
-            print(
-                f"Approved order notification lookup failed "
-                f"({supabase_error_description(error)})."
-            )
-            return
-        if order is None:
-            return
+    try:
+        store_identifiers = get_bot_store_identifiers()
+    except (requests.RequestException, ValueError) as error:
+        print(f"Store list lookup failed ({supabase_error_description(error)}).")
+        return
 
-        order_id = order["id"]
-        customer_id = order["telegram_user_id"]
-        try:
-            send_message(
-                customer_id,
-                payment_instruction_message(order),
-                {
-                    "inline_keyboard": [[
-                        {
-                            "text": "📤 ارسال رسید و فیش پرداخت",
-                            "callback_data": f"order:receipt:{order_id}",
-                        }
-                    ]]
-                },
-                parse_mode="HTML",
-            )
-        except (requests.RequestException, RuntimeError, ValueError) as error:
-            print(
-                f"Approved order payment notification failed "
-                f"({type(error).__name__}); it will be retried."
-            )
-            continue
-
-        try:
-            result = complete_bot_order_payment_notification(order_id)
-            if not result.get("changed"):
+    for store_identifier in store_identifiers:
+        for _ in range(limit):
+            try:
+                order = claim_bot_order_payment_notification(store_identifier)
+            except (requests.RequestException, ValueError, RuntimeError) as error:
                 print(
-                    f"Payment notification completion made no change: "
-                    f"order_id={order_id}."
+                    f"Approved order notification lookup failed for "
+                    f"store={store_identifier} ({supabase_error_description(error)})."
+                )
+                break
+            if order is None:
+                break
+
+            order_id = order["id"]
+            customer_id = order["telegram_user_id"]
+            try:
+                send_message(
+                    customer_id,
+                    payment_instruction_message(order),
+                    {
+                        "inline_keyboard": [[
+                            {
+                                "text": "📤 ارسال رسید و فیش پرداخت",
+                                "callback_data": (
+                                    f"order:receipt:{order_id}"
+                                    if store_identifier == "initial"
+                                    else f"order:receipt:{store_identifier}:{order_id}"
+                                ),
+                            }
+                        ]]
+                    },
+                    parse_mode="HTML",
+                )
+            except (requests.RequestException, RuntimeError, ValueError) as error:
+                print(
+                    f"Approved order payment notification failed "
+                    f"({type(error).__name__}); it will be retried."
                 )
                 continue
-        except (requests.RequestException, ValueError, RuntimeError) as error:
-            print(
-                f"Payment notification completion failed "
-                f"({type(error).__name__}); it will be retried."
-            )
-            continue
-        print(f"Approved order payment message sent: order_id={order_id}.")
+
+            try:
+                result = (
+                    complete_bot_order_payment_notification(order_id)
+                    if store_identifier == "initial"
+                    else complete_bot_order_payment_notification(order_id, store_identifier)
+                )
+                if not result.get("changed"):
+                    print(
+                        f"Payment notification completion made no change: "
+                        f"order_id={order_id}."
+                    )
+                    continue
+            except (requests.RequestException, ValueError, RuntimeError) as error:
+                print(
+                    f"Payment notification completion failed "
+                    f"({type(error).__name__}); it will be retried."
+                )
+                continue
+            print(f"Approved order payment message sent: order_id={order_id}.")
 
 
 def main_menu():
@@ -753,9 +977,51 @@ def main_menu():
     }
 
 
-def catalog_or_notify(chat_id):
+def handle_start_message(message):
+    text = message.get("text")
+    if not isinstance(text, str):
+        return False
+
+    parts = text.strip().split(maxsplit=1)
+    command = parts[0].partition("@")[0] if parts else ""
+    if command != "/start":
+        return False
+
+    chat_id = (message.get("chat") or {}).get("id")
+    store_identifier = parts[1].strip() if len(parts) > 1 else None
+    telegram_user_id = str((message.get("from") or {}).get("id") or "")
+    if store_identifier:
+        try:
+            store = get_bot_store(store_identifier)
+        except (requests.RequestException, ValueError) as error:
+            print(f"Bot store lookup failed ({type(error).__name__}); details omitted.")
+            send_message(
+                chat_id,
+                "این پیوند فروشگاه معتبر نیست یا فعلاً در دسترس نیست.",
+            )
+            return True
+
+        if store is None:
+            send_message(chat_id, "این پیوند فروشگاه معتبر نیست.")
+            return True
+    else:
+        store_identifier = "initial"
+    if telegram_user_id:
+        active_stores[telegram_user_id] = store_identifier
+
+    send_message(
+        chat_id,
+        "💍 به فروشگاه تشریفات آژو خوش آمدید.\n"
+        "──────────────\n"
+        "برای دیدن خدمات، قیمت‌ها و ثبت سفارش یکی از گزینه‌ها را انتخاب کنید.",
+        main_menu(),
+    )
+    return True
+
+
+def catalog_or_notify(chat_id, store_identifier="initial"):
     try:
-        return get_products()
+        return get_products(store_identifier)
     except (requests.RequestException, ValueError) as error:
         if isinstance(error, requests.HTTPError) and error.response is not None:
             status = error.response.status_code
@@ -916,8 +1182,9 @@ def send_product_details(chat_id, product, group, page):
     send_message(chat_id, "\n".join(lines), {"inline_keyboard": keyboard})
 
 
-def send_cart(chat_id, user_id, products):
-    user_cart = carts.get(str(user_id), {})
+def send_cart(chat_id, user_id, products, store_identifier="initial"):
+    cart_key = store_user_key(store_identifier, user_id)
+    user_cart = carts.get(cart_key, {})
     if not user_cart:
         send_message(
             chat_id,
@@ -961,9 +1228,10 @@ def send_cart(chat_id, user_id, products):
     send_message(chat_id, "\n".join(lines), {"inline_keyboard": keyboard})
 
 
-def submit_order(chat_id, user, products):
+def submit_order(chat_id, user, products, store_identifier="initial"):
     user_id = str(user["id"])
-    user_cart = carts.get(user_id, {})
+    cart_key = store_user_key(store_identifier, user_id)
+    user_cart = carts.get(cart_key, {})
     if not user_cart:
         send_message(chat_id, "سبد خرید شما خالی است.", main_menu())
         return
@@ -1002,6 +1270,7 @@ def submit_order(chat_id, user, products):
             str(user.get("username") or ""),
             user_id,
             order_items,
+            store_identifier,
         )
     except requests.HTTPError as error:
         status = error.response.status_code if error.response is not None else "unknown"
@@ -1040,8 +1309,9 @@ def submit_order(chat_id, user, products):
         customer,
         str(user.get("username") or ""),
         user_id,
+        store_identifier,
     )
-    carts.pop(user_id, None)
+    carts.pop(cart_key, None)
     notification_status = (
         "مدیر هم از طریق تلگرام مطلع شد."
         if admin_notified
@@ -1054,14 +1324,24 @@ def submit_order(chat_id, user, products):
     )
 
 
-def is_admin_callback(callback):
+def is_admin_callback(callback, store_identifier="initial"):
     message = callback.get("message") or {}
     chat = message.get("chat") or {}
     user = callback.get("from") or {}
     try:
-        configured_admin_id = int(TELEGRAM_ADMIN_CHAT_ID)
+        store_admin = get_bot_store_admin(store_identifier)
+    except (requests.RequestException, ValueError) as error:
+        print(f"Admin store lookup failed ({type(error).__name__}); details omitted.")
+        return False
+    configured_chat_id = (
+        store_admin.get("admin_chat_id")
+        if store_admin and store_admin.get("admin_chat_id")
+        else TELEGRAM_ADMIN_CHAT_ID if store_identifier == "initial" else ""
+    )
+    try:
+        configured_admin_id = int(configured_chat_id)
     except (TypeError, ValueError):
-        print("Admin order callback rejected: TELEGRAM_ADMIN_CHAT_ID is invalid.")
+        print(f"Admin order callback rejected: store admin is not configured ({store_identifier}).")
         return False
 
     if chat.get("type") != "private":
@@ -1088,11 +1368,17 @@ def is_admin_callback(callback):
     return True
 
 
-def handle_admin_order_action(callback, action, order_id, callback_answered=False):
+def handle_admin_order_action(
+    callback,
+    action,
+    order_id,
+    callback_answered=False,
+    store_identifier="initial",
+):
     message = callback["message"]
     chat_id = message["chat"]["id"]
     message_id = message["message_id"]
-    if not is_admin_callback(callback):
+    if not is_admin_callback(callback, store_identifier):
         if callback_answered:
             send_message(chat_id, "این دکمه فقط برای مدیر سفارش است.")
         else:
@@ -1102,7 +1388,11 @@ def handle_admin_order_action(callback, action, order_id, callback_answered=Fals
     print(f"Admin order callback accepted: action={action} order_id={order_id}.")
 
     try:
-        result = process_bot_order_action(order_id, action)
+        result = (
+            process_bot_order_action(order_id, action)
+            if store_identifier == "initial"
+            else process_bot_order_action(order_id, action, store_identifier)
+        )
     except requests.HTTPError as error:
         status = error.response.status_code if error.response is not None else "unknown"
         print(
@@ -1187,7 +1477,7 @@ def handle_admin_order_action(callback, action, order_id, callback_answered=Fals
         )
 
 
-def handle_receipt_request(callback, order_id):
+def handle_receipt_request(callback, order_id, store_identifier="initial"):
     message = callback.get("message") or {}
     chat = message.get("chat") or {}
     user = callback.get("from") or {}
@@ -1197,7 +1487,10 @@ def handle_receipt_request(callback, order_id):
         return
 
     try:
-        order = process_bot_order_action(order_id, "receipt")
+        if store_identifier == "initial":
+            order = process_bot_order_action(order_id, "receipt")
+        else:
+            order = process_bot_order_action(order_id, "receipt", store_identifier)
     except (requests.RequestException, ValueError, RuntimeError) as error:
         print(f"Receipt order lookup failed ({type(error).__name__}); details omitted.")
         answer_callback(callback["id"], "دریافت سفارش ناموفق بود؛ کمی بعد دوباره تلاش کنید.")
@@ -1210,7 +1503,7 @@ def handle_receipt_request(callback, order_id):
         answer_callback(callback["id"], "رسید فقط برای سفارش تأییدشده پذیرفته می‌شود.")
         return
 
-    awaiting_receipts[user_id] = str(order_id)
+    awaiting_receipts[store_user_key(store_identifier, user_id)] = str(order_id)
     answer_callback(callback["id"], "رسید را به‌صورت عکس یا فایل ارسال کنید.")
     send_message(
         chat["id"],
@@ -1226,7 +1519,9 @@ def handle_receipt_request(callback, order_id):
 def handle_receipt_message(message):
     user = message.get("from") or {}
     user_id = str(user.get("id") or "")
-    order_id = awaiting_receipts.get(user_id)
+    store_identifier = user_store(user_id)
+    state_key = store_user_key(store_identifier, user_id)
+    order_id = awaiting_receipts.get(state_key)
     if not order_id:
         return False
     chat_id = message.get("chat", {}).get("id")
@@ -1235,8 +1530,16 @@ def handle_receipt_message(message):
         return True
 
     try:
+        store_admin = get_bot_store_admin(store_identifier)
+        admin_chat_id = (
+            store_admin.get("admin_chat_id")
+            if store_admin and store_admin.get("admin_chat_id")
+            else TELEGRAM_ADMIN_CHAT_ID if store_identifier == "initial" else None
+        )
+        if not admin_chat_id:
+            raise RuntimeError("Store admin is not configured.")
         forward_message(
-            TELEGRAM_ADMIN_CHAT_ID,
+            admin_chat_id,
             chat_id,
             message["message_id"],
             caption=(
@@ -1252,16 +1555,19 @@ def handle_receipt_message(message):
         send_message(chat_id, "ارسال رسید ناموفق بود؛ لطفاً کمی بعد دوباره ارسال کنید.")
         return True
 
-    awaiting_receipts.pop(user_id, None)
+    awaiting_receipts.pop(state_key, None)
     try:
-        process_bot_order_action(int(order_id), "payment_review")
+        if store_identifier == "initial":
+            process_bot_order_action(int(order_id), "payment_review")
+        else:
+            process_bot_order_action(int(order_id), "payment_review", store_identifier)
     except (requests.RequestException, ValueError, RuntimeError) as error:
         print(
             f"Payment review status update failed ({type(error).__name__}); "
             "receipt was delivered to admin."
         )
         send_message(
-            TELEGRAM_ADMIN_CHAT_ID,
+            admin_chat_id,
             f"⚠️ وضعیت سفارش #{persian_digits(order_id)} در سامانه به‌روزرسانی نشد؛ "
             "رسید را دستی بررسی کنید.",
         )
@@ -1275,7 +1581,7 @@ def handle_receipt_message(message):
     )
     try:
         send_message(
-            TELEGRAM_ADMIN_CHAT_ID,
+            admin_chat_id,
             f"📥 رسید پرداخت سفارش #{persian_digits(order_id)}\n"
             f"مشتری: {customer_name}\n"
             f"شناسه تلگرام: {user_id}{username_line}",
@@ -1310,7 +1616,12 @@ def handle_address_message(message):
 
     address = text.strip()
     try:
-        result = save_bot_order_address(user_id, address)
+        store_identifier = active_stores.get(user_id)
+        result = (
+            save_bot_order_address(user_id, address)
+            if store_identifier is None
+            else save_bot_order_address(user_id, address, store_identifier)
+        )
     except (requests.RequestException, ValueError, RuntimeError) as error:
         print(
             f"Order delivery address save failed "
@@ -1332,6 +1643,13 @@ def handle_address_message(message):
         return True
 
     order_id = result["id"]
+    store_identifier = result.get("store_identifier") or active_stores.get(user_id)
+    if store_identifier is None:
+        store_identifier = "initial"
+    if not isinstance(store_identifier, str):
+        send_message(chat["id"], "فروشگاه سفارش در دسترس نیست؛ با مدیر تماس بگیرید.")
+        return True
+    active_stores[user_id] = store_identifier
     customer_name = " ".join(
         filter(None, [user.get("first_name"), user.get("last_name")])
     ) or str(result.get("customer_name") or "مشتری تلگرام")
@@ -1341,8 +1659,25 @@ def handle_address_message(message):
         else ""
     )
     try:
+        store_admin = get_bot_store_admin(store_identifier)
+    except (requests.RequestException, ValueError) as error:
+        print(f"Store admin lookup failed ({type(error).__name__}); details omitted.")
+        store_admin = None
+    admin_chat_id = (
+        store_admin.get("admin_chat_id")
+        if store_admin and store_admin.get("admin_chat_id")
+        else TELEGRAM_ADMIN_CHAT_ID if store_identifier == "initial" else None
+    )
+    if not admin_chat_id:
         send_message(
-            TELEGRAM_ADMIN_CHAT_ID,
+            chat["id"],
+            f"آدرس سفارش #{persian_digits(order_id)} ذخیره شد، اما مدیر فروشگاه پیکربندی نشده است.",
+            main_menu(),
+        )
+        return True
+    try:
+        send_message(
+            admin_chat_id,
             f"📍 آدرس ارسال سفارش #{persian_digits(order_id)}\n"
             f"مشتری: {customer_name}\n"
             f"شناسه تلگرام: {user_id}{username_line}\n\n"
@@ -1380,29 +1715,36 @@ def handle_callback(callback):
     chat_id = message["chat"]["id"]
     user_id = str(user["id"])
 
+    callback_store_identifier = user_store(user_id)
     if callback_data.startswith("order:"):
         parts = callback_data.split(":")
-        if len(parts) == 3 and parts[1] in {"approve", "reject"}:
+        if len(parts) == 4 and parts[1] in {"approve", "reject", "receipt"}:
+            action = parts[1]
+            callback_store_identifier = parts[2]
             try:
-                order_id = int(parts[2])
+                order_id = int(parts[3])
                 if order_id <= 0:
                     raise ValueError
             except ValueError:
                 answer_callback(callback_id, "شناسهٔ سفارش معتبر نیست.")
                 return
             print(
-                f"Order callback received: action={parts[1]} "
+                f"Order callback received: action={action} "
                 f"order_id={order_id}."
             )
+            if action == "receipt":
+                handle_receipt_request(callback, order_id, callback_store_identifier)
+                return
             answer_callback(callback_id, "در حال بررسی سفارش...")
             handle_admin_order_action(
                 callback,
-                parts[1],
+                action,
                 order_id,
                 callback_answered=True,
+                store_identifier=callback_store_identifier,
             )
             return
-        if len(parts) == 3 and parts[1] == "receipt":
+        if len(parts) == 3 and parts[1] in {"approve", "reject", "receipt"}:
             try:
                 order_id = int(parts[2])
                 if order_id <= 0:
@@ -1410,12 +1752,21 @@ def handle_callback(callback):
             except ValueError:
                 answer_callback(callback_id, "شناسهٔ سفارش معتبر نیست.")
                 return
+            if parts[1] in {"approve", "reject"}:
+                answer_callback(callback_id, "در حال بررسی سفارش...")
+                handle_admin_order_action(
+                    callback,
+                    parts[1],
+                    order_id,
+                    callback_answered=True,
+                )
+                return
             print(f"Receipt callback received: order_id={order_id}.")
-            handle_receipt_request(callback, order_id)
+            handle_receipt_request(callback, order_id, callback_store_identifier)
             return
 
     if callback_data == "receipt:cancel":
-        awaiting_receipts.pop(user_id, None)
+        awaiting_receipts.pop(store_user_key(callback_store_identifier, user_id), None)
         answer_callback(callback_id, "ارسال رسید لغو شد.")
         send_message(chat_id, "ارسال رسید لغو شد.", main_menu())
         return
@@ -1433,11 +1784,12 @@ def handle_callback(callback):
         return
     if callback_data == "noop":
         return
-    if callback_data == "cart" and not carts.get(user_id):
+    cart_key = store_user_key(callback_store_identifier, user_id)
+    if callback_data == "cart" and not carts.get(cart_key):
         send_message(chat_id, "سبد خرید شما خالی است.", main_menu())
         return
 
-    products = catalog_or_notify(chat_id)
+    products = catalog_or_notify(chat_id, callback_store_identifier)
     if products is None:
         return
 
@@ -1497,7 +1849,7 @@ def handle_callback(callback):
         if not any(str(item.get("id")) == product_id for item in products):
             send_message(chat_id, "این محصول دیگر در فهرست موجود نیست.", main_menu())
             return
-        user_cart = carts.setdefault(user_id, {})
+        user_cart = carts.setdefault(cart_key, {})
         user_cart[product_id] = min(
             user_cart.get(product_id, 0) + 1,
             MAX_CART_QUANTITY,
@@ -1518,19 +1870,19 @@ def handle_callback(callback):
         )
     elif callback_data.startswith("remove:"):
         product_id = callback_data.partition(":")[2]
-        user_cart = carts.get(user_id, {})
+        user_cart = carts.get(cart_key, {})
         quantity = user_cart.get(product_id, 0)
         if quantity > 1:
             user_cart[product_id] = quantity - 1
         else:
             user_cart.pop(product_id, None)
         if not user_cart:
-            carts.pop(user_id, None)
-        send_cart(chat_id, user_id, products)
+            carts.pop(cart_key, None)
+        send_cart(chat_id, user_id, products, callback_store_identifier)
     elif callback_data == "cart":
-        send_cart(chat_id, user_id, products)
+        send_cart(chat_id, user_id, products, callback_store_identifier)
     elif callback_data == "checkout":
-        submit_order(chat_id, user, products)
+        submit_order(chat_id, user, products, callback_store_identifier)
 
 
 def validate_settings():
@@ -1610,6 +1962,8 @@ def main():
                     continue
                 if handle_telegram_reminder_link(message):
                     continue
+                if handle_start_message(message):
+                    continue
                 if handle_address_message(message):
                     continue
                 if handle_receipt_message(message):
@@ -1618,22 +1972,16 @@ def main():
                     continue
                 chat_id = message["chat"]["id"]
                 text = message["text"].strip()
-                if text.startswith("/start"):
-                    send_message(
-                        chat_id,
-                        "💍 به فروشگاه تشریفات آژو خوش آمدید.\n"
-                        "──────────────\n"
-                        "برای دیدن خدمات، قیمت‌ها و ثبت سفارش یکی از گزینه‌ها را انتخاب کنید.",
-                        main_menu(),
-                    )
-                elif text.startswith("/cancel"):
-                    carts.pop(str(message.get("from", {}).get("id")), None)
+                if text.startswith("/cancel"):
+                    user_id = str(message.get("from", {}).get("id"))
+                    carts.pop(store_user_key(user_store(user_id), user_id), None)
                     send_message(chat_id, "سبد خرید شما پاک شد.", main_menu())
 
             process_pending_payment_notifications()
             if time.monotonic() >= next_reminder_check:
                 process_pending_telegram_event_reminders()
                 process_pending_custom_telegram_event_reminders()
+                process_pending_telegram_workspace_task_reminders()
                 next_reminder_check = time.monotonic() + 60
 
         except requests.HTTPError as error:

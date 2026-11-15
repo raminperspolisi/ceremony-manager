@@ -37,7 +37,7 @@ const APP_SECTION_HISTORY_KEY = '__ceremonyManagerSection';
 const APP_SECTION_POPUP_HISTORY_KEY = '__ceremonyManagerPopupSection';
 const getInitialActiveSection = () => {
   const section = window.history.state?.[APP_SECTION_HISTORY_KEY];
-  return typeof section === 'string' ? section : 'reports';
+  return typeof section === 'string' ? section : 'dashboard';
 };
 const getOrganizationLogoUrl = (organization) => {
   if (!organization?.id || !organization.logo_updated_at) return DEFAULT_LOGO_URL;
@@ -378,13 +378,25 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
     let authStateChanged = false;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       authStateChanged = true;
       if (mounted) {
         setSession(nextSession);
         setOfflineUser(nextSession?.user?.id);
         setAuthError('');
         setAuthReady(true);
+        if (event === 'SIGNED_IN') {
+          const nextHistoryState = {
+            ...(window.history.state || {}),
+            [APP_SECTION_HISTORY_KEY]: 'dashboard',
+          };
+          delete nextHistoryState[APP_SECTION_POPUP_HISTORY_KEY];
+          window.history.replaceState(nextHistoryState, '');
+          activeSectionRef.current = 'dashboard';
+          setActiveSection('dashboard');
+          setSectionPopup(null);
+          setVisitedSections(new Set(['dashboard']));
+        }
         if (!nextSession) {
           setOrganizationMemberships([]);
           setActiveOrganizationId(null);
@@ -1401,6 +1413,7 @@ export default function App() {
         <>
           {section === 'dashboard' && (
             <DashboardPanel
+              organizationId={activeOrganizationId}
               onNavigate={handleSectionChange}
               businessName={businessName}
               businessContact={businessContact}

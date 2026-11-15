@@ -1,17 +1,32 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { deleteRows, insertRows, readTable, updateRows } from '../offlineSync';
 import { formatDashboardDate } from '../dashboardUtils';
-import { formatDisplay } from '../styles';
+import { createWorkspaceTaskReminderTimestamp, formatReminderTimestamp } from '../telegramReminderUtils';
+import { gregorianISOToJalali } from '../calendarDateUtils';
+import { formatDisplay, formatPersianDigits } from '../styles';
+import { supabase } from '../supabaseClient';
 import { useToast } from './useToast';
+import PersianDateInput from './PersianDateInput';
 import './DashboardTaskNotebook.css';
 
 const TASK_TABLE = 'workspace_tasks';
 
-export default function DashboardTaskNotebook() {
+export default function DashboardTaskNotebook({ organizationId }) {
   const { confirm, toast } = useToast();
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
+  const [telegramReminderDate, setTelegramReminderDate] = useState('');
+  const [telegramReminderTime, setTelegramReminderTime] = useState('09:00');
+  const [telegramReminderEnabled, setTelegramReminderEnabled] = useState(false);
+  const [telegramReminders, setTelegramReminders] = useState([]);
+  const [activeReminderTaskId, setActiveReminderTaskId] = useState(null);
+  const [taskReminderDate, setTaskReminderDate] = useState('');
+  const [taskReminderTime, setTaskReminderTime] = useState('09:00');
+  const [telegramConnected, setTelegramConnected] = useState(false);
+  const [telegramReminderLoading, setTelegramReminderLoading] = useState(false);
+  const [deletingReminderId, setDeletingReminderId] = useState(null);
+  const [telegramErrorMessage, setTelegramErrorMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -48,6 +63,31 @@ export default function DashboardTaskNotebook() {
   }, [loadTasks]);
 
   useEffect(() => {
+    if (!isOpen || !organizationId) return undefined;
+    let active = true;
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc('list_telegram_workspace_task_reminders', {
+          p_organization_id: organizationId,
+        });
+        if (error) throw error;
+        if (!data || typeof data.connected !== 'boolean' || !Array.isArray(data.reminders)) {
+          throw new Error('پاسخ وضعیت اعلان‌های تلگرام معتبر نیست.');
+        }
+        if (active) {
+          setTelegramConnected(data.connected);
+          setTelegramReminders(data.reminders);
+        }
+      } catch (error) {
+        if (active) setTelegramErrorMessage(`بررسی اعلان‌های تلگرام ناموفق بود: ${error.message}`);
+      } finally {
+        if (active) setTelegramReminderLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [isOpen, organizationId]);
+
+  useEffect(() => {
     if (!isOpen) return undefined;
     const handleKeyDown = (event) => {
       if (event.key === 'Escape' && !saving) {
@@ -70,17 +110,50 @@ export default function DashboardTaskNotebook() {
     setSaving(true);
     setErrorMessage('');
     try {
-      const { data, error } = await insertRows(TASK_TABLE, [{
-        title: taskTitle,
-        notes: notes.trim() || null,
-        completed: false,
-      }]);
-      if (error) throw new Error(error.message);
-      setTasks((current) => [...(data || []), ...current]);
+      let createdTask;
+      if (telegramReminderEnabled) {
+        if (!telegramConnected) throw new Error('ابتدا تلگرام را از بخش پروفایل به فضای کاری وصل کنید.');
+        if (!navigator.onLine) throw new Error('برای ثبت اعلان تلگرام اتصال اینترنت لازم است.');
+        if (!telegramReminderDate) throw new Error('تاریخ اعلان را انتخاب کنید.');
+        const remindAt = createWorkspaceTaskReminderTimestamp(
+          gregorianISOToJalali(telegramReminderDate),
+          telegramReminderTime,
+        );
+        const { data, error } = await supabase.rpc('create_workspace_task_with_telegram_reminder', {
+          p_organization_id: organizationId,
+          p_title: taskTitle,
+          p_notes: notes.trim() || null,
+          p_remind_at: remindAt,
+        });
+        if (error) throw new Error(error.message);
+        if (!data?.task || !data?.reminder) {
+          throw new Error('پاسخ ثبت کار و اعلان معتبر نیست.');
+        }
+        createdTask = data.task;
+        setTelegramReminders((current) => [
+          ...current.filter((reminder) => reminder.task_id !== data.reminder.task_id),
+          data.reminder,
+        ].sort((first, second) => first.remind_at.localeCompare(second.remind_at)));
+      } else {
+        const { data, error } = await insertRows(TASK_TABLE, [{
+          title: taskTitle,
+          notes: notes.trim() || null,
+          completed: false,
+        }]);
+        if (error) throw new Error(error.message);
+        createdTask = data?.[0];
+        if (!createdTask) throw new Error('پاسخ ثبت کار معتبر نیست.');
+      }
+      setTasks((current) => [createdTask, ...current]);
       setTitle('');
       setNotes('');
+      setTelegramReminderDate('');
+      setTelegramReminderTime('09:00');
+      setTelegramReminderEnabled(false);
       setIsFormOpen(false);
-      toast('success', 'کار به دفترچه اضافه شد.');
+      toast('success', telegramReminderEnabled
+        ? 'کار و اعلان تلگرام زمان‌بندی‌شده ثبت شدند.'
+        : 'کار به دفترچه اضافه شد.');
     } catch (error) {
       setErrorMessage(`افزودن کار ناموفق بود: ${error.message}`);
     } finally {
@@ -102,8 +175,64 @@ export default function DashboardTaskNotebook() {
         Number(first.completed) - Number(second.completed)
         || String(second.created_at || '').localeCompare(String(first.created_at || ''))
       )));
+      if (completed) {
+        setTelegramReminders((current) => current.filter((reminder) => reminder.task_id !== task.id));
+        if (activeReminderTaskId === task.id) setActiveReminderTaskId(null);
+      }
     } catch (error) {
       setErrorMessage(`به‌روزرسانی کار ناموفق بود: ${error.message}`);
+    }
+  };
+
+  const handleScheduleExistingTaskReminder = async (event, task) => {
+    event.preventDefault();
+    setSaving(true);
+    setTelegramErrorMessage('');
+    try {
+      const remindAt = createWorkspaceTaskReminderTimestamp(
+        gregorianISOToJalali(taskReminderDate),
+        taskReminderTime,
+      );
+      const { data, error } = await supabase.rpc('create_telegram_workspace_task_reminder', {
+        p_organization_id: organizationId,
+        p_task_id: task.id,
+        p_remind_at: remindAt,
+      });
+      if (error) throw error;
+      if (!data?.id || data.task_id !== task.id || !data.remind_at) {
+        throw new Error('پاسخ ثبت اعلان معتبر نیست.');
+      }
+      setTelegramReminders((current) => [
+        ...current.filter((reminder) => reminder.task_id !== task.id),
+        data,
+      ].sort((first, second) => first.remind_at.localeCompare(second.remind_at)));
+      setActiveReminderTaskId(null);
+      setTaskReminderDate('');
+      setTaskReminderTime('09:00');
+      toast('success', 'اعلان تلگرام زمان‌بندی شد.');
+    } catch (error) {
+      setTelegramErrorMessage(`زمان‌بندی اعلان ناموفق بود: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteTelegramReminder = async (reminder) => {
+    if (!await confirm('اعلان تلگرام این کار حذف شود؟')) return;
+    setTelegramErrorMessage('');
+    setDeletingReminderId(reminder.id);
+    try {
+      const { data, error } = await supabase.rpc('delete_telegram_workspace_task_reminder', {
+        p_organization_id: organizationId,
+        p_reminder_id: reminder.id,
+      });
+      if (error) throw error;
+      if (!data) throw new Error('اعلان حذف نشد؛ شاید قبلاً ارسال شده باشد.');
+      setTelegramReminders((current) => current.filter((item) => item.id !== reminder.id));
+    } catch (error) {
+      setTelegramErrorMessage(`حذف اعلان تلگرام ناموفق بود: ${error.message}`);
+    } finally {
+      setDeletingReminderId(null);
     }
   };
 
@@ -116,6 +245,7 @@ export default function DashboardTaskNotebook() {
       ]);
       if (error) throw new Error(error.message);
       setTasks((current) => current.filter((item) => item.id !== task.id));
+      setTelegramReminders((current) => current.filter((reminder) => reminder.task_id !== task.id));
       toast('success', 'کار از دفترچه حذف شد.');
     } catch (error) {
       setErrorMessage(`حذف کار ناموفق بود: ${error.message}`);
@@ -123,10 +253,19 @@ export default function DashboardTaskNotebook() {
   };
 
   const pendingCount = tasks.filter((task) => !task.completed).length;
+  const openNotebook = () => {
+    setTelegramReminderLoading(Boolean(organizationId));
+    setTelegramErrorMessage('');
+    setIsOpen(true);
+    if (!organizationId) {
+      setTelegramErrorMessage('فضای کاری برای بارگذاری تنظیمات اعلان پیدا نشد.');
+    }
+  };
   const closeModal = () => {
     if (saving) return;
     setIsOpen(false);
     setIsFormOpen(false);
+    setActiveReminderTaskId(null);
   };
 
   return (
@@ -135,7 +274,7 @@ export default function DashboardTaskNotebook() {
         <button
           type="button"
           className="home-notebook-summary"
-          onClick={() => setIsOpen(true)}
+          onClick={openNotebook}
           aria-label={`مشاهدهٔ دفترچهٔ کارها، ${formatDisplay(pendingCount)} کار باقی‌مانده`}
         >
           <span className="home-notebook-heading">
@@ -149,7 +288,7 @@ export default function DashboardTaskNotebook() {
           type="button"
           className="home-notebook-add"
           onClick={() => {
-            setIsOpen(true);
+            openNotebook();
             setIsFormOpen(true);
           }}
         >
@@ -180,6 +319,14 @@ export default function DashboardTaskNotebook() {
             </header>
 
             {errorMessage && <p className="home-notebook-error" role="alert">{errorMessage}</p>}
+            {telegramErrorMessage && <p className="home-notebook-error" role="alert">{telegramErrorMessage}</p>}
+            {telegramReminderLoading ? (
+              <p className="home-notebook-telegram-status" role="status">در حال بررسی اتصال تلگرام…</p>
+            ) : telegramConnected ? (
+              <p className="home-notebook-telegram-status">اعلان‌ها به تلگرام متصل‌شدهٔ شما، در وقت تهران، ارسال می‌شوند.</p>
+            ) : (
+              <p className="home-notebook-telegram-status">برای زمان‌بندی اعلان، ابتدا تلگرام را از بخش پروفایل وصل کنید.</p>
+            )}
 
             <button
               type="button"
@@ -213,6 +360,38 @@ export default function DashboardTaskNotebook() {
                     disabled={saving}
                   />
                 </label>
+                <button
+                  type="button"
+                  className="home-notebook-telegram-toggle"
+                  onClick={() => setTelegramReminderEnabled((current) => !current)}
+                  disabled={saving || telegramReminderLoading || !telegramConnected}
+                >
+                  {telegramReminderEnabled ? 'حذف اعلان تلگرام' : 'زمان‌بندی اعلان تلگرام'}
+                </button>
+                {telegramReminderEnabled && (
+                  <div className="home-notebook-telegram-fields">
+                    <label>
+                      تاریخ اعلان (شمسی)
+                      <PersianDateInput
+                        className="home-notebook-telegram-date"
+                        value={telegramReminderDate}
+                        onChange={setTelegramReminderDate}
+                        disabled={saving}
+                        required
+                      />
+                    </label>
+                    <label>
+                      ساعت اعلان
+                      <input
+                        type="time"
+                        value={telegramReminderTime}
+                        onChange={(event) => setTelegramReminderTime(event.target.value)}
+                        disabled={saving}
+                        required
+                      />
+                    </label>
+                  </div>
+                )}
                 <button type="submit" disabled={saving || !title.trim()}>
                   {saving ? 'در حال افزودن…' : 'ثبت کار'}
                 </button>
@@ -243,6 +422,69 @@ export default function DashboardTaskNotebook() {
                     <button type="button" className="home-notebook-delete" onClick={() => { void handleDeleteTask(task); }} aria-label={`حذف ${task.title}`}>
                       حذف
                     </button>
+                    {!task.completed && telegramConnected && (
+                      <button
+                        type="button"
+                        className="home-notebook-schedule-reminder"
+                        onClick={() => {
+                          setActiveReminderTaskId((current) => current === task.id ? null : task.id);
+                          setTaskReminderDate('');
+                          setTaskReminderTime('09:00');
+                          setTelegramErrorMessage('');
+                        }}
+                        disabled={saving}
+                      >
+                        {telegramReminders.some((reminder) => reminder.task_id === task.id)
+                          ? 'تغییر زمان اعلان'
+                          : 'تنظیم اعلان تلگرام'}
+                      </button>
+                    )}
+                    {telegramReminders.filter((reminder) => reminder.task_id === task.id).map((reminder) => (
+                      <div className="home-notebook-telegram-reminder" key={reminder.id}>
+                        <span>اعلان تلگرام: {formatPersianDigits(formatReminderTimestamp(reminder.remind_at))}</span>
+                        <button
+                          type="button"
+                          onClick={() => { void handleDeleteTelegramReminder(reminder); }}
+                          disabled={deletingReminderId === reminder.id}
+                          aria-label={`حذف اعلان تلگرام ${task.title}`}
+                        >
+                          {deletingReminderId === reminder.id ? '…' : 'لغو'}
+                        </button>
+                      </div>
+                    ))}
+                    {activeReminderTaskId === task.id && (
+                      <form
+                        className="home-notebook-telegram-task-form"
+                        onSubmit={(event) => { void handleScheduleExistingTaskReminder(event, task); }}
+                      >
+                        <label>
+                          تاریخ اعلان (شمسی)
+                          <PersianDateInput
+                            className="home-notebook-telegram-date"
+                            value={taskReminderDate}
+                            onChange={setTaskReminderDate}
+                            disabled={saving}
+                            required
+                          />
+                        </label>
+                        <label>
+                          ساعت اعلان
+                          <input
+                            type="time"
+                            value={taskReminderTime}
+                            onChange={(event) => setTaskReminderTime(event.target.value)}
+                            disabled={saving}
+                            required
+                          />
+                        </label>
+                        <button type="submit" disabled={saving || !taskReminderDate}>
+                          {saving ? 'در حال ثبت…' : 'ثبت زمان اعلان'}
+                        </button>
+                        <button type="button" onClick={() => setActiveReminderTaskId(null)} disabled={saving}>
+                          انصراف
+                        </button>
+                      </form>
+                    )}
                   </li>
                 ))}
               </ul>

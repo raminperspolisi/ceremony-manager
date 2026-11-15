@@ -30,6 +30,7 @@ async function readAllRows(table, orderBy) {
 }
 
 export default function DashboardPanel({
+  organizationId,
   onNavigate,
   businessName,
   businessContact,
@@ -194,7 +195,7 @@ export default function DashboardPanel({
             <small>پیگیری در تقویم مراسم‌ها</small>
           </button>
         )}
-        <DashboardTaskNotebook />
+        <DashboardTaskNotebook organizationId={organizationId} />
       </section>
 
       <div className="home-dashboard-columns">

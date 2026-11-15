@@ -28,6 +28,24 @@ export function createReminderTimestamp(jalaliDate, time, eventDate) {
   return timestamp.toISOString();
 }
 
+export function createWorkspaceTaskReminderTimestamp(jalaliDate, time) {
+  const normalizedDate = normalizeJalaliDate(jalaliDate);
+  if (!normalizedDate) throw new Error("تاریخ یادآوری شمسی معتبر نیست.");
+
+  const [year, month, day] = normalizedDate.split("/").map(Number);
+  const gregorianDate = jalaliToGregorianISO(year, month, day);
+  if (!gregorianDate) throw new Error("تبدیل تاریخ یادآوری انجام نشد.");
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    throw new Error("ساعت یادآوری را به‌شکل ساعت:دقیقه وارد کنید.");
+  }
+
+  const timestamp = new Date(`${gregorianDate}T${time}:00+03:30`);
+  if (Number.isNaN(timestamp.getTime()) || timestamp.getTime() <= Date.now()) {
+    throw new Error("زمان یادآوری باید در آینده باشد.");
+  }
+  return timestamp.toISOString();
+}
+
 export function formatReminderTimestamp(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "زمان نامعتبر";

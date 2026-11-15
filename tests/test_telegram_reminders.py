@@ -5,6 +5,8 @@ from run_bot import (
     custom_telegram_event_reminder_message,
     handle_telegram_reminder_link,
     telegram_event_reminder_message,
+    telegram_workspace_task_reminder_message,
+    process_pending_telegram_workspace_task_reminders,
 )
 
 
@@ -48,6 +50,38 @@ class TelegramReminderTests(unittest.TestCase):
         self.assertIn("مریم", message)
         self.assertIn("هماهنگی گل‌آرایی", message)
         self.assertIn("۲۰۲۶-۱۱-۱۱", message)
+
+    def test_workspace_task_reminder_message_includes_notes_and_tehran_time(self):
+        message = telegram_workspace_task_reminder_message({
+            "title": "هماهنگی تهران",
+            "notes": "با تیم تماس گرفته شود",
+            "remind_at": "2026-11-15T05:30:00+00:00",
+        })
+
+        self.assertIn("یادآوری کار دفترچه", message)
+        self.assertIn("هماهنگی تهران", message)
+        self.assertIn("با تیم تماس گرفته شود", message)
+        self.assertIn("۲۰۲۶-۱۱-۱۵ ۰۹:۰۰", message)
+
+    def test_workspace_task_reminder_worker_sends_and_finishes_claimed_reminders(self):
+        reminder = {
+            "id": "reminder-id",
+            "chat_id": "123",
+            "title": "هماهنگی تهران",
+            "notes": None,
+            "remind_at": "2026-11-15T05:30:00+00:00",
+        }
+        with (
+            patch("run_bot.TELEGRAM_REMINDER_SECRET", "secret"),
+            patch("run_bot.claim_telegram_workspace_task_reminder", return_value=reminder),
+            patch("run_bot.send_message") as send,
+            patch("run_bot.finish_telegram_workspace_task_reminder") as finish,
+        ):
+            process_pending_telegram_workspace_task_reminders(limit=1)
+
+        self.assertEqual(send.call_args.args[0], "123")
+        self.assertIn("هماهنگی تهران", send.call_args.args[1])
+        finish.assert_called_once_with("reminder-id", True)
 
     def test_link_command_only_accepts_private_chat_and_valid_token(self):
         token = "a" * 64

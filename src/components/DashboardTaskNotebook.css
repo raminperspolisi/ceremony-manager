@@ -211,6 +211,116 @@
   opacity: 0.6;
 }
 
+.home-notebook-form .home-notebook-telegram-toggle {
+  justify-self: start;
+  min-height: 32px;
+  border: 1px solid #cfe4d9;
+  background: #e9f7ef;
+  color: #19745d;
+}
+
+.home-notebook-telegram-status {
+  margin: 0;
+  color: #68798a;
+  font-size: 10px;
+}
+
+.home-notebook-telegram-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.home-notebook-telegram-reminder {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 calc(100% - 25px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-right: 25px;
+  color: #19745d;
+  font-size: 10px;
+}
+
+.home-notebook-schedule-reminder {
+  margin-right: 25px;
+  padding: 4px 8px;
+  border: 1px solid #cfe4d9;
+  border-radius: 7px;
+  background: #e9f7ef;
+  color: #19745d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+}
+
+.home-notebook-schedule-reminder:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.home-notebook-telegram-task-form {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 7px;
+  margin-right: 25px;
+}
+
+.home-notebook-telegram-task-form label {
+  min-width: 0;
+  color: #52677c;
+  font-size: 10px;
+}
+
+.home-notebook-telegram-task-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #dce5e9;
+  border-radius: 8px;
+  background: #fff;
+  color: #253649;
+  font: inherit;
+  font-size: 10px;
+}
+
+.home-notebook-telegram-task-form button {
+  justify-self: start;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid #cfe4d9;
+  border-radius: 8px;
+  background: #e9f7ef;
+  color: #19745d;
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+}
+
+.home-notebook-telegram-task-form button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.home-notebook-telegram-reminder button {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid #dce5e9;
+  border-radius: 7px;
+  background: #fff;
+  color: #52677c;
+  cursor: pointer;
+  font: inherit;
+}
+
+.home-notebook-telegram-reminder button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .home-notebook-error {
   margin: 0;
   padding: 8px 11px;
@@ -241,6 +351,7 @@
 
 .home-notebook-item {
   display: flex;
+  flex-wrap: wrap;
   min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
@@ -253,6 +364,7 @@
 
 .home-notebook-task {
   display: flex;
+  flex: 1 1 0;
   min-width: 0;
   align-items: flex-start;
   gap: 9px;

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { gregorianISOToJalali } from "../src/calendarDateUtils.js";
 import {
   createReminderTimestamp,
+  createWorkspaceTaskReminderTimestamp,
   formatReminderTimestamp,
 } from "../src/telegramReminderUtils.js";
 
@@ -49,5 +50,32 @@ test("custom reminders reject invalid times and dates after the ceremony", () =>
       eventDateJalali,
     ),
     /روز مراسم یا قبل/,
+  );
+});
+
+test("workspace task reminders store the selected Jalali date and Tehran time", () => {
+  const reminderGregorianDate = gregorianDateAfter(3);
+  const reminderJalaliDate = gregorianISOToJalali(reminderGregorianDate);
+  const reminder = createWorkspaceTaskReminderTimestamp(reminderJalaliDate, "14:25");
+
+  assert.equal(
+    reminder,
+    new Date(`${reminderGregorianDate}T14:25:00+03:30`).toISOString(),
+  );
+  assert.equal(formatReminderTimestamp(reminder), `${reminderJalaliDate} 14:25`);
+});
+
+test("workspace task reminders reject invalid dates, times, and past times", () => {
+  assert.throws(
+    () => createWorkspaceTaskReminderTimestamp("invalid", "09:00"),
+    /تاریخ یادآوری شمسی/,
+  );
+  assert.throws(
+    () => createWorkspaceTaskReminderTimestamp(gregorianISOToJalali(gregorianDateAfter(3)), "25:00"),
+    /ساعت یادآوری/,
+  );
+  assert.throws(
+    () => createWorkspaceTaskReminderTimestamp(gregorianISOToJalali(gregorianDateAfter(-1)), "09:00"),
+    /زمان یادآوری باید در آینده/,
   );
 });
