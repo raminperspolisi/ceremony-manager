@@ -75,6 +75,7 @@ export default function InventoryPanel({
     quantities: null,
     reservationRecords: [],
     busy: true,
+    offline: false,
     save: null,
   });
 
@@ -328,6 +329,10 @@ export default function InventoryPanel({
   };
 
   const handleDoubleClick = (item) => {
+    if (stockSummary.offline || stockSummary.quantities === null) {
+      toast('warning', 'برای ویرایش کالا، ابتدا موجودی تازهٔ انبار را دریافت کنید.');
+      return;
+    }
     setEditingId(item.id);
     setEditForm({
       title: item.title || '',
@@ -470,11 +475,11 @@ export default function InventoryPanel({
         </article>
         <article className="inventory-summary-card is-renting">
           <span>در حال اجاره</span>
-          <strong>{formatDisplay(rentedQuantity)}</strong>
+          <strong>{stockSummary.offline ? '—' : formatDisplay(rentedQuantity)}</strong>
         </article>
         <article className="inventory-summary-card is-reserved">
           <span>رزرو این هفته</span>
-          <strong>{formatDisplay(reservedThisWeek)}</strong>
+          <strong>{stockSummary.offline ? '—' : formatDisplay(reservedThisWeek)}</strong>
         </article>
         <article className="inventory-summary-card is-low-stock">
           <span>موجودی کم</span>
@@ -723,7 +728,10 @@ export default function InventoryPanel({
                 const rented = getItemRented(item);
                 const lowStock = isLowStock(item);
                 const status = quantity === undefined
-                  ? { label: 'در حال دریافت', className: 'is-loading' }
+                  ? {
+                      label: stockSummary.offline ? 'دادهٔ تازه در دسترس نیست' : 'در حال دریافت',
+                      className: 'is-loading',
+                    }
                   : lowStock
                     ? { label: 'موجودی کم', className: 'is-low' }
                     : rented > 0

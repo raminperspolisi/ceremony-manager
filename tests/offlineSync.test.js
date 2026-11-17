@@ -322,6 +322,36 @@ test('unbounded table reads fetch every server page', async () => {
   }
 });
 
+test('inventory reads allow slower server responses and flag cached fallback data', async () => {
+  setOfflineUser('offline-inventory-read-test-user');
+  setOfflineOrganization('offline-inventory-read-test-organization');
+  globalThis.navigator.onLine = false;
+  const cachedItem = await insertRows('inventory', [{ title: 'کالای ذخیره‌شده' }]);
+
+  const previousFetch = globalThis.fetch;
+  const previousSetTimeout = globalThis.window.setTimeout;
+  const timeoutDelays = [];
+  globalThis.window.setTimeout = (callback, delay) => {
+    timeoutDelays.push(delay);
+    return previousSetTimeout(callback, delay);
+  };
+  globalThis.fetch = async () => {
+    throw new TypeError('Failed to fetch');
+  };
+
+  try {
+    globalThis.navigator.onLine = true;
+    const result = await readTable('inventory');
+    assert.equal(result.offline, true);
+    assert.equal(result.data[0].id, cachedItem.data[0].id);
+    assert.ok(timeoutDelays.includes(20000));
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.window.setTimeout = previousSetTimeout;
+    globalThis.navigator.onLine = false;
+  }
+});
+
 test('offline records are isolated between organizations for the same user', async () => {
   setOfflineUser('offline-sync-test-user');
   setOfflineOrganization('offline-sync-first-organization');

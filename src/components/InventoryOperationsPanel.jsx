@@ -104,31 +104,56 @@ export default function InventoryOperationsPanel({
   const [operationsModalOpen, setOperationsModalOpen] = useState(false);
 
   const refresh = useCallback(async () => {
-    const results = await Promise.all([
-      readTable('inventory_warehouses', { orderBy: 'name', ascending: true }),
-      readTable('inventory_suppliers', { orderBy: 'name', ascending: true }),
-      readTable('inventory_stock_movements', { orderBy: 'created_at', ascending: false }),
-      readTable('inventory_purchase_receipts', { orderBy: 'purchase_date', ascending: false }),
-      readTable('inventory_transfers', { orderBy: 'transfer_date', ascending: false }),
-      readTable('inventory_reservations', { orderBy: 'created_at', ascending: false }),
-    ]);
-    const failed = results.find((result) => result.error);
-    if (failed) {
-      setErrorMessage(`دریافت اطلاعات انبار ناموفق بود: ${failed.error.message}`);
-      return;
-    }
+    setBusy(true);
+    try {
+      const results = await Promise.all([
+        readTable('inventory_warehouses', { orderBy: 'name', ascending: true }),
+        readTable('inventory_suppliers', { orderBy: 'name', ascending: true }),
+        readTable('inventory_stock_movements', { orderBy: 'created_at', ascending: false }),
+        readTable('inventory_purchase_receipts', { orderBy: 'purchase_date', ascending: false }),
+        readTable('inventory_transfers', { orderBy: 'transfer_date', ascending: false }),
+        readTable('inventory_reservations', { orderBy: 'created_at', ascending: false }),
+      ]);
+      const failed = results.find((result) => result.error);
+      if (failed) {
+        setOfflineData(true);
+        setErrorMessage(`دریافت اطلاعات انبار ناموفق بود: ${failed.error.message}`);
+        onStockSummaryChange?.({
+          warehouseName: '',
+          warehouseId: '',
+          quantities: null,
+          reservationRecords: [],
+          busy: true,
+          offline: true,
+          save: null,
+        });
+        return;
+      }
 
-    setErrorMessage('');
-    const fetchedWarehouses = results[0].data || [];
-    setWarehouses(fetchedWarehouses);
-    setSuppliers(results[1].data || []);
-    setMovements(results[2].data || []);
-    setReceipts(results[3].data || []);
-    setTransfers(results[4].data || []);
-    setReservations(results[5].data || []);
-    setOfflineData(results.some((result) => result.offline));
-    const defaultWarehouse = fetchedWarehouses.find((warehouse) => warehouse.is_default) || fetchedWarehouses[0];
-    if (defaultWarehouse) {
+      setErrorMessage('');
+      const fetchedWarehouses = results[0].data || [];
+      setWarehouses(fetchedWarehouses);
+      setSuppliers(results[1].data || []);
+      setMovements(results[2].data || []);
+      setReceipts(results[3].data || []);
+      setTransfers(results[4].data || []);
+      setReservations(results[5].data || []);
+      const usingOfflineData = results.some((result) => result.offline);
+      setOfflineData(usingOfflineData);
+      const defaultWarehouse = fetchedWarehouses.find((warehouse) => warehouse.is_default) || fetchedWarehouses[0];
+      if (!defaultWarehouse) {
+        onStockSummaryChange?.({
+          warehouseName: '',
+          warehouseId: '',
+          quantities: null,
+          reservationRecords: [],
+          busy: false,
+          offline: usingOfflineData,
+          save: null,
+        });
+        return;
+      }
+
       const warehouseExists = (id) => fetchedWarehouses.some((warehouse) => String(warehouse.id) === String(id));
       setSelectedWarehouseId((current) => (
         warehouseExists(current) ? current : String(defaultWarehouse.id)
@@ -156,18 +181,35 @@ export default function InventoryOperationsPanel({
             (warehouse) => String(warehouse.id) !== String(defaultWarehouse.id),
           )?.id || ''),
       }));
+    } catch (error) {
+      setOfflineData(true);
+      setErrorMessage(`دریافت اطلاعات انبار ناموفق بود: ${error.message}`);
+      onStockSummaryChange?.({
+        warehouseName: '',
+        warehouseId: '',
+        quantities: null,
+        reservationRecords: [],
+        busy: true,
+        offline: true,
+        save: null,
+      });
+    } finally {
+      setBusy(false);
     }
-  }, []);
+  }, [onStockSummaryChange]);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(refresh, 0);
     const handleOfflineUpdate = () => refresh();
+    const handleOnline = () => refresh();
     window.addEventListener('offline-data-updated', handleOfflineUpdate);
     window.addEventListener('inventory-data-updated', handleOfflineUpdate);
+    window.addEventListener('online', handleOnline);
     return () => {
       window.clearTimeout(loadTimer);
       window.removeEventListener('offline-data-updated', handleOfflineUpdate);
       window.removeEventListener('inventory-data-updated', handleOfflineUpdate);
+      window.removeEventListener('online', handleOnline);
     };
   }, [refresh, organizationId]);
 
@@ -192,10 +234,11 @@ export default function InventoryOperationsPanel({
     onStockSummaryChange({
       warehouseName: activeWarehouse.name,
       warehouseId: selectedWarehouseId,
-      quantities,
-      reservationRecords: reservations,
+      quantities: offlineData ? null : quantities,
+      reservationRecords: offlineData ? [] : reservations,
       busy: busy || offlineData,
-      save: (inventoryId, targetQuantity) => {
+      offline: offlineData,
+      save: offlineData ? null : (inventoryId, targetQuantity) => {
         const item = items.find((candidate) => String(candidate.id) === String(inventoryId));
         if (!item) return Promise.resolve(false);
         const stockKey = `${selectedWarehouseId}:${item.id}`;
@@ -543,7 +586,7 @@ export default function InventoryOperationsPanel({
   }, 'عودت اجاره ثبت و موجودی انبار افزایش یافت.');
 
   const activeWarehouseId = selectedWarehouseId || String(warehouses.find((warehouse) => warehouse.is_default)?.id || '');
-  const lowStockItems = activeItems.filter((item) => (
+  const lowStockItems = offlineData ? [] : activeItems.filter((item) => (
     isBelowMinimumStock(item, stockFor(item.id, activeWarehouseId))
   ));
   const nameForItem = (id) => activeItems.find((item) => String(item.id) === String(id))?.title || `کالای ${id}`;
@@ -561,9 +604,14 @@ export default function InventoryOperationsPanel({
   return (
     <section className="inventory-operations" dir="rtl" aria-label="عملیات موجودی">
       {offlineData && (
-        <p className="inventory-ops-message warning" role="status">
-          داده‌های نمایش‌داده‌شده از حافظهٔ آفلاین هستند؛ عملیات موجودی تا دریافت دادهٔ تازه غیرفعال است.
-        </p>
+        <>
+          <p className="inventory-ops-message warning" role="status">
+            دادهٔ تازهٔ انبار دریافت نشده؛ موجودی‌های قدیمی پنهان شده‌اند تا عدد نادرست نمایش داده نشود.
+          </p>
+          <button type="button" className="inventory-ops-secondary" onClick={refresh} disabled={busy}>
+            تلاش دوباره برای دریافت موجودی
+          </button>
+        </>
       )}
       {errorMessage && <p className="inventory-ops-message error" role="alert">{errorMessage}</p>}
       {feedback && <p className="inventory-ops-message success" role="status">{feedback}</p>}
@@ -574,7 +622,7 @@ export default function InventoryOperationsPanel({
       >
         عملیات انبار
         <span className={lowStockItems.length ? 'inventory-ops-drawer-alert' : 'inventory-ops-drawer-count'}>
-          {formatNumber(lowStockItems.length)} هشدار کمبود
+          {offlineData ? 'دادهٔ تازه نیست' : `${formatNumber(lowStockItems.length)} هشدار کمبود`}
         </span>
       </button>
       {operationsModalOpen && (
@@ -634,7 +682,7 @@ export default function InventoryOperationsPanel({
             تنظیم به‌عنوان انبار اصلی بات
           </button>
         )}
-        <strong>{formatNumber(lowStockItems.length)} هشدار کمبود موجودی</strong>
+        <strong>{offlineData ? '—' : formatNumber(lowStockItems.length)} هشدار کمبود موجودی</strong>
         {lowStockItems.length > 0 && (
           <span>{lowStockItems.slice(0, 4).map((item) => item.title).join('، ')}</span>
         )}

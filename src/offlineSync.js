@@ -4,6 +4,7 @@ const DATABASE_NAME = 'ceremony-manager-offline';
 const DATABASE_VERSION = 1;
 const CACHE_PAGE_SIZE = 1000;
 const READ_TIMEOUT_MS = 8000;
+const INVENTORY_READ_TIMEOUT_MS = 20000;
 const PENDING_ID_PREFIX = 'offline:';
 const TENANT_TABLES = new Set([
   'customers',
@@ -346,13 +347,17 @@ export async function readTable(table, options = {}) {
     const userId = await getUserId();
     const organizationId = organizationIdForScope(userId);
     if (navigator.onLine) {
+      const defaultTimeoutMs = table === 'inventory' || table.startsWith('inventory_')
+        ? INVENTORY_READ_TIMEOUT_MS
+        : READ_TIMEOUT_MS;
+      const timeoutMs = options.timeoutMs ?? defaultTimeoutMs;
       const rows = [];
       const requestedLimit = options.limit ?? Number.POSITIVE_INFINITY;
       let result = { data: [], error: null };
       while (rows.length < requestedLimit) {
         const pageLimit = Math.min(CACHE_PAGE_SIZE, requestedLimit - rows.length);
         const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+        const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
         try {
           result = await buildQuery(table, {
             ...options,
