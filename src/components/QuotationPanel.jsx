@@ -91,6 +91,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
   const [savingInventoryItem, setSavingInventoryItem] = useState(false);
   const [inventoryCreateOpen, setInventoryCreateOpen] = useState(false);
   const [savingNewInventoryItem, setSavingNewInventoryItem] = useState(false);
+  const [pendingInitialStockItem, setPendingInitialStockItem] = useState(null);
   const [newInventoryForm, setNewInventoryForm] = useState({
     title: '',
     item_type: 'sale',
@@ -393,20 +394,23 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       return;
     }
     setSavingNewInventoryItem(true);
-    let createdItem = null;
+    let createdItem = pendingInitialStockItem;
+    let initialStockSaved = initialQuantity === 0;
     try {
-      const { data, error } = await insertRows('inventory', [{
-        title,
-        item_type: newInventoryForm.item_type,
-        sort_order: Math.max(0, ...inventoryItems.map((item) => Number(item.sort_order) || 0)) + 1,
-        base_cost: baseCost,
-        price_level1: parseNumericInput(newInventoryForm.price_level1),
-        price_level2: parseNumericInput(newInventoryForm.price_level2),
-        price_level3: parseNumericInput(newInventoryForm.price_level3),
-        image: newInventoryForm.image || null,
-      }]);
-      if (error) throw error;
-      createdItem = data?.[0];
+      if (!createdItem) {
+        const { data, error } = await insertRows('inventory', [{
+          title,
+          item_type: newInventoryForm.item_type,
+          sort_order: Math.max(0, ...inventoryItems.map((item) => Number(item.sort_order) || 0)) + 1,
+          base_cost: baseCost,
+          price_level1: parseNumericInput(newInventoryForm.price_level1),
+          price_level2: parseNumericInput(newInventoryForm.price_level2),
+          price_level3: parseNumericInput(newInventoryForm.price_level3),
+          image: newInventoryForm.image || null,
+        }]);
+        if (error) throw error;
+        createdItem = data?.[0];
+      }
       if (!createdItem?.id) throw new Error('کالا ذخیره شد اما شناسهٔ آن دریافت نشد.');
 
       if (initialQuantity > 0) {
@@ -425,8 +429,10 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
           throw new Error(`کالا ثبت شد، اما ثبت موجودی اولیه ناموفق بود: ${movementResult.error.message}`);
         }
         setPickerMovements((current) => [...current, ...(movementResult.data || [])]);
+        initialStockSaved = true;
       }
 
+      setPendingInitialStockItem(null);
       const quotationItem = { ...createdItem, requestedQuantity: 1, quantity: 1 };
       setSelectedItems?.((currentItems) => [...currentItems, quotationItem]);
       setPickerQuantities((current) => ({ ...current, [createdItem.id]: '1' }));
@@ -446,6 +452,9 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       await onInventoryChanged?.();
       toast('success', 'کالای جدید ثبت و به پیش‌فاکتور اضافه شد.');
     } catch (error) {
+      if (createdItem && !initialStockSaved) {
+        setPendingInitialStockItem(createdItem);
+      }
       if (createdItem) {
         window.dispatchEvent(new Event('inventory-data-updated'));
         await onInventoryChanged?.();
@@ -1289,7 +1298,11 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                         انصراف
                       </button>
                       <button type="submit" disabled={savingNewInventoryItem || pickerStockLoading}>
-                        {savingNewInventoryItem ? 'در حال ثبت...' : 'ثبت کالا و افزودن'}
+                        {savingNewInventoryItem
+                          ? 'در حال ثبت...'
+                          : pendingInitialStockItem
+                            ? 'تلاش دوباره برای ثبت موجودی'
+                            : 'ثبت کالا و افزودن'}
                       </button>
                     </div>
                   </form>

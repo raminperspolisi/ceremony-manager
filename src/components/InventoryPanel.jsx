@@ -32,6 +32,7 @@ export default function InventoryPanel({
   const [image, setImage] = useState('');
   const [loading, setLoading] = useState(false);
   const [newItemModalOpen, setNewItemModalOpen] = useState(false);
+  const [pendingInitialStock, setPendingInitialStock] = useState(null);
   const [draggingItemId, setDraggingItemId] = useState(null);
   const [dragOverItemId, setDragOverItemId] = useState(null);
   const [savingItemOrder, setSavingItemOrder] = useState(false);
@@ -242,35 +243,34 @@ export default function InventoryPanel({
     }
 
     setLoading(true);
-    let itemWasCreated = false;
+    const pendingItemId = pendingInitialStock?.organizationId === (organizationId || null)
+      ? pendingInitialStock.id
+      : null;
+    let createdItemId = pendingItemId;
+    let itemWasCreated = Boolean(pendingItemId);
+    let initialStockSaved = stockQuantity === 0;
     try {
-      const { data, error } = await insertRows('inventory', [{
-        title: title.trim(),
-        item_type: itemType,
-        sort_order: Math.max(0, ...items.map((item) => Number(item.sort_order) || 0)) + 1,
-        base_cost: purchaseCost,
-        price_level1: price1 === '' ? 0 : parseFloat(price1),
-        price_level2: price2 === '' ? 0 : parseFloat(price2),
-        price_level3: price3 === '' ? 0 : parseFloat(price3),
-        image: image || null,
-      }]);
+      if (!createdItemId) {
+        const { data, error } = await insertRows('inventory', [{
+          title: title.trim(),
+          item_type: itemType,
+          sort_order: Math.max(0, ...items.map((item) => Number(item.sort_order) || 0)) + 1,
+          base_cost: purchaseCost,
+          price_level1: price1 === '' ? 0 : parseFloat(price1),
+          price_level2: price2 === '' ? 0 : parseFloat(price2),
+          price_level3: price3 === '' ? 0 : parseFloat(price3),
+          image: image || null,
+        }]);
 
-      if (error) throw error;
-      const createdItem = data?.[0];
-      if (!createdItem?.id) throw new Error('کالا ذخیره شد اما شناسهٔ آن دریافت نشد.');
-      itemWasCreated = true;
+        if (error) throw error;
+        createdItemId = data?.[0]?.id;
+        if (!createdItemId) throw new Error('کالا ذخیره شد اما شناسهٔ آن دریافت نشد.');
+        itemWasCreated = true;
+      }
 
-      setTitle('');
-      setItemType('sale');
-      setBaseCost('');
-      setInitialQuantity('');
-      setPrice1('');
-      setPrice2('');
-      setPrice3('');
-      setImage('');
       if (stockQuantity > 0) {
         const movementResult = await insertRows('inventory_stock_movements', [{
-          inventory_id: createdItem.id,
+          inventory_id: createdItemId,
           warehouse_id: initialWarehouse.id,
           movement_type: 'opening',
           quantity_delta: stockQuantity,
@@ -283,14 +283,28 @@ export default function InventoryPanel({
         if (movementResult.error) {
           throw new Error(`ثبت موجودی اولیه ناموفق بود: ${movementResult.error.message}`);
         }
+        initialStockSaved = true;
         window.dispatchEvent(new Event('inventory-data-updated'));
       }
+
+      setPendingInitialStock(null);
+      setTitle('');
+      setItemType('sale');
+      setBaseCost('');
+      setInitialQuantity('');
+      setPrice1('');
+      setPrice2('');
+      setPrice3('');
+      setImage('');
       await refresh();
       setNewItemModalOpen(false);
       toast('success', 'کالا با موفقیت به انبار اضافه شد.');
     } catch (err) {
       console.error(itemWasCreated ? 'خطا در ثبت موجودی اولیه:' : 'خطا در ثبت کالا:', err.message);
       if (itemWasCreated) {
+        if (!initialStockSaved) {
+          setPendingInitialStock({ id: createdItemId, organizationId: organizationId || null });
+        }
         window.dispatchEvent(new Event('inventory-data-updated'));
         await refresh();
       }
@@ -606,7 +620,7 @@ export default function InventoryPanel({
             disabled={loading}
             style={{ width: '100%', backgroundColor: '#0ea5e9', color: '#ffffff', border: 'none', padding: '7px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
           >
-            {loading ? 'در حال ثبت...' : '+ ثبت کالا'}
+            {loading ? 'در حال ثبت...' : pendingInitialStock ? 'تلاش دوباره برای ثبت موجودی' : '+ ثبت کالا'}
           </button>
         </div>
             </form>
