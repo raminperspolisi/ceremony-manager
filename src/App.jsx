@@ -22,6 +22,7 @@ import { formatDisplay } from './styles';
 import { getBusinessContact, normalizeProfileLinks } from './profileLinks';
 import {
   getOfflineSyncStatus,
+  INVENTORY_LIST_COLUMNS,
   readTable,
   setOfflineOrganization,
   setOfflineUser,
@@ -251,31 +252,25 @@ export default function App() {
   const [botOrderNotification, setBotOrderNotification] = useState(null);
   const globalSearchCache = useRef(null);
   const [inventory, setInventory] = useState([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryLoadError, setInventoryLoadError] = useState('');
+  const [inventoryRefreshing, setInventoryRefreshing] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
   const sessionUserId = session?.user?.id;
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return undefined;
     let active = true;
     let registration;
-    let updateAnnounced = false;
-    const showUpdate = () => {
-      if (!active || updateAnnounced || !registration?.waiting || !navigator.serviceWorker.controller) return;
-      updateAnnounced = true;
-      toast('info', 'نسخهٔ جدید آماده است.', {
-        action: {
-          label: 'بارگذاری مجدد',
-          onClick: () => {
-            applyServiceWorkerUpdate.current = true;
-            registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
-          },
-        },
-      });
+    const activateWaitingWorker = () => {
+      if (!active || !registration?.waiting || applyServiceWorkerUpdate.current) return;
+      applyServiceWorkerUpdate.current = true;
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
     };
     const watchInstallingWorker = () => {
       const installing = registration?.installing;
       if (!installing) return;
       installing.addEventListener('statechange', () => {
-        if (installing.state === 'installed') showUpdate();
+        if (installing.state === 'installed') activateWaitingWorker();
         if (installing.state === 'activated') checkForUpdates();
       });
     };
@@ -283,14 +278,12 @@ export default function App() {
       if (applyServiceWorkerUpdate.current) window.location.reload();
     };
     const checkForUpdates = () => {
-      if (!registration?.active || registration.installing || registration.waiting) return;
+      if (!registration?.active || registration.installing || registration.waiting) {
+        activateWaitingWorker();
+        return;
+      }
       registration.update().catch((error) => console.error('بررسی نسخهٔ جدید ناموفق بود:', error));
     };
-    const checkWhenVisible = () => {
-      if (document.visibilityState === 'visible') checkForUpdates();
-    };
-    const updateCheckTimer = window.setInterval(checkForUpdates, 60 * 60 * 1000);
-    document.addEventListener('visibilitychange', checkWhenVisible);
     navigator.serviceWorker.addEventListener('controllerchange', reloadAfterUpdate);
     navigator.serviceWorker.getRegistration().then((currentRegistration) => {
       if (!active) return;
@@ -298,17 +291,15 @@ export default function App() {
       if (!registration) return;
       registration.addEventListener('updatefound', watchInstallingWorker);
       watchInstallingWorker();
-      showUpdate();
+      activateWaitingWorker();
       checkForUpdates();
     }).catch((error) => console.error('دریافت وضعیت سرویس‌ورکر ناموفق بود:', error));
     return () => {
       active = false;
-      window.clearInterval(updateCheckTimer);
-      document.removeEventListener('visibilitychange', checkWhenVisible);
       registration?.removeEventListener('updatefound', watchInstallingWorker);
       navigator.serviceWorker.removeEventListener('controllerchange', reloadAfterUpdate);
     };
-  }, [toast]);
+  }, []);
   const activeOrganizationMembership = organizationMemberships.find(
     (membership) => membership.organization_id === activeOrganizationId,
   ) || null;
@@ -438,16 +429,32 @@ export default function App() {
   }, []);
 
   // تابع دریافت داده‌ها
-  const fetchData = async () => {
+  const fetchData = async ({ requireOnline = false } = {}) => {
+    if (requireOnline) setInventoryRefreshing(true);
+    setInventoryLoading(true);
     try {
       const { data, error } = await readTable('inventory', {
-        orderBy: 'sort_order',
+        columns: INVENTORY_LIST_COLUMNS,
+        orderBy: ['sort_order', 'id'],
         ascending: true,
+        requireOnline,
       });
       if (error) throw error;
       setInventory(data || []);
+      setInventoryLoadError('');
+      if (requireOnline) {
+        window.dispatchEvent(new Event('inventory-data-updated'));
+        toast('success', `فهرست کالاها از سرور تازه شد؛ ${formatDisplay(data?.length || 0)} کالا دریافت شد.`);
+      }
     } catch (error) {
       console.error('خطا در دریافت اطلاعات:', error.message);
+      setInventoryLoadError(error.message);
+      if (requireOnline) {
+        toast('error', `تازه‌سازی کالاها ناموفق بود: ${error.message}`);
+      }
+    } finally {
+      setInventoryLoading(false);
+      if (requireOnline) setInventoryRefreshing(false);
     }
   };
 
@@ -609,12 +616,17 @@ export default function App() {
   useEffect(() => {
     if (!sessionUserId || !activeOrganizationId) return undefined;
     let mounted = true;
-    warmOfflineCache().then(() => {
-      if (mounted) setOfflineCacheUserId(offlineScopeId);
-    }).catch((error) => {
-      console.error('آماده‌سازی داده‌های آفلاین ناموفق بود:', error.message);
-      setOfflineSyncError(error.message);
-    });
+    const prepareOfflineCache = async () => {
+      try {
+        await syncPendingMutations();
+        await warmOfflineCache();
+        if (mounted) setOfflineCacheUserId(offlineScopeId);
+      } catch (error) {
+        console.error('آماده‌سازی داده‌های آفلاین ناموفق بود:', error.message);
+        if (mounted) setOfflineSyncError(error.message);
+      }
+    };
+    void prepareOfflineCache();
     return () => { mounted = false; };
   }, [sessionUserId, activeOrganizationId, offlineScopeId]);
 
@@ -623,6 +635,29 @@ export default function App() {
     let lastRefreshAt = Date.now();
     let refreshing = false;
     let realtimeRefreshTimer;
+    const pendingRealtimeTables = new Set();
+    const scheduleRealtimeRefresh = () => {
+      window.clearTimeout(realtimeRefreshTimer);
+      realtimeRefreshTimer = window.setTimeout(async () => {
+        if (!navigator.onLine || document.visibilityState === 'hidden') return;
+        if (refreshing) return;
+        const tables = [...pendingRealtimeTables];
+        if (!tables.length) return;
+        pendingRealtimeTables.clear();
+        refreshing = true;
+        lastRefreshAt = Date.now();
+        try {
+          await syncPendingMutations();
+          await warmOfflineCache({ tables });
+        } catch (error) {
+          console.error('تازه‌سازی تغییرات زنده ناموفق بود:', error.message);
+          setOfflineSyncError(error.message);
+        } finally {
+          refreshing = false;
+          if (pendingRealtimeTables.size) scheduleRealtimeRefresh();
+        }
+      }, 300);
+    };
     const refreshFromServer = async () => {
       if (!navigator.onLine || document.visibilityState === 'hidden' || refreshing) return;
       if (Date.now() - lastRefreshAt < 15000) return;
@@ -630,43 +665,35 @@ export default function App() {
       lastRefreshAt = Date.now();
       try {
         await syncPendingMutations();
+        pendingRealtimeTables.clear();
         await warmOfflineCache();
       } catch (error) {
         console.error('به‌روزرسانی داده‌ها ناموفق بود:', error.message);
         setOfflineSyncError(error.message);
       } finally {
         refreshing = false;
+        if (pendingRealtimeTables.size) scheduleRealtimeRefresh();
       }
     };
-    const refreshAfterRealtimeChange = () => {
-      window.clearTimeout(realtimeRefreshTimer);
-      realtimeRefreshTimer = window.setTimeout(async () => {
-        if (!navigator.onLine || document.visibilityState === 'hidden' || refreshing) return;
-        refreshing = true;
-        lastRefreshAt = Date.now();
-        try {
-          await syncPendingMutations();
-          await warmOfflineCache();
-        } catch (error) {
-          console.error('تازه‌سازی تغییرات زنده ناموفق بود:', error.message);
-          setOfflineSyncError(error.message);
-        } finally {
-          refreshing = false;
-        }
-      }, 300);
+    const refreshAfterRealtimeChange = (payload) => {
+      if (payload?.table) pendingRealtimeTables.add(payload.table);
+      scheduleRealtimeRefresh();
     };
     const refreshAfterReconnect = () => {
       lastRefreshAt = 0;
       refreshFromServer();
     };
     const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') refreshFromServer();
+      if (document.visibilityState === 'visible') {
+        refreshFromServer();
+        if (pendingRealtimeTables.size) scheduleRealtimeRefresh();
+      }
     };
 
     window.addEventListener('online', refreshAfterReconnect);
     window.addEventListener('focus', refreshFromServer);
     document.addEventListener('visibilitychange', refreshWhenVisible);
-    const refreshInterval = window.setInterval(refreshFromServer, 30000);
+    const refreshInterval = window.setInterval(refreshFromServer, 5 * 60 * 1000);
     const channel = supabase.channel(`live-data-${sessionUserId}-${activeOrganizationId}`);
     [
       'customers',
@@ -774,7 +801,7 @@ export default function App() {
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void refreshBotOrders();
     };
-    const poll = window.setInterval(() => { void refreshBotOrders(); }, 30000);
+    const poll = window.setInterval(() => { void refreshBotOrders(); }, 2 * 60 * 1000);
     document.addEventListener('visibilitychange', refreshWhenVisible);
     void startRealtimeNotifications();
 
@@ -1427,6 +1454,8 @@ export default function App() {
           {section === 'inventory' && (
             <InventoryPanel
               items={inventory}
+             isLoading={inventoryLoading}
+             loadError={inventoryLoadError}
               organizationId={activeOrganizationId}
               refresh={fetchData}
               onItemUpdated={handleItemUpdated}
@@ -1441,6 +1470,7 @@ export default function App() {
               onInventoryChanged={fetchData}
               selectedItems={selectedItems}
               setSelectedItems={setSelectedItems}
+              onInventoryItemUpdated={handleItemUpdated}
               businessName={businessName}
               logoUrl={logoUrl}
               businessContact={businessContact}
@@ -1495,8 +1525,13 @@ export default function App() {
           </div>
           <div className="page-heading-actions">
             {section === 'inventory' && (
-              <button type="button" className="refresh-button" onClick={fetchData}>
-                ↻ تازه‌سازی
+              <button
+                type="button"
+                className="refresh-button"
+                onClick={() => fetchData({ requireOnline: true })}
+                disabled={inventoryRefreshing}
+              >
+                {inventoryRefreshing ? 'در حال تازه‌سازی…' : '↻ تازه‌سازی'}
               </button>
             )}
           </div>

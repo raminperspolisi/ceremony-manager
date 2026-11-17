@@ -12,6 +12,8 @@ import './InventoryPanel.css';
 
 export default function InventoryPanel({
   items,
+  isLoading = false,
+  loadError = '',
   refresh,
   onItemUpdated,
   onItemsReordered,
@@ -454,6 +456,19 @@ export default function InventoryPanel({
     if (inventoryFilter === 'low') return isLowStock(item);
     return true;
   });
+  const emptyStateTitle = items.length === 0
+    ? isLoading ? 'در حال دریافت کالاها…' : loadError ? 'دریافت کالاها ناموفق بود' : 'هنوز کالایی در انبار ثبت نشده'
+    : 'موردی پیدا نشد';
+  const emptyStateDescription = items.length === 0
+    ? isLoading ? 'لطفاً کمی صبر کنید.' : loadError || 'برای شروع، اولین کالا یا خدمت را ثبت کنید.'
+    : 'فیلتر دیگری انتخاب کنید یا جستجو را پاک کنید.';
+  const emptyStateAction = items.length === 0
+    ? isLoading
+      ? undefined
+      : loadError
+        ? { label: 'تلاش دوباره', onClick: () => refresh?.() }
+        : { label: 'ثبت اولین کالا', onClick: () => setNewItemModalOpen(true) }
+    : { label: 'پاک کردن فیلترها', onClick: () => { setSearchQuery(''); setInventoryFilter('all'); } };
 
   return (
     <div className="inventory-panel">
@@ -712,11 +727,9 @@ export default function InventoryPanel({
             <div className="inventory-grid-empty">
               <EmptyState
                 icon={items.length === 0 ? 'box' : 'search'}
-                title={items.length === 0 ? 'هنوز کالایی در انبار ثبت نشده' : 'موردی پیدا نشد'}
-                description={items.length === 0 ? 'برای شروع، اولین کالا یا خدمت را ثبت کنید.' : 'فیلتر دیگری انتخاب کنید یا جستجو را پاک کنید.'}
-                primaryAction={items.length === 0
-                  ? { label: 'ثبت اولین کالا', onClick: () => setNewItemModalOpen(true) }
-                  : { label: 'پاک کردن فیلترها', onClick: () => { setSearchQuery(''); setInventoryFilter('all'); } }}
+                title={emptyStateTitle}
+                description={emptyStateDescription}
+                primaryAction={emptyStateAction}
               />
             </div>
           ) : (
@@ -750,7 +763,11 @@ export default function InventoryPanel({
                     onDoubleClick={() => { if (!isEditing) handleDoubleClick(item); }}
                   >
                     <div className="inventory-card-visual">
-                      <InventoryThumbnail item={item} className="inventory-card-thumbnail" />
+                      <InventoryThumbnail
+                        item={item}
+                        className="inventory-card-thumbnail"
+                        onImageLoaded={onItemUpdated}
+                      />
                       <span className={`inventory-status-badge ${status.className}`}>{status.label}</span>
                     </div>
                     {isEditing ? (
@@ -877,11 +894,9 @@ export default function InventoryPanel({
                   <td colSpan={tableColumnCount}>
                     <EmptyState
                       icon={items.length === 0 ? 'box' : 'search'}
-                      title={items.length === 0 ? 'هنوز کالایی در انبار ثبت نشده' : 'موردی پیدا نشد'}
-                      description={items.length === 0 ? 'برای شروع، اولین کالا یا خدمت را ثبت کنید.' : 'عبارت جستجو را تغییر دهید یا فیلتر را پاک کنید.'}
-                      primaryAction={items.length === 0
-                        ? { label: 'ثبت اولین کالا', onClick: () => setNewItemModalOpen(true) }
-                        : { label: 'پاک کردن فیلترها', onClick: () => { setSearchQuery(''); setInventoryFilter('all'); } }}
+                      title={emptyStateTitle}
+                      description={emptyStateDescription}
+                      primaryAction={emptyStateAction}
                     />
                   </td>
                 </tr>
@@ -965,7 +980,7 @@ export default function InventoryPanel({
                           </div>
                         ) : (
                           <div className="inventory-item-title">
-                            <InventoryThumbnail item={item} />
+                            <InventoryThumbnail item={item} onImageLoaded={onItemUpdated} />
                             <span>{item.title}</span>
                           </div>
                         )}

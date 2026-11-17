@@ -80,7 +80,7 @@ const hasInventoryReference = (value) => (
   && !String(value).startsWith('restored-')
 );
 
-export default function QuotationPanel({ inventoryItems = [], onItemSelected, onInventoryChanged, selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
+export default function QuotationPanel({ inventoryItems = [], onItemSelected, onInventoryChanged, onInventoryItemUpdated, selectedItems = [], setSelectedItems, businessName = 'تشریفات آژو', logoUrl = '/azho-logo.png', businessContact }) {
   const { toast, confirm } = useToast();
   const items = selectedItems || [];
   const [customers, setCustomers] = useState([]);
@@ -1418,7 +1418,10 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                               </div>
                             ) : (
                               <div className="quotation-inventory-item-name">
-                                <InventoryThumbnail item={item} />
+                                <InventoryThumbnail
+                                  item={item}
+                                  onImageLoaded={onInventoryItemUpdated}
+                                />
                                 <span>{item.title}</span>
                               </div>
                             )}

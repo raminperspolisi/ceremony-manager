@@ -143,6 +143,28 @@ test('warmOfflineCache stores bot orders and inventory operations for offline ac
   assert.deepEqual(result.data, [cachedOrder]);
 });
 
+test('warmOfflineCache refreshes only the requested tables when scoped', async () => {
+  setOfflineUser('offline-sync-test-user');
+  setOfflineOrganization('offline-sync-test-organization');
+  globalThis.navigator.onLine = true;
+  const requestedTables = new Set();
+  globalThis.fetch = async (input) => {
+    const url = new URL(input);
+    requestedTables.add(url.pathname.split('/').pop());
+    return new Response('[]', {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Range': '*/0',
+      },
+    });
+  };
+
+  await warmOfflineCache({ tables: ['bot_orders'] });
+
+  assert.deepEqual([...requestedTables], ['bot_orders']);
+});
+
 test('offline stock movements remap warehouse IDs before synchronization', async () => {
   setOfflineUser('offline-inventory-sync-test-user');
   setOfflineOrganization('offline-inventory-sync-test-organization');
@@ -286,7 +308,7 @@ test('unbounded table reads fetch every server page', async () => {
   setOfflineUser('offline-sync-pagination-test-user');
   setOfflineOrganization('offline-sync-pagination-test-organization');
   globalThis.navigator.onLine = true;
-  const rows = Array.from({ length: 1001 }, (_, index) => ({ id: index + 1 }));
+  const rows = Array.from({ length: 136 }, (_, index) => ({ id: index + 1 }));
   const requestedRanges = [];
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input, init = {}) => {
@@ -302,20 +324,72 @@ test('unbounded table reads fetch every server page', async () => {
       ? Number(range.split('-')[1])
       : start + Number(url.searchParams.get('limit') || 1000) - 1;
     requestedRanges.push([start, end]);
-    return new Response(JSON.stringify(rows.slice(start, end + 1)), {
+    const responseEnd = Math.min(end, start + 99, rows.length - 1);
+    return new Response(JSON.stringify(rows.slice(start, responseEnd + 1)), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Range': `${start}-${Math.min(end, rows.length - 1)}/${rows.length}`,
+        'Content-Range': `${start}-${responseEnd}/${rows.length}`,
       },
     });
   };
 
   try {
-    const result = await readTable('invoices', { orderBy: 'id', ascending: true });
+    const result = await readTable('invoices', {
+      orderBy: 'id',
+      ascending: true,
+      requireOnline: true,
+    });
     assert.equal(result.error, null);
-    assert.equal(result.data.length, 1001);
-    assert.deepEqual(requestedRanges, [[0, 999], [1000, 1999]]);
+    assert.equal(result.data.length, 136);
+    assert.deepEqual(requestedRanges, [[0, 99], [100, 199]]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.navigator.onLine = false;
+  }
+});
+
+test('warmOfflineCache stores every inventory row across 100-row server pages', async () => {
+  setOfflineUser('offline-inventory-cache-pagination-test-user');
+  setOfflineOrganization('offline-inventory-cache-pagination-test-organization');
+  globalThis.navigator.onLine = true;
+  const rows = Array.from({ length: 136 }, (_, index) => ({
+    id: index + 1,
+    title: `کالا ${index + 1}`,
+    sort_order: index + 1,
+  }));
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(input);
+    if (!url.pathname.endsWith('/inventory')) {
+      return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    const selectedColumns = url.searchParams.get('select');
+    assert.ok(selectedColumns.includes('title'));
+    assert.equal(selectedColumns.includes('image'), false);
+    const range = new Headers(init.headers).get('range');
+    const start = range
+      ? Number(range.split('-')[0])
+      : Number(url.searchParams.get('offset') || 0);
+    const end = range
+      ? Number(range.split('-')[1])
+      : start + Number(url.searchParams.get('limit') || 100) - 1;
+    const responseEnd = Math.min(end, start + 99, rows.length - 1);
+    return new Response(JSON.stringify(rows.slice(start, responseEnd + 1)), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Range': `${start}-${responseEnd}/${rows.length}`,
+      },
+    });
+  };
+
+  try {
+    await warmOfflineCache({ tables: ['inventory'] });
+    globalThis.navigator.onLine = false;
+    const cachedRows = await readTable('inventory', { orderBy: ['sort_order', 'id'] });
+    assert.equal(cachedRows.offline, true);
+    assert.equal(cachedRows.data.length, 136);
   } finally {
     globalThis.fetch = previousFetch;
     globalThis.navigator.onLine = false;
@@ -345,11 +419,49 @@ test('inventory reads allow slower server responses and flag cached fallback dat
     assert.equal(result.offline, true);
     assert.equal(result.data[0].id, cachedItem.data[0].id);
     assert.ok(timeoutDelays.includes(20000));
+
+    const refreshedResult = await readTable('inventory', { requireOnline: true });
+    assert.equal(refreshedResult.offline, true);
+    assert.equal(refreshedResult.data, null);
+    assert.match(refreshedResult.error.message, /سرور پاسخ نداد/);
   } finally {
     globalThis.fetch = previousFetch;
     globalThis.window.setTimeout = previousSetTimeout;
     globalThis.navigator.onLine = false;
   }
+});
+
+test('failed inventory reads without cached rows return an error instead of an empty list', async () => {
+  setOfflineUser('offline-inventory-empty-read-test-user');
+  setOfflineOrganization('offline-inventory-empty-read-test-organization');
+  globalThis.navigator.onLine = true;
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new TypeError('Failed to fetch');
+  };
+
+  try {
+    const result = await readTable('inventory');
+    assert.equal(result.data, null);
+    assert.match(result.error.message, /سرور پاسخ نداد/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.navigator.onLine = false;
+  }
+});
+
+test('required online reads do not present cached products as freshly updated while offline', async () => {
+  setOfflineUser('offline-required-refresh-test-user');
+  setOfflineOrganization('offline-required-refresh-test-organization');
+  const cachedItem = await insertRows('inventory', [{ title: 'کالای ذخیره‌شده' }]);
+  globalThis.navigator.onLine = false;
+
+  const result = await readTable('inventory', { requireOnline: true });
+
+  assert.equal(result.data, null);
+  assert.equal(result.offline, true);
+  assert.match(result.error.message, /اتصال اینترنت لازم است/);
+  assert.ok(cachedItem.data[0].id);
 });
 
 test('offline records are isolated between organizations for the same user', async () => {

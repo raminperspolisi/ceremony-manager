@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ceremony-manager-shell-v3';
+const CACHE_NAME = 'ceremony-manager-shell-v4';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -15,7 +15,7 @@ const APP_SHELL = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    fetch('/index.html')
+    fetch('/index.html', { cache: 'no-store' })
       .then(async (response) => {
         if (!response.ok) throw new Error('Could not preload the application shell.');
         const html = await response.text();
@@ -49,7 +49,7 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-store' })
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
@@ -64,7 +64,7 @@ self.addEventListener('fetch', (event) => {
     const cached = await caches.match(request, { ignoreVary: true });
     if (url.pathname.startsWith('/assets/')) {
       try {
-        const response = await fetch(request);
+        const response = await fetch(request, { cache: 'no-store' });
         if (response.ok && response.type === 'basic') {
           const copy = response.clone();
           void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));

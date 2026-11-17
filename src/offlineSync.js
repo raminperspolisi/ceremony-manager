@@ -2,10 +2,33 @@ import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from './supabaseClient.js';
 
 const DATABASE_NAME = 'ceremony-manager-offline';
 const DATABASE_VERSION = 1;
-const CACHE_PAGE_SIZE = 1000;
+const CACHE_PAGE_SIZE = 100;
 const READ_TIMEOUT_MS = 8000;
 const INVENTORY_READ_TIMEOUT_MS = 20000;
+export const INVENTORY_LIST_COLUMNS = 'id, organization_id, title, item_type, sort_order, base_cost, price_level1, price_level2, price_level3, minimum_stock';
 const PENDING_ID_PREFIX = 'offline:';
+const OFFLINE_CACHE_TABLES = [
+  'customers',
+  'ceremonies',
+  'events',
+  'event_tasks',
+  'inventory',
+  'quotations',
+  'invoices',
+  'invoice_expenses',
+  'financial_accounts',
+  'cash_transactions',
+  'bot_catalog_items',
+  'bot_orders',
+  'inventory_warehouses',
+  'inventory_suppliers',
+  'inventory_stock_movements',
+  'inventory_purchase_receipts',
+  'inventory_transfers',
+  'inventory_reservations',
+  'business_contacts',
+  'workspace_tasks',
+];
 const TENANT_TABLES = new Set([
   'customers',
   'ceremonies',
@@ -168,6 +191,7 @@ const localizeRows = async (userId, table, rows) => {
       transfer_to_account_id: 'financial_accounts',
       invoice_id: 'invoices',
       event_id: 'events',
+      reversal_of_transaction_id: 'cash_transactions',
     },
     inventory_stock_movements: {
       inventory_id: 'inventory',
@@ -285,14 +309,18 @@ const projectColumns = (rows, columns) => {
 
 const sortRows = (rows, orderBy, ascending = true) => {
   if (!orderBy) return rows;
+  const columns = Array.isArray(orderBy) ? orderBy : [orderBy];
   const direction = ascending ? 1 : -1;
   return rows.sort((first, second) => {
-    const a = first[orderBy];
-    const b = second[orderBy];
-    if (a === b) return 0;
-    if (a === null || a === undefined) return -direction;
-    if (b === null || b === undefined) return direction;
-    return (a < b ? -1 : 1) * direction;
+    for (const column of columns) {
+      const a = first[column];
+      const b = second[column];
+      if (a === b) continue;
+      if (a === null || a === undefined) return -direction;
+      if (b === null || b === undefined) return direction;
+      return (a < b ? -1 : 1) * direction;
+    }
+    return 0;
   });
 };
 
@@ -311,7 +339,8 @@ const buildQuery = (
     else if (filter.operator === 'isNull') query = query.is(filter.column, null);
     else query = query.eq(filter.column, filter.value);
   }
-  if (orderBy) query = query.order(orderBy, { ascending });
+  const orderColumns = Array.isArray(orderBy) ? orderBy : orderBy ? [orderBy] : [];
+  for (const column of orderColumns) query = query.order(column, { ascending });
   if (offset !== undefined && limit) query = query.range(offset, offset + limit - 1);
   else if (limit) query = query.limit(limit);
   return query;
@@ -343,6 +372,8 @@ export const subscribeOfflineSyncStatus = (listener) => {
 };
 
 export async function readTable(table, options = {}) {
+  const requireOnline = options.requireOnline === true;
+  let networkReadError = null;
   try {
     const userId = await getUserId();
     const organizationId = organizationIdForScope(userId);
@@ -393,10 +424,33 @@ export async function readTable(table, options = {}) {
         return { data: data || [], error: null, offline: false };
       }
       if (!isNetworkError(error)) return { data: null, error };
+      networkReadError = error;
       notifyStatus(navigator.onLine ? 'server-unavailable' : 'offline-pending');
+      if (requireOnline) {
+        return {
+          data: null,
+          error: { message: 'سرور پاسخ نداد؛ فهرست تازه دریافت نشد.' },
+          offline: true,
+        };
+      }
+    }
+
+    if (requireOnline) {
+      return {
+        data: null,
+        error: { message: 'برای دریافت فهرست تازه از سرور، اتصال اینترنت لازم است.' },
+        offline: true,
+      };
     }
 
     let rows = await getCachedRows(userId, table);
+    if (table === 'inventory' && networkReadError && rows.length === 0) {
+      return {
+        data: null,
+        error: { message: 'سرور پاسخ نداد؛ فهرست کالاها دریافت نشد.' },
+        offline: true,
+      };
+    }
     rows = filterRows(rows, options.filters);
     sortRows(rows, options.orderBy, options.ascending);
     if (options.offset !== undefined && options.limit) rows = rows.slice(options.offset, options.offset + options.limit);
@@ -601,6 +655,53 @@ export async function recordCashTransaction(transaction) {
     window.dispatchEvent(new Event('offline-data-updated'));
     if (navigator.onLine) void syncPendingMutations();
     return { data: localRow, error: null, offline: true };
+  } catch (error) {
+    return { data: null, error: { message: error.message } };
+  }
+}
+
+export async function reverseCashTransaction(transactionId, reason) {
+  if (!navigator.onLine) {
+    return { data: null, error: { message: 'برای ثبت برگشت مالی، اتصال اینترنت لازم است.' } };
+  }
+
+  try {
+    const userId = await getUserId();
+    if ((await getPendingMutations(userId)).length) {
+      return {
+        data: null,
+        error: { message: 'ابتدا تغییرهای در صف همگام‌سازی را کامل کنید؛ سپس برگشت مالی را ثبت کنید.' },
+      };
+    }
+
+    const serverTransactionId = await resolveServerId(userId, 'cash_transactions', transactionId);
+    if (isPendingId(serverTransactionId)) {
+      return {
+        data: null,
+        error: { message: 'ابتدا گردش اصلی را همگام‌سازی کنید؛ سپس برگشت مالی را ثبت کنید.' },
+      };
+    }
+
+    const { data, error } = await supabase.rpc('reverse_cash_transaction', {
+      p_transaction_id: serverTransactionId,
+      p_reason: reason,
+    });
+    if (error) return { data: null, error };
+    if (!data?.transaction) {
+      return { data: null, error: { message: 'پاسخ ثبت برگشت از سرور معتبر نیست.' } };
+    }
+
+    await applyCashTransactionResult(userId, null, data);
+    if (data.invoice_expense_id) {
+      await updateCachedRows(
+        userId,
+        'invoice_expenses',
+        [{ column: 'id', operator: 'eq', value: data.invoice_expense_id }],
+        { is_paid: false, payment_date: null, account_id: null, cash_transaction_id: null },
+      );
+      window.dispatchEvent(new Event('offline-data-updated'));
+    }
+    return { data, error: null, offline: false };
   } catch (error) {
     return { data: null, error: { message: error.message } };
   }
@@ -817,34 +918,19 @@ async function mustQueueBehindPendingMutations(userId) {
   return (await getPendingMutations(userId)).length > 0;
 }
 
-export async function warmOfflineCache() {
-  const tables = [
-    'customers',
-    'ceremonies',
-    'events',
-    'event_tasks',
-    'inventory',
-    'quotations',
-    'invoices',
-    'invoice_expenses',
-    'financial_accounts',
-    'cash_transactions',
-    'bot_catalog_items',
-    'bot_orders',
-    'inventory_warehouses',
-    'inventory_suppliers',
-    'inventory_stock_movements',
-    'inventory_purchase_receipts',
-    'inventory_transfers',
-    'inventory_reservations',
-    'business_contacts',
-    'workspace_tasks',
-  ];
+export async function warmOfflineCache({ tables = OFFLINE_CACHE_TABLES } = {}) {
+  if (!Array.isArray(tables)) throw new TypeError('فهرست جدول‌های حافظهٔ آفلاین معتبر نیست.');
+  const selectedTables = [...new Set(tables)];
+  const unsupportedTables = selectedTables.filter((table) => !OFFLINE_CACHE_TABLES.includes(table));
+  if (unsupportedTables.length) {
+    throw new Error(`جدول‌های حافظهٔ آفلاین پشتیبانی نمی‌شوند: ${unsupportedTables.join('، ')}`);
+  }
   const failures = [];
-  await Promise.all(tables.map(async (table) => {
+  await Promise.all(selectedTables.map(async (table) => {
     const serverRows = [];
     for (let offset = 0; ; offset += CACHE_PAGE_SIZE) {
       const result = await readTable(table, {
+        ...(table === 'inventory' ? { columns: INVENTORY_LIST_COLUMNS } : {}),
         orderBy: 'id',
         ascending: true,
         offset,
@@ -863,7 +949,7 @@ export async function warmOfflineCache() {
     }
   }));
   if (failures.length) throw new Error(`ذخیرهٔ آفلاین بعضی اطلاعات ناموفق بود: ${failures.join('؛ ')}`);
-  window.dispatchEvent(new Event('offline-data-updated'));
+  if (selectedTables.length) window.dispatchEvent(new Event('offline-data-updated'));
 }
 
 const applyMutation = async (userId, mutation) => {
