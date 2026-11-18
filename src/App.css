@@ -5158,7 +5158,7 @@ textarea:focus-visible {
   .home-dashboard-metrics {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    align-items: start;
+    align-items: stretch;
     gap: 13px;
   }
 
@@ -12678,7 +12678,7 @@ body,
 }
 
 .app-container .panel-container :is(section, article, fieldset, [class*="card"], [class*="panel"], [class*="list"], [class*="toolbar"], [class*="filter"]) {
-  border-color: #e2e9e3 !important;
+  border-color: #cbd7ce !important;
   background-color: #fff !important;
   color: #263a32 !important;
   box-shadow: 0 2px 10px rgb(26 51 44 / 4%) !important;
@@ -13203,15 +13203,15 @@ body {
 }
 
 @media (max-width: 700px) {
-  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) {
+  .app-container .panel-container .home-dashboard-metrics > .home-metric-card {
     min-height: 110px;
     padding: 14px 14px 14px 64px;
     gap: 5px;
   }
 
-  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) > span,
-  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) > strong,
-  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) > small {
+  .home-dashboard-metrics > .home-metric-card > span,
+  .home-dashboard-metrics > .home-metric-card > strong,
+  .home-dashboard-metrics > .home-metric-card > small {
     grid-column: 1;
     grid-row: auto;
     min-width: 0;
@@ -13220,13 +13220,12 @@ body {
     overflow-wrap: anywhere;
   }
 
-  .home-dashboard-metrics > .home-metric-card:not(.home-metric-notebook) > strong {
+  .home-dashboard-metrics > .home-metric-card > strong {
     font-size: clamp(16px, 4.2vw, 18px);
   }
 
   .home-metric-notebook {
     grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
   }
 }
 
@@ -13269,15 +13268,27 @@ body {
   font-weight: 700;
 }
 
-.app-container .panel-container .home-metric-notebook {
-  border-color: #d8ebe3 !important;
-  background: linear-gradient(135deg, #effbf5, #fff 84%) !important;
+.app-container .panel-container .home-dashboard-metrics > .home-metric-card {
+  min-height: 142px;
+  border-color: #e2e9e3 !important;
+  background: linear-gradient(135deg, #f7faf8, #fff 84%) !important;
   box-shadow: 0 10px 25px rgb(26 45 66 / 7%) !important;
   color: #263a32 !important;
 }
 
-.app-container .panel-container .home-metric-notebook::after {
-  background: rgb(53 167 122 / 13%);
+.home-dashboard-metrics > .home-metric-card::after {
+  background: rgb(53 167 122 / 10%);
+}
+
+.home-dashboard-metrics > .home-metric-card.home-metric-notebook {
+  padding-left: 76px;
+}
+
+@media (max-width: 700px) {
+  .home-dashboard-metrics > .home-metric-card {
+    min-height: 110px;
+    padding: 14px 14px 14px 64px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

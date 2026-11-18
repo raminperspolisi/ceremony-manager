@@ -3,9 +3,6 @@
   align-content: start;
   justify-items: stretch;
   gap: 8px;
-  padding: 18px;
-  border-color: #d8ebe3 !important;
-  background: linear-gradient(135deg, #effbf5, #fff 84%) !important;
   text-align: right;
 }
 
@@ -16,7 +13,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px 10px;
-  padding: 0 0 0 52px;
+  padding: 0;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -423,10 +420,6 @@
 }
 
 @media (max-width: 700px) {
-  .home-metric-notebook {
-    padding: 14px;
-  }
-
   .home-notebook-modal {
     max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     padding: 14px;
