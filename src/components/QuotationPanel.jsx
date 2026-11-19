@@ -548,6 +548,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       const quotationPayload = {
         customer_name: selectedCustomer["Full name"],
         customer_phone: selectedCustomer.phone || '',
+        customer_address: selectedCustomer.address || '',
         items_json: itemsPayload,
         total_price: finalTotal,
         discount_amount: numericDiscount,
@@ -655,10 +656,13 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       const result = await convertQuotationToInvoice(inv, { readTable, insertRows });
       if (result.alreadyConverted) {
         toast('info', `این پیش‌فاکتور قبلاً به فاکتور رسمی شمارهٔ ${formatPersianDigits(result.invoice.id)} تبدیل شده است.`);
+      } else if (result.offline) {
+        toast('info', 'فاکتور رسمی در این دستگاه ثبت شد و پس از برقراری اتصال همگام‌سازی می‌شود.');
       } else {
         toast('success', 'فاکتور رسمی با موفقیت صادر شد و در گزارش مالی قرار گرفت.');
       }
       await fetchInvoices();
+      window.dispatchEvent(new Event('offline-data-updated'));
     } catch (error) {
       const detail = error.code === '23505'
         ? 'این پیش‌فاکتور قبلاً از دستگاه دیگری به فاکتور رسمی تبدیل شده است؛ فهرست را تازه‌سازی کنید.'

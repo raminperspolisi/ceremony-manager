@@ -1,0 +1,260 @@
+:root {
+  color-scheme: light;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-small: 8px;
+  --radius-medium: 12px;
+  --radius-large: 16px;
+  --shadow-subtle: 0 2px 8px rgb(23 43 39 / 6%);
+  --shadow-raised: 0 10px 28px rgb(23 43 39 / 10%);
+  --transition-fast: 160ms ease;
+}
+
+html {
+  min-width: 0;
+  scroll-behavior: smooth;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: clamp(14px, 0.9rem, 16px);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-height-fa);
+}
+
+#root {
+  min-width: 0;
+  width: 100%;
+}
+
+#root :is(button, input, select, textarea) {
+  font-family: var(--font-family);
+}
+
+#root button {
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+#root :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+#root button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+#root .app-container,
+#root .app-layout,
+#root .main-content,
+#root .panel-container {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#root .app-container.window-normal {
+  width: min(1500px, calc(100% - clamp(24px, 4vw, 48px))) !important;
+}
+
+#root .main-content {
+  padding-inline: clamp(16px, 2.4vw, 32px);
+}
+
+#root .main-content[class*="page-theme-"] > :is(.page-heading, .panel-container) {
+  border-color: var(--color-border) !important;
+  border-radius: var(--radius-large) !important;
+  box-shadow: var(--shadow-subtle) !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#root .main-content[class*="page-theme-"] > .page-heading {
+  background: linear-gradient(110deg, #fffdf8, #f8f5eb) !important;
+}
+
+#root .main-content[class*="page-theme-"] > .panel-container {
+  background: #fffdf9 !important;
+}
+
+#root .panel-container :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select,
+  textarea
+) {
+  min-width: 0;
+  max-width: 100%;
+  margin-bottom: 0;
+  border-color: var(--color-border);
+  border-radius: var(--radius-small);
+  font-size: 14px;
+  line-height: 1.6;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+
+#root .panel-container :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select
+) {
+  min-height: 42px !important;
+  height: auto !important;
+  padding: 8px 12px !important;
+}
+
+#root .panel-container textarea {
+  min-height: 92px;
+  padding: 10px 12px !important;
+}
+
+#root .panel-container :is(input, select, textarea):focus-visible {
+  border-color: var(--color-brand) !important;
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--color-focus-ring) !important;
+}
+
+#root .panel-container :is(input[type="checkbox"], input[type="radio"]) {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-brand);
+  vertical-align: middle;
+}
+
+#root .panel-container input[type="file"] {
+  max-width: 100%;
+  margin: 0;
+}
+
+#root .app-container .panel-container button:not(.nav-button):not(.calendar-day):not(.icon-button) {
+  min-height: 40px !important;
+  padding: 8px 12px !important;
+  border-radius: var(--radius-small) !important;
+  line-height: 1.5;
+}
+
+#root .panel-container :is(table button, .calendar-grid button) {
+  min-height: 34px !important;
+}
+
+#root .panel-container table {
+  max-width: 100%;
+  border-color: var(--color-border);
+}
+
+#root .panel-container :is(th, td) {
+  overflow-wrap: anywhere;
+}
+
+#root .panel-container :is(
+  .home-metric-card,
+  .home-dashboard-card,
+  .home-dashboard-shortcuts,
+  .business-contact-card,
+  .home-reminder-item,
+  .home-ceremony-item,
+  .home-event-task-item
+) {
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-medium);
+}
+
+#root .sms-auth-screen {
+  background:
+    radial-gradient(ellipse at 12% 8%, rgb(226 183 91 / 16%), transparent 34rem),
+    linear-gradient(145deg, #f7f5ed, #edf3ef);
+}
+
+#root .sms-auth-panel {
+  border-color: var(--color-border);
+  border-radius: 20px;
+  box-shadow: var(--shadow-raised);
+}
+
+#root .sms-auth-primary {
+  background: var(--color-brand);
+}
+
+#root .sms-auth-primary:hover:not(:disabled) {
+  background: var(--color-brand-hover);
+  box-shadow: 0 6px 16px rgb(40 100 90 / 18%);
+}
+
+@media (max-width: 900px) {
+  #root .app-container.window-normal {
+    width: calc(100% - 24px) !important;
+    margin: 12px auto !important;
+  }
+
+  #root .main-content {
+    padding-inline: clamp(12px, 3vw, 20px);
+  }
+}
+
+@media (max-width: 600px) {
+  #root .app-container.window-normal {
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  #root .main-content {
+    padding-inline: 12px;
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+  }
+
+  #root .main-content[class*="page-theme-"] > :is(.page-heading, .panel-container) {
+    border-radius: var(--radius-medium) !important;
+  }
+
+  #root .app-container .panel-container button:not(.nav-button):not(.calendar-day):not(.icon-button) {
+    min-height: 44px !important;
+  }
+
+  #root .panel-container :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    select
+  ) {
+    min-height: 44px !important;
+  }
+
+  #root .panel-container :is(.table-responsive, [class*="table-wrap"], [class*="table-wrapper"]) {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 420px) {
+  #root .sms-auth-screen {
+    padding: 12px;
+  }
+
+  #root .sms-auth-panel {
+    min-height: 0;
+    border-radius: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  #root button {
+    transition: none;
+  }
+}

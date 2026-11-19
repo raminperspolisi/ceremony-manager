@@ -4,6 +4,7 @@ import './design-tokens.css'
 import './index.css'
 import './App.css'
 import './components/shared-components.css'
+import './visual-polish.css'
 import App from './App.jsx'
 import { ToastProvider } from './components/ToastProvider.jsx'
 

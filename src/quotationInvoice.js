@@ -150,10 +150,11 @@ export async function convertQuotationToInvoice(quotation, { readTable, insertRo
 
   const quotationItems = quotation.items_json || quotation.items_data || [];
   const { items } = await ensureQuotationInventoryLinks(quotationItems, { readTable, insertRows });
-  const { data, error } = await insertRows('invoices', [{
+  const insertResult = await insertRows('invoices', [{
     quotation_id: String(quotation.id),
     customer_name: quotation.customer_name,
     customer_phone: quotation.customer_phone || quotation.phone || '',
+    customer_address: quotation.customer_address || quotation.address || '',
     total_price: quotation.total_price,
     discount_amount: Number(quotation.discount_amount || 0),
     paid_amount: 0,
@@ -161,8 +162,14 @@ export async function convertQuotationToInvoice(quotation, { readTable, insertRo
     items_data: items,
     is_official: true,
   }]);
+  const { data, error } = insertResult;
   if (error) throw error;
-  return { alreadyConverted: false, invoice: data?.[0] || null };
+  if (!data?.[0]) throw new Error('فاکتور ثبت نشد، اما هیچ خطایی از پایگاه داده دریافت نشد.');
+  return {
+    alreadyConverted: false,
+    invoice: data[0],
+    offline: Boolean(insertResult?.offline),
+  };
 }
 
 export function getInvoiceDeletionErrorMessage(error) {

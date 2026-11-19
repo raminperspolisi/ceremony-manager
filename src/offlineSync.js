@@ -625,7 +625,18 @@ export async function recordCashTransaction(transaction) {
       return { data, error: null, offline: false };
     }
 
-    if (!isNetworkError(error)) return { data: null, error };
+    if (!isNetworkError(error)) {
+      const missingReceiptColumn = /reference_number|receipt_note/i.test(error.message || '');
+      return {
+        data: null,
+        error: {
+          ...error,
+          message: missingReceiptColumn
+            ? `${error.message}. ابتدا migration supabase/migrations/20261119000000_reconcile_cashbook_receipt_columns.sql را در SQL Editor سوپابیس اجرا کنید.`
+            : error.message,
+        },
+      };
+    }
   }
 
   try {
