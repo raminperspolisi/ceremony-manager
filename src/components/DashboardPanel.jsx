@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import moment from 'jalali-moment';
 import { readTable } from '../offlineSync';
-import { formatDisplay, formatMoney, formatPersianDigits } from '../styles';
+import { formatDisplay, formatPersianDigits } from '../styles';
 import { formatDashboardDate, getPendingEventTasks, toDashboardIsoDate } from '../dashboardUtils';
 import BusinessContactCard from './BusinessContactCard';
 import DashboardTaskNotebook from './DashboardTaskNotebook';
 
 const PAGE_SIZE = 1000;
-const money = (value) => formatMoney(value);
+const money = (value) => formatDisplay(value);
 
 function DashboardListSkeleton() {
   return (
@@ -174,7 +174,6 @@ export default function DashboardPanel({
         <button type="button" className="home-metric-card home-metric-receivables" onClick={() => navigate('reminders')}>
           <span>مطالبات از مشتریان</span>
           <strong>{loading ? '—' : money(receivables)}</strong>
-          <small>برای پیگیری و ثبت دریافت</small>
         </button>
         <button type="button" className="home-metric-card home-metric-events" onClick={() => navigate('calendar')}>
           <span>مراسم‌های ۳۰ روز آینده</span>
