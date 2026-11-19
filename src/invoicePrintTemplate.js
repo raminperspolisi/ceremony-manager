@@ -128,6 +128,39 @@ export function buildInvoicePrintHtml({
           .signature + .signature { border-right: 1px solid #cbd9d5; }
           .fit-warning { display: none; padding: 8px; color: #9a3412; font-weight: 700; }
           @media screen { body { max-width: 860px; margin: 0 auto; padding: 12px; } .paper { width: 100%; } }
+          @media screen and (max-width: 700px) {
+            body { width: 100%; max-width: 100%; min-width: 0; padding: 8px; overflow-x: hidden; }
+            .paper { width: 100%; min-width: 0; padding: 7px; border-width: 2px; }
+            .top-grid { grid-template-columns: 1fr; }
+            .business-block { border-left: 0; border-bottom: 1px solid #28645a; }
+            .company-logo { width: 44px; height: 44px; }
+            .contact-block { min-height: 42px; }
+            .business-name { font-size: 13px; }
+            .document-meta, .customer-meta { grid-template-columns: 1fr; }
+            .document-meta span, .customer-meta span { grid-column: 1 / -1; border-left: 0; }
+            table { display: block; }
+            thead { display: none; }
+            tbody { display: grid; gap: 6px; }
+            .invoice-item-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #cbd5d1; border-radius: 8px; overflow: hidden; }
+            .invoice-item-row td { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 6px; border: 0; border-bottom: 1px solid #e2e8e5; border-left: 1px solid #e2e8e5; text-align: right; }
+            .invoice-item-row td::before { flex: 0 0 auto; color: #64748b; font-size: 8px; font-weight: 700; }
+            .invoice-item-row td:nth-child(1)::before { content: 'ردیف'; }
+            .invoice-item-row td:nth-child(2)::before { content: 'کالا'; }
+            .invoice-item-row td:nth-child(3)::before { content: 'نوع'; }
+            .invoice-item-row td:nth-child(4)::before { content: 'تعداد'; }
+            .invoice-item-row td:nth-child(5)::before { content: 'اجاره'; }
+            .invoice-item-row td:nth-child(6)::before { content: 'قیمت واحد'; }
+            .invoice-item-row td:nth-child(7)::before { content: 'جمع ردیف'; }
+            .invoice-item-row td:nth-child(2), .invoice-item-row td:nth-child(7) { grid-column: 1 / -1; }
+            .invoice-item-row td:nth-child(odd) { border-left: 1px solid #e2e8e5; }
+            .invoice-item-row td:nth-child(even) { border-left: 0; }
+            .rental-period { grid-template-columns: auto auto auto; align-items: center; }
+            .rental-date-divider { width: 8px; }
+            .bottom-grid { border-radius: 8px; overflow: hidden; }
+            .totals { grid-template-columns: 1fr; }
+            .total-row { font-size: 10px; }
+            .signatures { min-height: 36px; }
+          }
           @media print {
             html, body { width: 190mm; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .paper { width: 190mm; margin: 0; break-inside: avoid; page-break-inside: avoid; }

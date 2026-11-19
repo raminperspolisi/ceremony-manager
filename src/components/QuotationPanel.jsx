@@ -317,6 +317,26 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
     }
   };
 
+  const handleTogglePickerItem = (item) => {
+    if (!setSelectedItems) {
+      handleAddPickerItem(item);
+      return;
+    }
+    setSelectedItems((currentItems) => {
+      const existing = currentItems.find((currentItem) => (
+        String(currentItem.inventory_id || currentItem.id) === String(item.id)
+      ));
+      if (existing) {
+        return currentItems.filter((currentItem) => (
+          String(currentItem.inventory_id || currentItem.id) !== String(item.id)
+        ));
+      }
+      const quantity = Number(pickerQuantities[item.id] ?? 1);
+      if (!Number.isFinite(quantity) || quantity <= 0) return currentItems;
+      return [...currentItems, { ...item, requestedQuantity: quantity, quantity }];
+    });
+  };
+
   const handleStartInventoryItemEdit = (item) => {
     setEditingInventoryItemId(item.id);
     setInventoryEditForm({
@@ -1397,7 +1417,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                           key={item.id}
                           className={`${isSelected ? 'selected' : ''}${isEditing ? ' editing' : ''}`}
                           onClick={() => {
-                            if (!isEditing) handleAddPickerItem(item);
+                            if (!isEditing) handleTogglePickerItem(item);
                           }}
                           onDoubleClick={() => {
                             if (!savingInventoryItem) handleStartInventoryItemEdit(item);
@@ -1405,7 +1425,10 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                           title={isEditing ? 'ویرایش کالا' : 'برای افزودن، تعداد را وارد و دکمهٔ افزودن را بزنید'}
                         >
                           <td>{isSelected ? '✓' : formatDisplay(index + 1)}</td>
-                          <td onClick={(event) => event.stopPropagation()}>
+                          <td onClick={(event) => {
+                            event.stopPropagation();
+                            if (!isEditing) handleTogglePickerItem(item);
+                          }}>
                             {isEditing ? (
                               <div className="quotation-inventory-edit-item">
                                 <input
@@ -1527,9 +1550,12 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                                 <button
                                   type="button"
                                   className="quotation-inventory-picker-select-button"
-                                  onClick={() => handleAddPickerItem(item)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleTogglePickerItem(item);
+                                  }}
                                 >
-                                  {isSelected ? 'ثبت تعداد' : 'افزودن'}
+                                  {isSelected ? 'حذف از فاکتور' : 'افزودن'}
                                 </button>
                                 <button
                                   type="button"

@@ -113,7 +113,6 @@ export default function ImageUpload({ value, onChange, onError, label = 'تصو�
               حذف تصویر
             </button>
           )}
-          <small>JPG، PNG یا WebP · تصویرهای بزرگ‌تر خودکار فشرده می‌شوند (حداکثر ۵ مگابایت)</small>
         </div>
       </div>
     </div>

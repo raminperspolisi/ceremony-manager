@@ -347,7 +347,6 @@ export default function BusinessContactsPanel({ organizationId }) {
             <div className="business-contact-card-upload">
               <label htmlFor="business-contact-personal-photo-file">عکس پرسنلی</label>
               <input id="business-contact-personal-photo-file" type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePersonalPhotoChange} />
-              <small>JPG، PNG یا WebP؛ حداکثر ۵ مگابایت</small>
               {personalPhotoFile && <small>{personalPhotoFile.name}</small>}
               {!personalPhotoFile && form.personal_photo_path && !removePersonalPhoto && (
                 <>
@@ -360,7 +359,6 @@ export default function BusinessContactsPanel({ organizationId }) {
             <div className="business-contact-card-upload">
               <label htmlFor="business-contact-card-file">تصویر کارت ویزیت</label>
               <input id="business-contact-card-file" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleCardFileChange} />
-              <small>JPG، PNG یا WebP؛ حداکثر ۵ مگابایت</small>
               {cardFile && <small>{cardFile.name}</small>}
               {!cardFile && editingCardUrl && !removeCard && (
                 <>

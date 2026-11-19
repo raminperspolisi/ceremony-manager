@@ -2064,6 +2064,74 @@ textarea:focus-visible {
 }
 
 @media (max-width: 600px) {
+  .quotation-inventory-picker {
+    width: 100%;
+    max-height: 96dvh;
+  }
+
+  .quotation-inventory-picker-list {
+    overflow-x: hidden;
+  }
+
+  .quotation-inventory-picker .quotation-inventory-picker-table {
+    display: block;
+    min-width: 0;
+  }
+
+  .quotation-inventory-picker-table thead {
+    display: none;
+  }
+
+  .quotation-inventory-picker-table tbody {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .quotation-inventory-picker-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    padding: 8px;
+    border: 1px solid #e1e8e4;
+    border-radius: 10px;
+    background: #fff;
+  }
+
+  .quotation-inventory-picker-table tbody tr.selected {
+    border-color: #86bfa7;
+    background: #effaf4;
+  }
+
+  .quotation-inventory-picker-table td {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 7px 4px !important;
+    border-bottom: 1px solid #edf1ef;
+    white-space: normal;
+  }
+
+  .quotation-inventory-picker-table td:nth-child(2),
+  .quotation-inventory-picker-table td:nth-child(10),
+  .quotation-inventory-picker-table td:nth-child(11) {
+    grid-column: 1 / -1;
+  }
+
+  .quotation-inventory-picker-table td:nth-child(2) {
+    justify-content: flex-start;
+  }
+
+  .quotation-inventory-picker-row-actions {
+    width: 100%;
+  }
+
+  .quotation-inventory-picker-row-actions button {
+    flex: 1 1 0;
+  }
+
   .business-logo-settings {
     grid-template-columns: 76px minmax(0, 1fr);
     gap: 10px;
