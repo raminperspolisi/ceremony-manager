@@ -511,6 +511,7 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       return;
     }
 
+    const printWindow = window.open('', '_blank');
     setIsSaving(true);
     try {
       if (editingQuotationId && savedInvoices.some((invoice) => (
@@ -590,7 +591,6 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
       }
       await fetchInvoices();
 
-      const printWindow = window.open("", "_blank");
       if (printWindow) {
         const quotationRows = linkedItems.map((item) => {
           const quantity = getQuantity(item.requestedQuantity);
@@ -642,8 +642,11 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
         });
         printWindow.document.write(quotationHtml);
         printWindow.document.close();
+      } else {
+        toast('warning', 'پیش‌فاکتور ذخیره شد؛ مرورگر پنجرهٔ چاپ را مسدود کرد. اجازهٔ بازشدن پنجره‌های جدید را فعال کنید و دوباره تلاش کنید.');
       }
     } catch (err) { 
+      if (printWindow && !printWindow.closed) printWindow.close();
       toast('error', `خطا در ذخیره‌سازی پیش‌فاکتور: ${err.message}`);
     } finally { 
       setIsSaving(false); 
