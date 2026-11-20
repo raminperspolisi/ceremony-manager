@@ -718,6 +718,52 @@ export async function reverseCashTransaction(transactionId, reason) {
   }
 }
 
+export async function editCashTransaction(transactionId, transaction, reason) {
+  if (!navigator.onLine) {
+    return { data: null, error: { message: 'برای اصلاح گردش مالی، اتصال اینترنت لازم است.' } };
+  }
+
+  try {
+    const userId = await getUserId();
+    if ((await getPendingMutations(userId)).length) {
+      return {
+        data: null,
+        error: { message: 'ابتدا تغییرهای در صف همگام‌سازی را کامل کنید؛ سپس گردش را اصلاح کنید.' },
+      };
+    }
+
+    const serverTransactionId = await resolveServerId(userId, 'cash_transactions', transactionId);
+    if (isPendingId(serverTransactionId)) {
+      return {
+        data: null,
+        error: { message: 'ابتدا گردش ذخیره‌شده را همگام‌سازی کنید؛ سپس آن را اصلاح کنید.' },
+      };
+    }
+    const organizationId = organizationIdForScope(userId);
+    const row = await rewriteReferences(userId, 'cash_transactions', {
+      ...transaction,
+      organization_id: organizationId,
+    });
+    const { data, error } = await supabase.rpc('edit_cash_transaction', {
+      p_transaction_id: serverTransactionId,
+      p_transaction: row,
+      p_reason: reason,
+    });
+    if (error) return { data: null, error };
+    if (!data?.transaction) {
+      return { data: null, error: { message: 'پاسخ اصلاح گردش از سرور معتبر نیست.' } };
+    }
+
+    await applyCashTransactionResult(userId, null, data);
+    if (data.invoice_expense) {
+      await cacheRows(userId, 'invoice_expenses', [data.invoice_expense]);
+    }
+    return { data, error: null, offline: false };
+  } catch (error) {
+    return { data: null, error: { message: error.message } };
+  }
+}
+
 export async function payInvoiceExpense(expenseId, accountId, paymentDate) {
   if (!navigator.onLine) {
     return { data: null, error: { message: 'برای ثبت پرداخت هزینهٔ فاکتور، اتصال اینترنت لازم است.' } };

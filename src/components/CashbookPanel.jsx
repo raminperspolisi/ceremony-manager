@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { insertRows, readTable, recordCashTransaction, updateRows } from '../offlineSync';
+import {
+  insertRows,
+  readTable,
+  recordCashTransaction,
+  editCashTransaction,
+  reverseCashTransaction,
+  updateRows,
+} from '../offlineSync';
 import FormattedNumberInput from './FormattedNumberInput';
 import PersianDateInput from './PersianDateInput';
 import { formatPersianDigits } from '../styles';
@@ -87,7 +94,11 @@ export default function CashbookPanel() {
   const [dateTo, setDateTo] = useState(() => localIsoDate(new Date()));
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [periodDetailsType, setPeriodDetailsType] = useState(null);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [editReason, setEditReason] = useState('');
   const [savingEventTransactionId, setSavingEventTransactionId] = useState(null);
+  const [reversalTarget, setReversalTarget] = useState(null);
+  const [reversalReason, setReversalReason] = useState('');
 
   const balances = useMemo(
     () => calculateAccountBalances(accounts, transactions),
@@ -110,6 +121,18 @@ export default function CashbookPanel() {
       String(second.transaction_date).localeCompare(String(first.transaction_date))
       || Number(second.id || 0) - Number(first.id || 0)
     )), [transactions, dateFrom, dateTo]);
+  const reversedTransactionIds = useMemo(() => new Set(
+    transactions
+      .map((transaction) => transaction.reversal_of_transaction_id)
+      .filter((id) => id !== null && id !== undefined)
+      .map(String),
+  ), [transactions]);
+  const isEditingTransactionTypeLocked = Boolean(editingTransaction && (
+    editingTransaction.invoice_id
+    || invoiceExpenseTransactionIds.has(String(editingTransaction.id))
+    || editingTransaction.reversal_of_transaction_id
+    || reversedTransactionIds.has(String(editingTransaction.id))
+  ));
   const periodCostOfGoodsEntries = useMemo(
     () => getPeriodCostOfGoodsEntries(invoices, dateFrom, dateTo),
     [invoices, dateFrom, dateTo],
@@ -135,6 +158,7 @@ export default function CashbookPanel() {
         (total, transaction) => total + Number(transaction.amount || 0),
         0,
       );
+  const isEditableCashTransaction = (transaction) => !transaction.isCostOfGoods;
   const outstandingInvoices = invoices
     .map((invoice) => ({
       ...invoice,
@@ -197,7 +221,11 @@ export default function CashbookPanel() {
     const handleAppEscape = (event) => {
       if (transactionModalOpen) {
         event.preventDefault();
-        if (!busy) setTransactionModalOpen(false);
+        if (!busy) {
+          setTransactionModalOpen(false);
+          setEditingTransaction(null);
+          setEditReason('');
+        }
         return;
       }
       if (!periodDetailsType) return;
@@ -343,6 +371,17 @@ export default function CashbookPanel() {
       setBusy(false);
       return;
     }
+    if (editingTransaction && editReason.trim().length < 4) {
+      setErrorMessage('دلیل اصلاح باید دست‌کم ۴ نویسه باشد.');
+      setBusy(false);
+      return;
+    }
+    if (isEditingTransactionTypeLocked
+      && transactionForm.transaction_type !== editingTransaction.transaction_type) {
+      setErrorMessage('نوع گردش متصل به فاکتور یا مرتبط با برگشت قابل تغییر نیست.');
+      setBusy(false);
+      return;
+    }
 
     const transaction = {
       transaction_type: transactionForm.transaction_type,
@@ -354,6 +393,20 @@ export default function CashbookPanel() {
       receipt_note: transactionForm.receipt_note.trim(),
       category: transactionForm.transaction_type === 'expense' ? transactionForm.category : null,
     };
+    const balanceAfterUndoingEdit = (accountId) => {
+      let balance = balances.get(String(accountId)) || 0;
+      if (!editingTransaction) return balance;
+      if (String(editingTransaction.account_id) === String(accountId)) {
+        balance += editingTransaction.transaction_type === 'income'
+          ? -Number(editingTransaction.amount || 0)
+          : Number(editingTransaction.amount || 0);
+      }
+      if (editingTransaction.transaction_type === 'transfer'
+        && String(editingTransaction.transfer_to_account_id) === String(accountId)) {
+        balance -= Number(editingTransaction.amount || 0);
+      }
+      return balance;
+    };
     if (transactionForm.transaction_type === 'transfer') {
       const destination = accounts.find((item) => String(item.id) === String(transactionForm.transfer_to_account_id));
       if (!destination || String(destination.id) === String(account.id)) {
@@ -361,7 +414,7 @@ export default function CashbookPanel() {
         setBusy(false);
         return;
       }
-      if ((balances.get(String(account.id)) || 0) < amount) {
+      if (balanceAfterUndoingEdit(account.id) < amount) {
         setErrorMessage('ماندهٔ حساب مبدا برای این انتقال کافی نیست.');
         setBusy(false);
         return;
@@ -369,12 +422,12 @@ export default function CashbookPanel() {
       transaction.transfer_to_account_id = destination.id;
     }
     if (transactionForm.transaction_type === 'expense'
-      && (balances.get(String(account.id)) || 0) < amount) {
+      && balanceAfterUndoingEdit(account.id) < amount) {
       setErrorMessage('ماندهٔ حساب برای پرداخت این هزینه کافی نیست.');
       setBusy(false);
       return;
     }
-    if (transactionForm.transaction_type === 'income' && transactionForm.invoice_id) {
+    if (transactionForm.transaction_type === 'income' && transactionForm.invoice_id && !editingTransaction) {
       const invoice = invoices.find((item) => String(item.id) === String(transactionForm.invoice_id));
       if (!invoice) {
         setErrorMessage('فاکتور انتخاب‌شده پیدا نشد؛ فهرست را تازه‌سازی کنید.');
@@ -392,6 +445,11 @@ export default function CashbookPanel() {
       }
       transaction.invoice_id = invoice.id;
     }
+    if (transactionForm.transaction_type === 'income' && transactionForm.invoice_id && editingTransaction) {
+      setErrorMessage('گردش متصل به فاکتور از این مسیر قابل ویرایش نیست.');
+      setBusy(false);
+      return;
+    }
     if (
       transactionForm.event_id
       && (transactionForm.transaction_type === 'expense'
@@ -400,18 +458,44 @@ export default function CashbookPanel() {
       transaction.event_id = transactionForm.event_id;
     }
 
-    const result = await recordCashTransaction(transaction);
+    const result = editingTransaction
+      ? await editCashTransaction(editingTransaction.id, transaction, editReason.trim())
+      : await recordCashTransaction(transaction);
     setBusy(false);
     if (result.error) {
-      setErrorMessage(`ثبت گردش مالی ناموفق بود: ${result.error.message}`);
+      setErrorMessage(`${editingTransaction ? 'اصلاح گردش مالی' : 'ثبت گردش مالی'} ناموفق بود: ${result.error.message}`);
       return;
     }
-    setFeedback(result.offline
-      ? 'گردش مالی در دستگاه ذخیره شد و پس از اتصال همگام می‌شود.'
-      : 'گردش مالی با موفقیت ثبت شد.');
+    setFeedback(editingTransaction
+      ? 'گردش با حفظ سابقه اصلاح شد؛ گردش قبلی برگشت خورده و نسخهٔ جدید ثبت شد.'
+      : result.offline
+        ? 'گردش مالی در دستگاه ذخیره شد و پس از اتصال همگام می‌شود.'
+        : 'گردش مالی با موفقیت ثبت شد.');
     setTransactionForm(newTransactionForm());
     setTransactionModalOpen(false);
+    setEditingTransaction(null);
+    setEditReason('');
     await refreshData();
+  };
+
+  const startEditTransaction = (transaction) => {
+    setEditingTransaction(transaction);
+    setEditReason('');
+    setErrorMessage('');
+    setTransactionForm({
+      transaction_type: transaction.transaction_type,
+      amount: String(transaction.amount ?? ''),
+      account_id: String(transaction.account_id ?? ''),
+      transfer_to_account_id: String(transaction.transfer_to_account_id ?? ''),
+      invoice_id: '',
+      event_id: String(transaction.event_id || ''),
+      category: transaction.category || EXPENSE_CATEGORIES[0],
+      description: transaction.description || '',
+      reference_number: transaction.reference_number || '',
+      receipt_note: transaction.receipt_note || '',
+      transaction_date: formatJalaliDate(transaction.transaction_date),
+    });
+    setTransactionModalOpen(true);
   };
 
   const handleTransactionEventChange = async (transaction, eventId) => {
@@ -431,6 +515,31 @@ export default function CashbookPanel() {
         : item
     )));
     window.dispatchEvent(new Event('offline-data-updated'));
+  };
+
+  const handleReversalSubmit = async (event) => {
+    event.preventDefault();
+    if (!reversalTarget) return;
+    const reason = reversalReason.trim();
+    if (reason.length < 4 || reason.length > 240) {
+      setErrorMessage('دلیل برگشت باید بین ۴ تا ۲۴۰ نویسه باشد.');
+      return;
+    }
+
+    setBusy(true);
+    setErrorMessage('');
+    setFeedback('');
+    const result = await reverseCashTransaction(reversalTarget.id, reason);
+    setBusy(false);
+    if (result.error) {
+      setErrorMessage(`ثبت برگشت ناموفق بود: ${result.error.message}`);
+      return;
+    }
+
+    setFeedback('برگشت کامل با ارجاع به گردش اصلی ثبت شد؛ سابقهٔ قبلی بدون تغییر باقی ماند.');
+    setReversalTarget(null);
+    setReversalReason('');
+    await refreshData();
   };
 
   const accountOptions = accounts.map((account) => (
@@ -808,6 +917,9 @@ export default function CashbookPanel() {
               className="cashbook-primary-button"
               onClick={() => {
                 setErrorMessage('');
+                setEditingTransaction(null);
+                setEditReason('');
+                setTransactionForm(newTransactionForm());
                 setTransactionModalOpen(true);
               }}
             >
@@ -824,7 +936,11 @@ export default function CashbookPanel() {
         <div
           className="cashbook-transaction-modal-backdrop"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !busy) setTransactionModalOpen(false);
+            if (event.target === event.currentTarget && !busy) {
+              setTransactionModalOpen(false);
+              setEditingTransaction(null);
+              setEditReason('');
+            }
           }}
         >
           <section
@@ -837,14 +953,22 @@ export default function CashbookPanel() {
             <header className="cashbook-transaction-modal-header">
               <div>
                 <h3 id="cashbook-transaction-modal-title">
-                  {transactionForm.transaction_type === 'income' ? 'ثبت دریافت' : 'ثبت گردش مالی'}
+                  {editingTransaction
+                    ? 'اصلاح گردش مالی'
+                    : transactionForm.transaction_type === 'income' ? 'ثبت دریافت' : 'ثبت گردش مالی'}
                 </h3>
-                <p>اطلاعات گردش و حساب مقصد را وارد کنید.</p>
+                <p>{editingTransaction
+                  ? 'گردش قبلی حفظ و برگشت می‌خورد؛ نسخهٔ اصلاح‌شده جداگانه ثبت می‌شود.'
+                  : 'اطلاعات گردش و حساب مقصد را وارد کنید.'}</p>
               </div>
               <button
                 type="button"
                 aria-label="بستن پنجره"
-                onClick={() => setTransactionModalOpen(false)}
+                onClick={() => {
+                  setTransactionModalOpen(false);
+                  setEditingTransaction(null);
+                  setEditReason('');
+                }}
                 disabled={busy}
               >
                 ×
@@ -856,6 +980,7 @@ export default function CashbookPanel() {
               نوع گردش
               <select
                 value={transactionForm.transaction_type}
+                disabled={isEditingTransactionTypeLocked}
                 onChange={(event) => setTransactionForm((current) => ({
                   ...current,
                   transaction_type: event.target.value,
@@ -866,6 +991,11 @@ export default function CashbookPanel() {
               >
                 {TRANSACTION_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
               </select>
+              {isEditingTransactionTypeLocked && (
+                <small className="cashbook-sensitive-note">
+                  برای حفظ ارتباط فاکتور و سوابق برگشت، نوع این گردش قابل تغییر نیست.
+                </small>
+              )}
             </label>
             <label>
               مبلغ (تومان)
@@ -900,7 +1030,7 @@ export default function CashbookPanel() {
                 </select>
               </label>
             )}
-            {transactionForm.transaction_type === 'income' && (
+            {transactionForm.transaction_type === 'income' && !editingTransaction && (
               <label>
                 دریافت بابت فاکتور (اختیاری)
                 <select value={transactionForm.invoice_id} onChange={(event) => setTransactionForm((current) => ({
@@ -919,7 +1049,9 @@ export default function CashbookPanel() {
               </label>
             )}
             {(transactionForm.transaction_type === 'expense'
-              || (transactionForm.transaction_type === 'income' && !transactionForm.invoice_id)) && (
+              || (transactionForm.transaction_type === 'income'
+                && !transactionForm.invoice_id
+                && !editingTransaction?.invoice_id)) && (
               <label>
                 اتصال به مراسم (اختیاری)
                 <select
@@ -973,10 +1105,37 @@ export default function CashbookPanel() {
                 placeholder="مثلاً شماره چک یا توضیح پرداخت"
               />
             </label>
+            {editingTransaction && (
+              <label className="cashbook-description-field">
+                دلیل اصلاح (برای ثبت در سوابق)
+                <input
+                  value={editReason}
+                  onChange={(event) => setEditReason(event.target.value)}
+                  minLength={4}
+                  maxLength={240}
+                  required
+                  placeholder="مثلاً اصلاح مبلغ یا تاریخ"
+                />
+              </label>
+            )}
             <div className="cashbook-form-actions cashbook-transaction-submit">
               <button type="submit" className="cashbook-primary-button" disabled={busy}>
-                {busy ? 'در حال ثبت…' : 'ثبت گردش مالی'}
+                {busy ? 'در حال ثبت…' : editingTransaction ? 'ثبت اصلاح' : 'ثبت گردش مالی'}
               </button>
+              {editingTransaction && (
+                <button
+                  type="button"
+                  className="cashbook-secondary-button"
+                  onClick={() => {
+                    setTransactionModalOpen(false);
+                    setEditingTransaction(null);
+                    setEditReason('');
+                  }}
+                  disabled={busy}
+                >
+                  انصراف
+                </button>
+              )}
             </div>
             </form>
           </section>
@@ -1012,7 +1171,7 @@ export default function CashbookPanel() {
           <div className="cashbook-table-wrap">
             <table className="cashbook-table">
               <thead>
-                <tr><th>تاریخ</th><th>نوع</th><th>حساب</th><th>دسته / مرجع</th><th>مراسم</th><th>توضیحات و رسید</th><th>مبلغ</th></tr>
+                <tr><th>تاریخ</th><th>نوع</th><th>حساب</th><th>دسته / مرجع</th><th>مراسم</th><th>توضیحات و رسید</th><th>مبلغ</th><th>عملیات</th></tr>
               </thead>
               <tbody>
                 {visibleTransactions.map((transaction) => {
@@ -1021,7 +1180,10 @@ export default function CashbookPanel() {
                   const invoice = invoices.find((item) => String(item.id) === String(transaction.invoice_id));
                   const linkedEvent = events.find((item) => String(item.id) === String(transaction.event_id));
                   const isInvoiceExpenseTransaction = invoiceExpenseTransactionIds.has(String(transaction.id));
-                  const typeLabel = TRANSACTION_TYPES.find((type) => type.value === transaction.transaction_type)?.label || transaction.transaction_type;
+                  const baseTypeLabel = TRANSACTION_TYPES.find((type) => type.value === transaction.transaction_type)?.label || transaction.transaction_type;
+                  const typeLabel = transaction.reversal_of_transaction_id
+                    ? `برگشت ${baseTypeLabel}`
+                    : baseTypeLabel;
                   return (
                     <tr key={transaction.id}>
                       <td>{formatJalaliDate(transaction.transaction_date)}</td>
@@ -1052,9 +1214,46 @@ export default function CashbookPanel() {
                       </td>
                       <td>
                         {transaction.description || transaction.receipt_note || '—'}
+                        {transaction.reversal_of_transaction_id && (
+                          <small className="cashbook-ledger-reference">
+                            برگشت گردش #{formatPersianDigits(transaction.reversal_of_transaction_id)}
+                          </small>
+                        )}
                         {transaction.reference_number && <small className="cashbook-ledger-reference">پیگیری: {transaction.reference_number}</small>}
                       </td>
                       <td className={`cashbook-amount cashbook-amount-${transaction.transaction_type}`}>{money(transaction.amount)}</td>
+                      <td>
+                        {isEditableCashTransaction(transaction) && (
+                          <button
+                            type="button"
+                            className="cashbook-link-button"
+                            onClick={() => startEditTransaction(transaction)}
+                            disabled={busy}
+                            aria-label={`ویرایش گردش ${formatPersianDigits(transaction.id)}`}
+                          >
+                            ویرایش
+                          </button>
+                        )}
+                        {transaction.reversal_of_transaction_id ? (
+                          <span className="cashbook-sensitive-note">برگشت</span>
+                        ) : reversedTransactionIds.has(String(transaction.id)) ? (
+                          <span className="cashbook-sensitive-note">برگشت خورده</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="cashbook-link-button"
+                            onClick={() => {
+                              setReversalTarget(transaction);
+                              setReversalReason('');
+                              setErrorMessage('');
+                            }}
+                            disabled={busy}
+                            aria-label={`ثبت برگشت کامل برای گردش ${formatPersianDigits(transaction.id)}`}
+                          >
+                            ثبت برگشت
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -1063,6 +1262,73 @@ export default function CashbookPanel() {
           </div>
         )}
       </section>
+
+      {reversalTarget && (
+        <div
+          className="cashbook-transaction-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) setReversalTarget(null);
+          }}
+        >
+          <section
+            className="cashbook-transaction-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cashbook-reversal-modal-title"
+            dir="rtl"
+          >
+            <header className="cashbook-transaction-modal-header">
+              <div>
+                <h3 id="cashbook-reversal-modal-title">ثبت برگشت کامل گردش</h3>
+                <p>گردش اصلی حذف یا ویرایش نمی‌شود؛ یک گردش جبرانی با همان مبلغ ساخته خواهد شد.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="بستن پنجره"
+                onClick={() => setReversalTarget(null)}
+                disabled={busy}
+              >
+                ×
+              </button>
+            </header>
+            {errorMessage && <div className="cashbook-alert cashbook-alert-error" role="alert">{errorMessage}</div>}
+            <form className="cashbook-form cashbook-transaction-form" onSubmit={handleReversalSubmit}>
+              <p>
+                گردش #{formatPersianDigits(reversalTarget.id)} · {money(reversalTarget.amount)} ·
+                {' '}{formatJalaliDate(reversalTarget.transaction_date)}
+              </p>
+              <label>
+                دلیل برگشت
+                <input
+                  value={reversalReason}
+                  onChange={(event) => setReversalReason(event.target.value)}
+                  minLength={4}
+                  maxLength={240}
+                  required
+                  autoFocus
+                  placeholder="علت ثبت برگشت را بنویسید"
+                />
+              </label>
+              <small className="cashbook-sensitive-note">
+                برگشت فقط برای کل مبلغ انجام می‌شود و به اتصال اینترنت نیاز دارد. اگر موجودی حساب برای برگشت کافی نباشد، ثبت رد می‌شود.
+              </small>
+              <div className="cashbook-form-actions cashbook-transaction-submit">
+                <button type="submit" className="cashbook-primary-button" disabled={busy}>
+                  {busy ? 'در حال ثبت…' : 'تأیید و ثبت برگشت'}
+                </button>
+                <button
+                  type="button"
+                  className="cashbook-secondary-button"
+                  onClick={() => setReversalTarget(null)}
+                  disabled={busy}
+                >
+                  انصراف
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

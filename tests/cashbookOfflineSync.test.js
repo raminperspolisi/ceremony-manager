@@ -23,6 +23,8 @@ const {
   insertRows,
   readTable,
   recordCashTransaction,
+  editCashTransaction,
+  reverseCashTransaction,
   setOfflineOrganization,
   setOfflineUser,
   syncPendingMutations,
@@ -81,6 +83,7 @@ test('offline invoice receipts update local invoices and sync as one RPC with ma
 
   const rpcTransactions = [];
   const requests = [];
+  const editRequests = [];
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(input);
     const method = init.method || 'GET';
@@ -132,6 +135,64 @@ test('offline invoice receipts update local invoices and sync as one RPC with ma
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    if (method === 'POST' && url.pathname.endsWith('/rpc/reverse_cash_transaction')) {
+      const request = JSON.parse(init.body);
+      assert.equal(request.p_transaction_id, 36);
+      assert.equal(request.p_reason, 'ثبت اشتباه');
+      return new Response(JSON.stringify({
+        transaction: {
+          id: 38,
+          transaction_type: 'expense',
+          amount: 250,
+          account_id: 12,
+          reversal_of_transaction_id: 36,
+          organization_id: 'cashbook-offline-test-organization',
+          transaction_date: '2026-09-26',
+          description: 'برگشت گردش #36 - ثبت اشتباه',
+        },
+        reversed_transaction_id: 36,
+        invoice: {
+          id: 24,
+          customer_name: 'مشتری',
+          total_price: 1000,
+          paid_amount: 100,
+          payment_status: 'deposit_paid',
+          event_id: 17,
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (method === 'POST' && url.pathname.endsWith('/rpc/edit_cash_transaction')) {
+      const request = JSON.parse(init.body);
+      editRequests.push(request);
+      const edited = request.p_transaction;
+      const isInvoiceReceipt = request.p_transaction_id === 36;
+      return new Response(JSON.stringify({
+        transaction: {
+          ...edited,
+          id: request.p_transaction_id,
+          account_id: 12,
+          event_id: isInvoiceReceipt ? null : 17,
+          invoice_id: isInvoiceReceipt ? 24 : null,
+          offline_sync_id: isInvoiceReceipt ? 'invoice-sync-id' : 'expense-sync-id',
+          created_at: '2026-09-26T00:00:00Z',
+        },
+        invoice: isInvoiceReceipt ? {
+          id: 24,
+          customer_name: 'مشتری',
+          total_price: 1000,
+          paid_amount: 110,
+          payment_status: 'deposit_paid',
+          event_id: 17,
+        } : null,
+        invoice_expense: null,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     throw new Error(`Unexpected request: ${method} ${url.href}`);
   };
   globalThis.navigator.onLine = true;
@@ -163,6 +224,48 @@ test('offline invoice receipts update local invoices and sync as one RPC with ma
   assert.equal(syncedPayment.receipt_note, 'واریز کارت به کارت');
   assert.equal(syncedExpense.event_id, eventId);
   assert.equal(syncedExpense.category, 'تدارکات');
+
+  globalThis.navigator.onLine = true;
+  const reversalResult = await reverseCashTransaction(paymentResult.data.id, 'ثبت اشتباه');
+  assert.equal(reversalResult.error, null);
+  assert.equal(reversalResult.data.reversed_transaction_id, 36);
+  globalThis.navigator.onLine = false;
+  const reversedTransactions = await readTable('cash_transactions');
+  const reversal = reversedTransactions.data.find((item) => item.reversal_of_transaction_id);
+  assert.equal(reversal.reversal_of_transaction_id, paymentResult.data.id);
+  const reversedInvoice = await readTable('invoices');
+  assert.equal(reversedInvoice.data[0].paid_amount, 100);
+
+  globalThis.navigator.onLine = true;
+  const editResult = await editCashTransaction(expenseResult.data.id, {
+    transaction_type: 'expense',
+    amount: 75,
+    account_id: 12,
+    event_id: 17,
+    category: 'تدارکات',
+    description: 'هزینه اصلاح‌شده',
+    transaction_date: '2026-09-25',
+  }, 'اصلاح مبلغ');
+  assert.equal(editResult.error, null);
+  assert.equal(editRequests[0].p_transaction_id, 37);
+  assert.equal(editRequests[0].p_reason, 'اصلاح مبلغ');
+  assert.equal(editRequests[0].p_transaction.amount, 75);
+  assert.equal(editRequests[0].p_transaction.event_id, 17);
+  const editedTransactions = await readTable('cash_transactions');
+  assert.equal(editedTransactions.data.find((item) => item.id === expenseResult.data.id).amount, 75);
+
+  const invoiceEditResult = await editCashTransaction(paymentResult.data.id, {
+    transaction_type: 'income',
+    amount: 260,
+    account_id: 12,
+    description: 'دریافت اصلاح‌شده',
+    transaction_date: '2026-09-24',
+  }, 'اصلاح دریافت');
+  assert.equal(invoiceEditResult.error, null);
+  assert.equal(editRequests[1].p_transaction_id, 36);
+  const editedInvoice = await readTable('invoices');
+  assert.equal(editedInvoice.data[0].paid_amount, 110);
+  globalThis.navigator.onLine = false;
 });
 
 test.after(async () => {
