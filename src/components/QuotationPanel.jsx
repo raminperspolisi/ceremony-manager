@@ -1023,23 +1023,25 @@ export default function QuotationPanel({ inventoryItems = [], onItemSelected, on
                       {['rent', 'اجاره', 'اجاره‌ای'].includes(item.item_type)
                         && hasInventoryReference(item.inventory_id || item.id) ? (
                         <div className="quotation-item-date-fields">
-                          <label className="quotation-item-date-field">
+                          <div className="quotation-item-date-field">
                             <span>تحویل</span>
                             <PersianDateInput
                               className="quotation-item-date-value"
                               value={item.rental_checkout_date || ''}
                               onChange={(value) => handleQuotationItemChange(item.id, 'rental_checkout_date', value)}
+                              aria-label="تاریخ تحویل اجاره"
                             />
-                          </label>
+                          </div>
                           <span className="quotation-item-date-divider" aria-hidden="true" />
-                          <label className="quotation-item-date-field">
+                          <div className="quotation-item-date-field">
                             <span>عودت</span>
                             <PersianDateInput
                               className="quotation-item-date-value"
                               value={item.rental_return_date || ''}
                               onChange={(value) => handleQuotationItemChange(item.id, 'rental_return_date', value)}
+                              aria-label="تاریخ عودت اجاره"
                             />
-                          </label>
+                          </div>
                         </div>
                       ) : <span className="quotation-item-no-rental">—</span>}
                     </td>

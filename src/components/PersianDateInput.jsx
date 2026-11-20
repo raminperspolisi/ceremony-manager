@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import datePickerModule from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
 import gregorian from 'react-date-object/calendars/gregorian';
@@ -20,8 +20,11 @@ export default function PersianDateInput({
   className = '',
   ...inputProps
 }) {
+  const datePickerRef = useRef(null);
+
   return (
     <DatePicker
+      ref={datePickerRef}
       value={toLocalDate(value)}
       calendar={persian}
       locale={persian_fa}
@@ -34,6 +37,7 @@ export default function PersianDateInput({
       placeholder="مثلاً ۱۴۰۵/۰۸/۰۹"
       onChange={(date) => {
         onChange(date ? toAsciiDigits(date.convert(gregorian).format('YYYY-MM-DD')) : '');
+        if (date) datePickerRef.current?.closeCalendar();
       }}
       {...inputProps}
     />

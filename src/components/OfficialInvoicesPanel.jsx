@@ -914,7 +914,7 @@ export default function OfficialInvoicesPanel({ businessName = 'تشریفات �
                       </div>
                     </td>
                     <td style={{ padding: '10px' }}>
-                      {inv.ceremony_date ? formatPersianDigits(inv.ceremony_date) : <span style={{ color: '#94a3b8' }}>ثبت نشده</span>}
+                      {inv.ceremony_date ? formatPersianDate(inv.ceremony_date) : <span style={{ color: '#94a3b8' }}>ثبت نشده</span>}
                     </td>
                     <td style={{ padding: '10px', color: '#0369a1' }}>
                       {formatDisplay(inv.total_price || 0)}

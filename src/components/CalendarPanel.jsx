@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { deleteRows, insertRows, readTable, updateRows } from "../offlineSync";
 import { supabase } from "../supabaseClient";
 import { formatPersianDigits } from "../styles";
-import { gregorianISOToJalali, jalaliToGregorianISO, normalizeJalaliDate } from "../calendarDateUtils";
+import { gregorianISOToJalali, jalaliToGregorianISO, normalizeJalaliDate, toGregorianISODate } from "../calendarDateUtils";
 import { createReminderTimestamp, formatReminderTimestamp } from "../telegramReminderUtils";
 import PersianDateInput from "./PersianDateInput";
 import moment from "jalali-moment";
@@ -32,6 +32,11 @@ export default function CalendarPanel({ organizationId }) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingEventDateId, setEditingEventDateId] = useState(null);
+  const [eventDateDraft, setEventDateDraft] = useState("");
+  const [savingEventDateId, setSavingEventDateId] = useState(null);
+  const [deletingEventId, setDeletingEventId] = useState(null);
+  const [eventActionError, setEventActionError] = useState("");
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [customers, setCustomers] = useState([]);
@@ -448,6 +453,74 @@ export default function CalendarPanel({ organizationId }) {
     }
   };
 
+  const handleSaveEventDate = async (event, submitEvent) => {
+    submitEvent.preventDefault();
+    const newDateISO = toGregorianISODate(eventDateDraft);
+    if (!newDateISO) {
+      setEventActionError("تاریخ واردشده معتبر نیست.");
+      return;
+    }
+
+    setSavingEventDateId(event.id);
+    setEventActionError("");
+    try {
+      const { error: updateError } = await updateRows(
+        "events",
+        { event_date: newDateISO },
+        [{ column: "id", operator: "eq", value: event.id }],
+      );
+      if (updateError) throw new Error(updateError.message);
+
+      const newJalaliDate = gregorianISOToJalali(newDateISO);
+      if (!newJalaliDate) throw new Error("تبدیل تاریخ به شمسی ناموفق بود.");
+      const [year, month] = newJalaliDate.split("/").map(Number);
+      setEvents((currentEvents) => currentEvents.map((currentEvent) => (
+        String(currentEvent.id) === String(event.id)
+          ? { ...currentEvent, event_date: newDateISO }
+          : currentEvent
+      )));
+      setSelectedDay(newJalaliDate);
+      setJYear(year);
+      setJMonth(month);
+      setEditingEventDateId(null);
+      setEventDateDraft("");
+    } catch (updateError) {
+      setEventActionError(`تغییر تاریخ مراسم ناموفق بود: ${updateError.message}`);
+    } finally {
+      setSavingEventDateId(null);
+    }
+  };
+
+  const handleDeleteEvent = async (event) => {
+    if (!await confirm(
+      `مراسم «${event.customer_name || "مشتری ثبت‌نشده"}» حذف شود؟ پروندهٔ اجرایی و یادآوری‌های تلگرام مرتبط نیز حذف خواهند شد.`,
+    )) return;
+
+    setDeletingEventId(event.id);
+    setEventActionError("");
+    try {
+      const { error: deleteError } = await deleteRows(
+        "events",
+        [{ column: "id", operator: "eq", value: event.id }],
+      );
+      if (deleteError) throw new Error(deleteError.message);
+      setEvents((currentEvents) => currentEvents.filter(
+        (currentEvent) => String(currentEvent.id) !== String(event.id),
+      ));
+      if (String(selectedEventForTasks?.id) === String(event.id)) {
+        setSelectedEventForTasks(null);
+      }
+      if (String(editingEventDateId) === String(event.id)) {
+        setEditingEventDateId(null);
+        setEventDateDraft("");
+      }
+    } catch (deleteError) {
+      setEventActionError(`حذف مراسم ناموفق بود: ${deleteError.message}`);
+    } finally {
+      setDeletingEventId(null);
+    }
+  };
+
   return (
     <div className="calendar-panel">
       <div className="calendar-page-heading">
@@ -676,13 +749,57 @@ export default function CalendarPanel({ organizationId }) {
                     {!isInvoice && event.notes && <span>توضیح: {event.notes}</span>}
                   </div>
                   {!isInvoice && (
-                    <button
-                      type="button"
-                      className="calendar-event-tasks-button"
-                      onClick={() => openEventTasks(event)}
-                    >
-                      پروندهٔ اجرایی و چک‌لیست
-                    </button>
+                    <>
+                      <div className="calendar-event-actions">
+                        <button
+                          type="button"
+                          className="calendar-event-tasks-button"
+                          onClick={() => openEventTasks(event)}
+                        >
+                          پروندهٔ اجرایی و چک‌لیست
+                        </button>
+                        <button
+                          type="button"
+                          className="calendar-event-action-button"
+                          onClick={() => {
+                            if (String(editingEventDateId) === String(event.id)) {
+                              setEditingEventDateId(null);
+                              setEventDateDraft("");
+                            } else {
+                              setEditingEventDateId(event.id);
+                              setEventDateDraft(toGregorianISODate(event.event_date) || "");
+                            }
+                            setEventActionError("");
+                          }}
+                        >
+                          {String(editingEventDateId) === String(event.id) ? "لغو تغییر تاریخ" : "تغییر تاریخ"}
+                        </button>
+                        <button
+                          type="button"
+                          className="calendar-event-action-button calendar-event-delete-button"
+                          onClick={() => { void handleDeleteEvent(event); }}
+                          disabled={String(deletingEventId) === String(event.id)}
+                        >
+                          {String(deletingEventId) === String(event.id) ? "در حال حذف…" : "حذف مراسم"}
+                        </button>
+                      </div>
+                      {String(editingEventDateId) === String(event.id) && (
+                        <form className="calendar-event-date-editor" onSubmit={(submitEvent) => { void handleSaveEventDate(event, submitEvent); }}>
+                          <label>
+                            تاریخ جدید مراسم
+                            <PersianDateInput value={eventDateDraft} onChange={setEventDateDraft} required />
+                          </label>
+                          <button
+                            type="submit"
+                            className="calendar-event-action-button calendar-event-date-save"
+                            disabled={String(savingEventDateId) === String(event.id)}
+                          >
+                            {String(savingEventDateId) === String(event.id) ? "در حال ذخیره…" : "ذخیرهٔ تاریخ"}
+                          </button>
+                        </form>
+                      )}
+                      {eventActionError && <p className="calendar-event-action-error" role="alert">{eventActionError}</p>}
+                    </>
                   )}
                   {isInvoice && eventItems.length > 0 && (
                     <div className="calendar-invoice-items">

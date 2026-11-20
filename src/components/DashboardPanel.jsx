@@ -37,6 +37,7 @@ export default function DashboardPanel({
   onEditProfile,
   canViewBusinessContacts = false,
   canViewCalendar = false,
+  canViewCashbook = false,
 }) {
   const [invoices, setInvoices] = useState([]);
   const [ceremonies, setCeremonies] = useState([]);
@@ -195,6 +196,11 @@ export default function DashboardPanel({
           </button>
         )}
         <DashboardTaskNotebook organizationId={organizationId} />
+        {canViewCashbook && (
+          <button type="button" className="home-metric-card home-metric-cashbook" onClick={() => navigate('cashbook')}>
+            <strong>حساب‌ها و گردش مالی</strong>
+          </button>
+        )}
       </section>
 
       <div className="home-dashboard-columns">

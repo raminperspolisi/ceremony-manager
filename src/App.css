@@ -1755,6 +1755,68 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.calendar-event-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-event-action-button {
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid #d5e5dc;
+  border-radius: 8px;
+  background: #f7faf8;
+  color: #28564d !important;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.calendar-event-action-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.calendar-event-delete-button {
+  border-color: #f0d1d1;
+  background: #fff7f7;
+  color: #a33a4b !important;
+}
+
+.calendar-event-date-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.calendar-event-date-editor label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: #52677c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.calendar-event-date-editor .persian-date-input {
+  width: 100%;
+}
+
+.calendar-event-date-save {
+  border-color: #b7d9ca;
+  background: #eff8f3;
+}
+
+.calendar-event-action-error {
+  margin: 0;
+  color: #a33a4b !important;
+  font-size: 11px;
+}
+
 .calendar-event-tasks-backdrop {
   position: fixed;
   z-index: 60;
@@ -13121,6 +13183,11 @@ body {
   grid-row: 2;
 }
 
+.home-dashboard-metrics > .home-metric-cashbook {
+  grid-column: 2;
+  grid-row: 2;
+}
+
 .home-metric-tasks {
   --metric-icon: "✓";
   --metric-icon-bg: #f8ebd4;
@@ -13250,6 +13317,11 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .home-dashboard-metrics > .home-metric-cashbook {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
   .home-metric-card > strong {
     font-size: 17px;
     white-space: nowrap;
@@ -13342,6 +13414,20 @@ body {
   background: linear-gradient(135deg, #f7faf8, #fff 84%) !important;
   box-shadow: 0 10px 25px rgb(26 45 66 / 7%) !important;
   color: #263a32 !important;
+}
+
+.home-dashboard-metrics > .home-metric-cashbook {
+  --metric-icon: "⇄";
+  --metric-icon-bg: #dceff0;
+  --metric-icon-color: #287c82;
+  --metric-glow: rgb(48 139 145 / 13%);
+  border-color: #d4e9e8 !important;
+  background: linear-gradient(135deg, #eff9f8, #fff 84%) !important;
+}
+
+.home-dashboard-metrics > .home-metric-cashbook > strong {
+  color: #287c82 !important;
+  font-size: clamp(16px, 1.8vw, 21px);
 }
 
 .home-dashboard-metrics > .home-metric-card::after {
